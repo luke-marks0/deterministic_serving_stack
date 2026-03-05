@@ -1,0 +1,19 @@
+name: Release Gate
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  release-matrix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint
+        run: bash scripts/ci/lint.sh
+      - name: Schema Gate
+        run: bash scripts/ci/schema_gate.sh
+      - name: Determinism Matrix (D0-D5)
+        run: bash scripts/ci/test_release.sh

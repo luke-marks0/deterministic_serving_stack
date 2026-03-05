@@ -1,0 +1,44 @@
+from __future__ import annotations
+
+import tempfile
+import unittest
+from pathlib import Path
+
+from tests.helpers import read_json, run_cmd
+
+
+class TestD2SingleNodeRunner(unittest.TestCase):
+    def test_runner_outputs_are_reproducible(self) -> None:
+        manifest = "tests/fixtures/positive/manifest.v1.example.json"
+        with tempfile.TemporaryDirectory() as td:
+            tdir = Path(td)
+            lock_resolved = tdir / "resolved.lock.json"
+            lock_built = tdir / "built.lock.json"
+            run_a = tdir / "run-a"
+            run_b = tdir / "run-b"
+            report = tdir / "verify_report.json"
+            summary = tdir / "verify_summary.txt"
+
+            run_cmd(["python3", "cmd/resolver/main.py", "--manifest", manifest, "--lockfile-out", str(lock_resolved)])
+            run_cmd(["python3", "cmd/builder/main.py", "--lockfile", str(lock_resolved), "--lockfile-out", str(lock_built)])
+            run_cmd(["python3", "cmd/runner/main.py", "--manifest", manifest, "--lockfile", str(lock_built), "--out-dir", str(run_a)])
+            run_cmd(["python3", "cmd/runner/main.py", "--manifest", manifest, "--lockfile", str(lock_built), "--out-dir", str(run_b)])
+            run_cmd([
+                "python3",
+                "cmd/verifier/main.py",
+                "--baseline",
+                str(run_a / "run_bundle.v1.json"),
+                "--candidate",
+                str(run_b / "run_bundle.v1.json"),
+                "--report-out",
+                str(report),
+                "--summary-out",
+                str(summary),
+            ])
+
+            verify = read_json(report)
+            self.assertEqual(verify["status"], "conformant")
+
+
+if __name__ == "__main__":
+    unittest.main()

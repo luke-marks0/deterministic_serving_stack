@@ -1,0 +1,30 @@
+name: Main Gate
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint
+        run: bash scripts/ci/lint.sh
+
+  schema:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Schema Gate
+        run: bash scripts/ci/schema_gate.sh
+
+  full-tests:
+    runs-on: ubuntu-latest
+    needs: [lint, schema]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Full Test Suite
+        run: bash scripts/ci/test_full.sh
