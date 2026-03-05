@@ -55,11 +55,84 @@ def _write_json(path: Path, data: Any) -> str:
     return sha256_prefixed(path.read_bytes())
 
 
-def _hardware_fingerprint(manifest: dict[str, Any]) -> str:
-    return sha256_prefixed(canonical_json_bytes(manifest["hardware_profile"]))
+def _hardware_fingerprint(hardware_profile: dict[str, Any]) -> str:
+    return sha256_prefixed(canonical_json_bytes(hardware_profile))
 
 
-def run(manifest: dict[str, Any], lockfile: dict[str, Any], out_dir: Path, replica_id: str) -> dict[str, Any]:
+def _value_repr(value: Any) -> str:
+    return canonical_json_text(value).strip()
+
+
+def _diff_hardware(expected: Any, actual: Any, path: str, out: list[dict[str, str]]) -> None:
+    if isinstance(expected, dict):
+        if not isinstance(actual, dict):
+            out.append({"path": path, "expected": _value_repr(expected), "actual": _value_repr(actual)})
+            return
+        keys = sorted(set(expected.keys()) | set(actual.keys()))
+        for key in keys:
+            key_path = f"{path}.{key}"
+            if key not in expected:
+                out.append({"path": key_path, "expected": "<absent>", "actual": _value_repr(actual[key])})
+                continue
+            if key not in actual:
+                out.append({"path": key_path, "expected": _value_repr(expected[key]), "actual": "<absent>"})
+                continue
+            _diff_hardware(expected[key], actual[key], key_path, out)
+        return
+
+    if isinstance(expected, list):
+        if not isinstance(actual, list) or expected != actual:
+            out.append({"path": path, "expected": _value_repr(expected), "actual": _value_repr(actual)})
+        return
+
+    if expected != actual:
+        out.append({"path": path, "expected": _value_repr(expected), "actual": _value_repr(actual)})
+
+
+def _extract_observed_hardware(
+    expected_hardware: dict[str, Any],
+    runtime_hardware: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if runtime_hardware is None:
+        return expected_hardware
+    if not isinstance(runtime_hardware, dict):
+        raise ValidationError("runtime_hardware must be a JSON object when provided")
+    return runtime_hardware
+
+
+def _hardware_conformance_record(
+    expected_hardware: dict[str, Any],
+    observed_hardware: dict[str, Any],
+    *,
+    strict_hardware: bool,
+) -> dict[str, Any]:
+    diffs: list[dict[str, str]] = []
+    _diff_hardware(expected_hardware, observed_hardware, "$.hardware_profile", diffs)
+    status = "conformant" if len(diffs) == 0 else "non_conformant"
+    record = {
+        "status": status,
+        "strict_hardware": strict_hardware,
+        "expected_fingerprint": _hardware_fingerprint(expected_hardware),
+        "actual_fingerprint": _hardware_fingerprint(observed_hardware),
+        "diffs": diffs,
+    }
+    if strict_hardware and len(diffs) > 0:
+        first = diffs[0]
+        raise ValidationError(
+            "Hardware conformance failed (strict_hardware=true): "
+            f"{first['path']} expected={first['expected']} actual={first['actual']}"
+        )
+    return record
+
+
+def run(
+    manifest: dict[str, Any],
+    lockfile: dict[str, Any],
+    out_dir: Path,
+    replica_id: str,
+    *,
+    runtime_hardware: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     validate_with_schema("manifest.v1.schema.json", manifest)
     validate_with_schema("lockfile.v1.schema.json", lockfile)
 
@@ -83,6 +156,16 @@ def run(manifest: dict[str, Any], lockfile: dict[str, Any], out_dir: Path, repli
                 raise ValidationError(
                     f"Artifact digest mismatch for {artifact_id}: expected={expected_digest} actual={actual_digest}"
                 )
+
+    expected_hardware = manifest["hardware_profile"]
+    observed_hardware = _extract_observed_hardware(expected_hardware, runtime_hardware)
+    hardware_conformance = _hardware_conformance_record(
+        expected_hardware,
+        observed_hardware,
+        strict_hardware=bool(manifest["runtime"]["strict_hardware"]),
+    )
+    observed_gpu = observed_hardware.get("gpu", expected_hardware["gpu"])
+    observed_nic = observed_hardware.get("nic", expected_hardware["nic"])
 
     out_dir.mkdir(parents=True, exist_ok=True)
     manifest_copy = out_dir / "manifest.json"
@@ -195,10 +278,11 @@ def run(manifest: dict[str, Any], lockfile: dict[str, Any], out_dir: Path, repli
             "vllm_version": "0.1.0",
             "torch_version": "2.5.0",
             "cuda_version": "12.4",
-            "driver_version": manifest["hardware_profile"]["gpu"]["driver_version"],
-            "gpu_inventory": [manifest["hardware_profile"]["gpu"]["model"]],
-            "hardware_fingerprint": _hardware_fingerprint(manifest),
+            "driver_version": observed_gpu.get("driver_version", expected_hardware["gpu"]["driver_version"]),
+            "gpu_inventory": [observed_gpu.get("model", expected_hardware["gpu"]["model"])],
+            "hardware_fingerprint": hardware_conformance["actual_fingerprint"],
         },
+        "hardware_conformance": hardware_conformance,
         "execution_trace_metadata": {
             "actual_batch_sizes": [target_batch for _ in manifest["requests"]],
             "resolved_args": {
@@ -215,7 +299,7 @@ def run(manifest: dict[str, Any], lockfile: dict[str, Any], out_dir: Path, repli
             "capture_digest": network_digest,
             "frame_count": len(frames),
             "capture_mode": "userspace_pre_enqueue",
-            "nic_fingerprint": sha256_prefixed(canonical_json_bytes(manifest["hardware_profile"]["nic"])),
+            "nic_fingerprint": sha256_prefixed(canonical_json_bytes(observed_nic)),
             "security_mode": manifest["network"]["security_mode"],
         },
         "observables": {
@@ -263,12 +347,22 @@ def main() -> int:
     parser.add_argument("--lockfile", required=True, help="Lockfile JSON path")
     parser.add_argument("--out-dir", required=True, help="Output bundle directory")
     parser.add_argument("--replica-id", default="replica-0", help="Replica identifier")
+    parser.add_argument("--runtime-hardware", help="Optional observed runtime hardware profile JSON path")
     args = parser.parse_args()
 
     manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
     lockfile = json.loads(Path(args.lockfile).read_text(encoding="utf-8"))
+    runtime_hardware = None
+    if args.runtime_hardware:
+        runtime_hardware = json.loads(Path(args.runtime_hardware).read_text(encoding="utf-8"))
 
-    run(manifest, lockfile, Path(args.out_dir), args.replica_id)
+    run(
+        manifest,
+        lockfile,
+        Path(args.out_dir),
+        args.replica_id,
+        runtime_hardware=runtime_hardware,
+    )
     return 0
 
 

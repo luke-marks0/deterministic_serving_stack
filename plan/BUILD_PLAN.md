@@ -276,10 +276,19 @@ Weeks 11-12:
 
 ## 9. Immediate Next Actions
 
-1. Convert `spec.md` normative statements into machine-readable conformance cases.
-2. Finalize `manifest.v1`, `lockfile.v1`, and `run_bundle.v1` JSON schemas.
-3. Stand up deterministic fixture harness and CI release gates.
-4. Implement resolver first, then builder, then runner/instrumentation/verifier in parallel tracks.
+1. Phase 2 productionization:
+   1. Replace deterministic closure descriptor with direct Nix derivation/closure integration and provenance capture from real build outputs.
+   2. Add OCI export/publish flow with immutable runtime image digest recording for deployment use.
+2. Resolver hardening:
+   1. Expand required-file detection for wider HF model layouts.
+   2. Add authenticated internal mirror flow and offline/cache-first resolution mode.
+   3. Add negative tests for malformed/missing HF artifacts and remote-code policy edge cases.
+3. Phase 3 baseline runner hardening:
+   1. Replace file-provided runtime hardware profile with live host/Kubernetes node inventory probes.
+   2. Ensure run bundle includes full provenance fields required for third-party re-run.
+4. Conformance backlog:
+   1. Progress MUST requirements still marked `planned` or `partial` in `docs/conformance/spec_requirements.v1.json`.
+   2. Keep release blockers limited to implemented MUST IDs only.
 
 ## 10. Session Handoff (2026-03-05)
 
@@ -289,21 +298,37 @@ Current state (left off):
    1. Governance artifacts are in place (ADR workflow/templates/index entries, CODEOWNERS, release policy).
    2. Machine-readable conformance mapping is implemented and validated in CI.
    3. Resolver now supports HF immutable commit resolution, required-file enumeration, per-file digests, and remote-code pin+digest handling.
-2. CI status at handoff:
+2. Completed additional next-step execution:
+   1. Builder now emits deterministic closure metadata (`build` section), closure component inventory, OCI artifact inventory, and idempotent build provenance attestation.
+   2. Runner now enforces runtime hardware conformance:
+      1. `strict_hardware=true` causes hard refusal on mismatch.
+      2. `strict_hardware=false` allows execution but records non-conformance with structured diffs in run bundle.
+   3. D1 and D2 CI scripts now validate closure component contracts and strict/non-strict hardware behavior.
+   4. Integration tests were added for builder closure profile and runner hardware conformance paths.
+3. Documentation and developer workflow updates:
+   1. Root README was rewritten into a conventional project README with repository structure, quickstart usage, and pipeline examples.
+   2. CI workflows install `ripgrep` before lint to keep lint behavior consistent across runners.
+4. CI status at handoff:
    1. `make ci-pr` passed.
    2. `make ci-main` passed.
    3. `make ci-release` passed (D0-D5 and release blockers).
-3. Session notes were recorded under `plan/notes/features/governance-conformance-hf-resolution/`.
+5. Conformance snapshot:
+   1. `docs/conformance/spec_requirements.v1.json` currently reports MUST implemented: `34/41`.
+6. Session notes were recorded under:
+   1. `plan/notes/features/governance-conformance-hf-resolution/`
+   2. `plan/notes/features/phase2-builder-runner-hardware-conformance/`
 
 What to do next:
 
-1. Phase 2 execution: replace placeholder builder behavior with real hermetic closure build + stable `runtime_closure_digest` attestation path.
+1. Phase 2 productionization:
+   1. Replace deterministic closure descriptor with direct Nix derivation/closure integration and provenance capture from real build outputs.
+   2. Add OCI export/publish flow with immutable runtime image digest recording for deployment use.
 2. Resolver hardening:
    1. Expand required-file detection for wider HF model layouts.
    2. Add authenticated internal mirror flow and offline/cache-first resolution mode.
    3. Add negative tests for malformed/missing HF artifacts and remote-code policy edge cases.
 3. Phase 3 baseline runner hardening:
-   1. Implement strict/non-strict hardware conformance enforcement end-to-end.
+   1. Replace file-provided runtime hardware profile with live host/Kubernetes node inventory probes.
    2. Ensure run bundle includes full provenance fields required for third-party re-run.
 4. Conformance backlog:
    1. Progress MUST requirements still marked `planned` or `partial` in `docs/conformance/spec_requirements.v1.json`.

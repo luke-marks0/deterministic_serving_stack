@@ -8,6 +8,7 @@ Use this index to locate active note directories.
 - `repo-scaffold-ci-gates/`: repository layout and CI gate scaffolding notes.
 - `schema-locking-hardening/`: schema hardening and deterministic CI matrix implementation notes.
 - `governance-conformance-hf-resolution/`: governance artifacts, conformance catalog mapping, and HF resolver integration notes.
+- `phase2-builder-runner-hardware-conformance/`: builder closure hardening and runner strict/non-strict hardware conformance notes.
 
 ## Bugs
 

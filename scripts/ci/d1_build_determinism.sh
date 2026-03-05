@@ -27,10 +27,25 @@ if left["runtime_closure_digest"] != right["runtime_closure_digest"]:
     raise SystemExit("runtime_closure_digest differs across identical builds")
 if left["canonicalization"]["lockfile_digest"] != right["canonicalization"]["lockfile_digest"]:
     raise SystemExit("lockfile_digest differs across identical builds")
+if left["build"]["closure_inputs_digest"] != left["runtime_closure_digest"]:
+    raise SystemExit("build.closure_inputs_digest must match runtime_closure_digest")
+
+required_components = {
+    "serving_stack",
+    "cuda_userspace_or_container",
+    "kernel_libraries",
+    "network_stack",
+    "pmd_driver",
+}
+component_names = {item["name"] for item in left["build"]["components"]}
+if component_names != required_components:
+    raise SystemExit(f"build.components mismatch: {component_names}")
+
 print("Builder determinism checks passed")
 PY
 
 python3 scripts/ci/lockfile_validate.py --lockfile "$BUILT1"
 python3 scripts/ci/mark_conformance.py --id SPEC-6.1-RUNTIME-CLOSURE-DIGEST
+python3 scripts/ci/mark_conformance.py --id SPEC-6.1-NIX-CLOSURE-CONTENT
 
 log "D1 passed"
