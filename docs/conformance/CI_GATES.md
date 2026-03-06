@@ -32,11 +32,13 @@ Runs on `v*` tags:
 
 1. `lint`
 2. `schema`
-3. `test-release` (D0-D5 executable matrix)
+3. `test-release` (D0-D5 executable matrix + release contract proofs)
 4. Release blocker check from `docs/conformance/RELEASE_BLOCKERS.json`
 
 ## Notes
 
-D0-D5 execute real resolver/builder/runner/verifier/dispatcher flows and emit conformance markers consumed by release blocker enforcement.
+D0-D5 execute the determinism matrix and emit conformance markers consumed by release blocker enforcement.
+
+`scripts/ci/release_contracts.sh` runs non-matrix release proofs (builder/HF resolver/deploy/provenance/verifier contracts) and emits additional conformance markers for release blockers that do not belong semantically in D0-D5.
 
 Conformance IDs are maintained in `docs/conformance/spec_requirements.v1.json` and validated in `scripts/ci/check_conformance_catalog.py` as part of the schema gate.

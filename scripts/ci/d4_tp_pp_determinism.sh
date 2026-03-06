@@ -22,6 +22,16 @@ manifest["hardware_profile"]["topology"]["rack_count"] = 2
 manifest["hardware_profile"]["topology"]["collective_fabric"] = "cross_rack"
 manifest["deterministic_dispatcher"]["enabled"] = True
 manifest["deterministic_dispatcher"]["algorithm"] = "sequence_map"
+manifest["artifact_inputs"].append({
+    "artifact_id": "collective-stack",
+    "artifact_type": "collective_stack",
+    "expected_digest": "sha256:" + ("c" * 64),
+    "immutable_ref": "sha256:" + ("d" * 64),
+    "name": "nccl-stack",
+    "size_bytes": 512,
+    "source_kind": "oci",
+    "source_uri": "oci://registry.example/nccl@sha256:" + ("d" * 64),
+})
 Path(sys.argv[2]).write_text(json.dumps(manifest, sort_keys=True, separators=(",", ":"), ensure_ascii=True) + "\n", encoding="utf-8")
 print("Wrote TP manifest")
 PY
@@ -51,5 +61,6 @@ print("TP/PP trace checks passed")
 PY
 
 python3 scripts/ci/mark_conformance.py --id SPEC-10.2-TPPP-TRACE
+python3 scripts/ci/mark_conformance.py --id SPEC-10.2-COLLECTIVE-STACK-PIN
 
 log "D4 passed"

@@ -36,6 +36,21 @@ MODEL_ARTIFACT_TYPES = {
 }
 
 
+def _topology_requires_collective_stack(manifest: dict[str, Any]) -> bool:
+    mode = manifest["hardware_profile"]["topology"]["mode"]
+    return mode in {"tensor_parallel", "pipeline_parallel"}
+
+
+def _require_topology_artifacts(manifest: dict[str, Any]) -> None:
+    if not _topology_requires_collective_stack(manifest):
+        return
+
+    if not any(item.get("artifact_type") == "collective_stack" for item in manifest["artifact_inputs"]):
+        raise ValidationError(
+            "Topology mode requires artifact_inputs to pin a collective_stack artifact"
+        )
+
+
 def _artifact_from_input(item: dict[str, Any], model_source: str) -> dict[str, Any]:
     source_bytes = canonical_json_bytes(item)
     digest = item.get("expected_digest") or sha256_prefixed(source_bytes)
@@ -77,6 +92,9 @@ def _resolve_manifest_hf_model(
     *,
     hf_cache_dir: Path | None,
     hf_token: str | None,
+    hf_mirror_root: str | Path | None,
+    hf_resolution_mode: str,
+    hf_mirror_token: str | None,
 ) -> dict[str, Any]:
     source = manifest["model"]["source"]
     if not str(source).startswith("hf://"):
@@ -88,6 +106,9 @@ def _resolve_manifest_hf_model(
         bool(manifest["model"]["trust_remote_code"]),
         client=client,
         cache_dir=hf_cache_dir,
+        mirror_root=hf_mirror_root,
+        resolution_mode=hf_resolution_mode,
+        mirror_token=hf_mirror_token,
     )
 
     manifest["model"]["resolved_revision"] = resolved.resolved_revision
@@ -109,11 +130,23 @@ def resolve_manifest_to_lockfile(
     resolve_hf: bool = False,
     hf_cache_dir: Path | None = None,
     hf_token: str | None = None,
+    hf_mirror_root: str | Path | None = None,
+    hf_resolution_mode: str = "online",
+    hf_mirror_token: str | None = None,
 ) -> dict[str, Any]:
     validate_with_schema("manifest.v1.schema.json", manifest)
+    _require_topology_artifacts(manifest)
     if resolve_hf:
-        manifest = _resolve_manifest_hf_model(manifest, hf_cache_dir=hf_cache_dir, hf_token=hf_token)
+        manifest = _resolve_manifest_hf_model(
+            manifest,
+            hf_cache_dir=hf_cache_dir,
+            hf_token=hf_token,
+            hf_mirror_root=hf_mirror_root,
+            hf_resolution_mode=hf_resolution_mode,
+            hf_mirror_token=hf_mirror_token,
+        )
         validate_with_schema("manifest.v1.schema.json", manifest)
+        _require_topology_artifacts(manifest)
     deterministic_timestamp = manifest["created_at"]
 
     artifacts = [_artifact_from_input(item, manifest["model"]["source"]) for item in manifest["artifact_inputs"]]
@@ -153,24 +186,55 @@ def resolve_manifest_to_lockfile(
     return lockfile
 
 
+def _read_optional_secret(value: str | None, path: str | None) -> str | None:
+    if value is not None:
+        return value
+    if path is None:
+        return None
+    try:
+        secret = Path(path).read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        raise HFResolutionError(f"Unable to read secret file {path}: {exc}") from exc
+    if secret == "":
+        raise HFResolutionError(f"Secret file {path} is empty")
+    return secret
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Resolve manifest into deterministic lockfile")
     parser.add_argument("--manifest", required=True, help="Path to manifest JSON")
     parser.add_argument("--lockfile-out", required=True, help="Path to lockfile JSON output")
     parser.add_argument("--resolve-hf", action="store_true", help="Resolve Hugging Face model files and digests")
     parser.add_argument("--hf-cache-dir", help="Optional HF cache directory")
-    parser.add_argument("--hf-token", help="Optional HF token")
+    hf_token_group = parser.add_mutually_exclusive_group()
+    hf_token_group.add_argument("--hf-token", help="Optional HF token")
+    hf_token_group.add_argument("--hf-token-file", help="Read the HF token from a file")
+    parser.add_argument(
+        "--hf-resolution-mode",
+        choices=["online", "cache_first", "offline"],
+        default="online",
+        help="How HF resolution should use the internal mirror/cache",
+    )
+    parser.add_argument("--hf-mirror-root", help="Optional local path or HTTP(S) base URL for an HF mirror")
+    hf_mirror_token_group = parser.add_mutually_exclusive_group()
+    hf_mirror_token_group.add_argument("--hf-mirror-token", help="Optional bearer token for an HTTP HF mirror")
+    hf_mirror_token_group.add_argument("--hf-mirror-token-file", help="Read the HF mirror bearer token from a file")
     args = parser.parse_args()
 
     manifest_path = Path(args.manifest)
     lockfile_path = Path(args.lockfile_out)
+    hf_token = _read_optional_secret(args.hf_token, args.hf_token_file)
+    hf_mirror_token = _read_optional_secret(args.hf_mirror_token, args.hf_mirror_token_file)
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     lockfile = resolve_manifest_to_lockfile(
         manifest,
         resolve_hf=bool(args.resolve_hf),
         hf_cache_dir=Path(args.hf_cache_dir) if args.hf_cache_dir else None,
-        hf_token=args.hf_token,
+        hf_token=hf_token,
+        hf_mirror_root=args.hf_mirror_root,
+        hf_resolution_mode=args.hf_resolution_mode,
+        hf_mirror_token=hf_mirror_token,
     )
 
     lockfile_path.parent.mkdir(parents=True, exist_ok=True)

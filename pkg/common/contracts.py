@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from jsonschema import Draft202012Validator
+from pkg.common.jsonschema_compat import DefaultValidator
 
 SCHEMA_DIR = Path("schemas")
 
@@ -18,13 +18,13 @@ def _load_schema(schema_name: str) -> dict[str, Any]:
     if not path.exists():
         raise ValidationError(f"Missing schema: {path}")
     schema = json.loads(path.read_text(encoding="utf-8"))
-    Draft202012Validator.check_schema(schema)
+    DefaultValidator.check_schema(schema)
     return schema
 
 
 def validate_with_schema(schema_name: str, data: Any) -> None:
     schema = _load_schema(schema_name)
-    validator = Draft202012Validator(schema)
+    validator = DefaultValidator(schema)
     errors = sorted(validator.iter_errors(data), key=lambda e: list(e.path))
     if errors:
         first = errors[0]

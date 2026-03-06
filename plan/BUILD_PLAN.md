@@ -224,7 +224,7 @@ Run on every release candidate:
 1. PR gate: unit + fast integration + schema compatibility checks.
 2. Merge-to-main gate: full integration + selected e2e determinism tests.
 3. Nightly gate: long-run determinism, stress, chaos, drift analysis.
-4. Release gate: full D0-D5 matrix + reproducibility report + signed artifacts.
+4. Release gate: full D0-D5 matrix, targeted non-matrix release contract proofs, release blocker enforcement, reproducibility report, and signed artifacts.
 
 ## 5.4 Test Fixtures and Golden Data
 
@@ -276,60 +276,47 @@ Weeks 11-12:
 
 ## 9. Immediate Next Actions
 
-1. Phase 2 productionization:
-   1. Replace deterministic closure descriptor with direct Nix derivation/closure integration and provenance capture from real build outputs.
-   2. Add OCI export/publish flow with immutable runtime image digest recording for deployment use.
+1. Builder productionization:
+   1. Replace the current Nix-aware reference/CLI hybrid flow with direct Nix derivation and closure capture from real build outputs.
+   2. Add OCI export/publish automation that records the final immutable runtime image digest used by deployment.
 2. Resolver hardening:
-   1. Expand required-file detection for wider HF model layouts.
-   2. Add authenticated internal mirror flow and offline/cache-first resolution mode.
-   3. Add negative tests for malformed/missing HF artifacts and remote-code policy edge cases.
-3. Phase 3 baseline runner hardening:
-   1. Replace file-provided runtime hardware profile with live host/Kubernetes node inventory probes.
-   2. Ensure run bundle includes full provenance fields required for third-party re-run.
-4. Conformance backlog:
-   1. Progress MUST requirements still marked `planned` or `partial` in `docs/conformance/spec_requirements.v1.json`.
-   2. Keep release blockers limited to implemented MUST IDs only.
+   1. Replace the current reference mirror layout with a digest-keyed artifact service so `SPEC-5.2-HF-INTERNAL-MIRROR` can move from planned to implemented.
+   2. Decide deployment/runtime credential injection policy for HTTP mirror access in Kubernetes jobs and release automation.
+   3. Decide whether release CI should add a live external HF-resolution proof in addition to the current local mirror/fixture coverage.
+3. Runtime/deploy hardening:
+   1. Add stronger live host/Kubernetes inventory probes beyond env/file-based evidence.
+   2. Replace placeholder deployment values in `deploy/` and `nix/` with release-fed inputs.
+4. Release-proof backlog:
+   1. Add a second release-contract pass for the remaining implemented schema/static MUST requirements.
+   2. Keep release blockers limited to IDs with explicit release-time proofs.
 
-## 10. Session Handoff (2026-03-05)
+## 10. Session Handoff (2026-03-06)
 
 Current state (left off):
 
-1. Completed prior-next-step points 1-3:
-   1. Governance artifacts are in place (ADR workflow/templates/index entries, CODEOWNERS, release policy).
-   2. Machine-readable conformance mapping is implemented and validated in CI.
-   3. Resolver now supports HF immutable commit resolution, required-file enumeration, per-file digests, and remote-code pin+digest handling.
-2. Completed additional next-step execution:
-   1. Builder now emits deterministic closure metadata (`build` section), closure component inventory, OCI artifact inventory, and idempotent build provenance attestation.
-   2. Runner now enforces runtime hardware conformance:
-      1. `strict_hardware=true` causes hard refusal on mismatch.
-      2. `strict_hardware=false` allows execution but records non-conformance with structured diffs in run bundle.
-   3. D1 and D2 CI scripts now validate closure component contracts and strict/non-strict hardware behavior.
-   4. Integration tests were added for builder closure profile and runner hardware conformance paths.
-3. Documentation and developer workflow updates:
-   1. Root README was rewritten into a conventional project README with repository structure, quickstart usage, and pipeline examples.
-   2. CI workflows install `ripgrep` before lint to keep lint behavior consistent across runners.
+1. Completed release-aligned productionization work:
+   1. Builder now records Nix-aware closure metadata, OCI image metadata, and collective-stack artifact inventory, with optional `nix path-info` integration.
+   2. Runner now records execution context, mounted run inputs, rerun metadata, explicit deterministic networking provenance, and opt-in host probing.
+   3. Deploy/Nix scaffolding exists for digest-pinned Kubernetes/Helm assets and reference runtime/image definitions.
+   4. Resolver now supports broader HF file-layout detection, cache-first/offline mirror resolution, authenticated HTTP mirror fetches, and negative-path validation for malformed or incomplete HF artifacts without rewriting canonical `hf://` lockfile URIs.
+2. Completed conformance closure work:
+   1. `docs/conformance/spec_requirements.v1.json` now reports MUST implemented: `41/41`.
+   2. D0-D5 remain the determinism matrix.
+   3. `scripts/ci/release_contracts.sh` now proves non-matrix builder/HF resolver/deploy/provenance/verifier contracts in the release lane.
+   4. `docs/conformance/RELEASE_BLOCKERS.json` now contains `24` blocker IDs, all satisfied in `make ci-release`.
+3. Documentation and planning updates:
+   1. `docs/conformance/CI_GATES.md` documents the split between the D0-D5 determinism matrix and the release-contract lane.
+   2. Session notes were recorded under:
+      1. `plan/notes/features/governance-conformance-hf-resolution/`
+      2. `plan/notes/features/phase2-runtime-deploy-conformance/`
 4. CI status at handoff:
-   1. `make ci-pr` passed.
-   2. `make ci-main` passed.
-   3. `make ci-release` passed (D0-D5 and release blockers).
-5. Conformance snapshot:
-   1. `docs/conformance/spec_requirements.v1.json` currently reports MUST implemented: `34/41`.
-6. Session notes were recorded under:
-   1. `plan/notes/features/governance-conformance-hf-resolution/`
-   2. `plan/notes/features/phase2-builder-runner-hardware-conformance/`
+   1. `python3 -m unittest tests.integration.test_resolver_hf_resolution -v` passed.
+   2. `bash scripts/ci/release_contracts.sh` passed.
+   3. `make ci-release` passed.
 
 What to do next:
 
-1. Phase 2 productionization:
-   1. Replace deterministic closure descriptor with direct Nix derivation/closure integration and provenance capture from real build outputs.
-   2. Add OCI export/publish flow with immutable runtime image digest recording for deployment use.
-2. Resolver hardening:
-   1. Expand required-file detection for wider HF model layouts.
-   2. Add authenticated internal mirror flow and offline/cache-first resolution mode.
-   3. Add negative tests for malformed/missing HF artifacts and remote-code policy edge cases.
-3. Phase 3 baseline runner hardening:
-   1. Replace file-provided runtime hardware profile with live host/Kubernetes node inventory probes.
-   2. Ensure run bundle includes full provenance fields required for third-party re-run.
-4. Conformance backlog:
-   1. Progress MUST requirements still marked `planned` or `partial` in `docs/conformance/spec_requirements.v1.json`.
-   2. Keep release blockers limited to implemented MUST IDs only.
+1. Replace the remaining reference-mode builder behavior with real Nix/OCI release automation.
+2. Replace the current reference HF mirror/cache flow with a digest-keyed artifact service and settle deployment credential policy.
+3. Strengthen live runtime evidence collection from actual host/Kubernetes inventory.
+4. Decide whether to add a second release-contract lane for the remaining `17` implemented MUST requirements that are not yet release blockers.

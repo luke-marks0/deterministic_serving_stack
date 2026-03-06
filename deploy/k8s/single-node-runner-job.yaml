@@ -1,0 +1,75 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: deterministic-run-inputs
+  labels:
+    app.kubernetes.io/name: deterministic-serving-stack
+    app.kubernetes.io/component: run-inputs
+data:
+  manifest.json: |
+    {"manifest_version":"v1"}
+  lockfile.json: |
+    {"lockfile_version":"v1"}
+  runtime_closure_digest.txt: |
+    sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: deterministic-runner
+  labels:
+    app.kubernetes.io/name: deterministic-serving-stack
+    app.kubernetes.io/component: runner
+spec:
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: deterministic-serving-stack
+        app.kubernetes.io/component: runner
+    spec:
+      restartPolicy: Never
+      nodeSelector:
+        hardware.gpu.vendor: nvidia
+        hardware.gpu.model: H100-SXM-80GB
+        hardware.nic.model: ConnectX-7
+      containers:
+        - name: runner
+          image: registry.example/deterministic-serving/runner@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          imagePullPolicy: IfNotPresent
+          command: ["python3", "/app/cmd/runner/main.py"]
+          args:
+            - --manifest
+            - /run-inputs/manifest.json
+            - --lockfile
+            - /run-inputs/lockfile.json
+            - --out-dir
+            - /var/run/deterministic-serving
+          env:
+            - name: RUNNER_POD_MANIFEST_PATH
+              value: /run-inputs/manifest.json
+            - name: RUNNER_POD_LOCKFILE_PATH
+              value: /run-inputs/lockfile.json
+            - name: RUNNER_POD_RUNTIME_CLOSURE_PATH
+              value: /run-inputs/runtime_closure_digest.txt
+            - name: RUNNER_ENABLE_HOST_PROBE
+              value: "1"
+            - name: RUNNER_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: RUNNER_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: RUNNER_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          volumeMounts:
+            - name: run-inputs
+              mountPath: /run-inputs
+              readOnly: true
+      volumes:
+        - name: run-inputs
+          configMap:
+            name: deterministic-run-inputs

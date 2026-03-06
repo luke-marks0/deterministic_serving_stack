@@ -1,0 +1,20 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: deterministic-runner
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: runner
+          image: {{ .Values.runnerImage.repository }}@{{ .Values.runnerImage.digest }}
+          env:
+            - name: RUNNER_POD_MANIFEST_PATH
+              value: {{ .Values.mounts.manifestPath | quote }}
+            - name: RUNNER_POD_LOCKFILE_PATH
+              value: {{ .Values.mounts.lockfilePath | quote }}
+            - name: RUNNER_POD_RUNTIME_CLOSURE_PATH
+              value: {{ .Values.mounts.runtimeClosurePath | quote }}
+            - name: RUNNER_ENABLE_HOST_PROBE
+              value: "1"

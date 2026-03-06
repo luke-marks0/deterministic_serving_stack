@@ -26,6 +26,13 @@ class TestD5NetworkEgress(unittest.TestCase):
             net2 = read_json(run2 / "observables/network_egress.json")
             self.assertEqual(net1, net2)
 
+            bundle = read_json(run1 / "run_bundle.v1.json")
+            self.assertEqual(bundle["network_provenance"]["route_mode"], "deterministic_userspace_stack")
+            self.assertTrue(bundle["network_provenance"]["capture_non_perturbing"])
+            self.assertEqual(bundle["network_provenance"]["capture_isolation"], "pre_enqueue_mirror")
+            self.assertTrue(bundle["network_provenance"]["network_stack_artifact_digest"].startswith("sha256:"))
+            self.assertTrue(bundle["network_provenance"]["pmd_driver_artifact_digest"].startswith("sha256:"))
+
 
 if __name__ == "__main__":
     unittest.main()

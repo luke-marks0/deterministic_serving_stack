@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import tempfile
 import unittest
@@ -37,6 +38,9 @@ class TestBuilderClosureProfile(unittest.TestCase):
             self.assertEqual(build["builder_system"], "nix")
             self.assertEqual(build["closure_inputs_digest"], lockfile["runtime_closure_digest"])
             self.assertTrue(re.fullmatch(r"nix://closure/[a-f0-9]{64}", build["closure_uri"]))
+            self.assertEqual(build["nix_closure"]["source"], "reference_descriptor")
+            self.assertEqual(build["nix_closure"]["closure_digest"], lockfile["runtime_closure_digest"])
+            self.assertGreaterEqual(build["nix_closure"]["closure_size_bytes"], 1)
 
             expected_components = {
                 "serving_stack",
@@ -55,6 +59,8 @@ class TestBuilderClosureProfile(unittest.TestCase):
                     self.assertIn(artifact_id, artifacts_by_id)
 
             self.assertGreaterEqual(len(build["oci_artifacts"]), 1)
+            self.assertEqual(build["collective_stack_artifacts"], [])
+            self.assertTrue(build["oci_image"]["image_ref"].startswith("oci://"))
             self.assertTrue(
                 any(item["attestation_type"] == "build_provenance" for item in lockfile["attestations"])
             )
@@ -91,6 +97,65 @@ class TestBuilderClosureProfile(unittest.TestCase):
 
             self.assertEqual(lockfile["build"]["builder_system"], "equivalent")
             self.assertTrue(lockfile["build"]["closure_uri"].startswith("equivalent://closure/"))
+            self.assertEqual(lockfile["build"]["nix_closure"]["source"], "equivalent_descriptor")
+
+    def test_builder_uses_nix_cli_metadata_when_store_paths_are_provided(self) -> None:
+        manifest = "tests/fixtures/positive/manifest.v1.example.json"
+        with tempfile.TemporaryDirectory() as td:
+            tdir = Path(td)
+            bin_dir = tdir / "bin"
+            bin_dir.mkdir()
+            fake_nix = bin_dir / "nix"
+            fake_nix.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env python3",
+                        "import json",
+                        "import sys",
+                        "paths = [arg for arg in sys.argv[1:] if arg.startswith('/nix/store/')]",
+                        "payload = {",
+                        "    path: {",
+                        "        'narHash': 'sha256-fakehash',",
+                        "        'narSize': 2048,",
+                        "        'references': [],",
+                        "        'deriver': '/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-runtime.drv',",
+                        "    }",
+                        "    for path in paths",
+                        "}",
+                        "print(json.dumps(payload, sort_keys=True))",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            fake_nix.chmod(0o755)
+
+            resolved = tdir / "resolved.lock.json"
+            built = tdir / "built.lock.json"
+            run_cmd(["python3", "cmd/resolver/main.py", "--manifest", manifest, "--lockfile-out", str(resolved)])
+            run_cmd(
+                [
+                    "python3",
+                    "cmd/builder/main.py",
+                    "--lockfile",
+                    str(resolved),
+                    "--lockfile-out",
+                    str(built),
+                    "--nix-store-path",
+                    "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-runtime",
+                ],
+                env={"PATH": f"{bin_dir}:{os.environ['PATH']}"},
+            )
+
+            lockfile = read_json(built)
+            nix_closure = lockfile["build"]["nix_closure"]
+            self.assertEqual(nix_closure["source"], "nix_cli")
+            self.assertEqual(nix_closure["store_paths"], ["/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-runtime"])
+            self.assertEqual(
+                nix_closure["derivation_paths"],
+                ["/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-runtime.drv"],
+            )
+            self.assertEqual(nix_closure["closure_digest"], lockfile["runtime_closure_digest"])
 
 
 if __name__ == "__main__":

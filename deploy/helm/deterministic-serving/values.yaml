@@ -1,0 +1,7 @@
+runnerImage:
+  repository: registry.example/deterministic-serving/runner
+  digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+mounts:
+  manifestPath: /run-inputs/manifest.json
+  lockfilePath: /run-inputs/lockfile.json
+  runtimeClosurePath: /run-inputs/runtime_closure_digest.txt

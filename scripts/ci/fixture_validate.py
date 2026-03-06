@@ -6,7 +6,11 @@ from pathlib import Path
 import re
 import sys
 
-from jsonschema import Draft202012Validator
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from pkg.common.jsonschema_compat import DefaultValidator
 
 SCHEMA_DIR = Path("schemas")
 POS_DIR = Path("tests/fixtures/positive")
@@ -15,10 +19,10 @@ POS_NAME_RE = re.compile(r"^(?P<schema>[a-z_]+\.v\d+)\.example\.json$")
 NEG_NAME_RE = re.compile(r"^(?P<schema>[a-z_]+\.v\d+)__.+\.invalid\.json$")
 
 
-def _validator(schema_file: Path) -> Draft202012Validator:
+def _validator(schema_file: Path) -> DefaultValidator:
     schema = json.loads(schema_file.read_text(encoding="utf-8"))
-    Draft202012Validator.check_schema(schema)
-    return Draft202012Validator(schema)
+    DefaultValidator.check_schema(schema)
+    return DefaultValidator(schema)
 
 
 def _validate_positive() -> tuple[int, list[str]]:

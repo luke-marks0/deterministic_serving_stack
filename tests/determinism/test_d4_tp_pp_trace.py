@@ -17,6 +17,18 @@ class TestD4TpPpTrace(unittest.TestCase):
         base_manifest["hardware_profile"]["topology"]["collective_fabric"] = "cross_rack"
         base_manifest["deterministic_dispatcher"]["enabled"] = True
         base_manifest["deterministic_dispatcher"]["algorithm"] = "sequence_map"
+        base_manifest["artifact_inputs"].append(
+            {
+                "artifact_id": "collective-stack",
+                "artifact_type": "collective_stack",
+                "expected_digest": "sha256:" + ("c" * 64),
+                "immutable_ref": "sha256:" + ("d" * 64),
+                "name": "nccl-stack",
+                "size_bytes": 512,
+                "source_kind": "oci",
+                "source_uri": "oci://registry.example/nccl@sha256:" + ("d" * 64),
+            }
+        )
 
         with tempfile.TemporaryDirectory() as td:
             tdir = Path(td)
@@ -32,6 +44,9 @@ class TestD4TpPpTrace(unittest.TestCase):
             run_cmd(["python3", "cmd/builder/main.py", "--lockfile", str(lock_resolved), "--lockfile-out", str(lock_built)])
             run_cmd(["python3", "cmd/runner/main.py", "--manifest", str(manifest), "--lockfile", str(lock_built), "--out-dir", str(run1)])
             run_cmd(["python3", "cmd/runner/main.py", "--manifest", str(manifest), "--lockfile", str(lock_built), "--out-dir", str(run2)])
+
+            built_lockfile = read_json(lock_built)
+            self.assertTrue(any(item["artifact_type"] == "collective_stack" for item in built_lockfile["artifacts"]))
 
             trace1 = read_json(run1 / "observables/engine_trace.json")
             trace2 = read_json(run2 / "observables/engine_trace.json")

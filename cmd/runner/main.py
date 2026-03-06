@@ -2,8 +2,13 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import json
+import os
 from pathlib import Path
+import re
+import shutil
+import subprocess
 import sys
 from typing import Any
 
@@ -20,6 +25,9 @@ from pkg.common.deterministic import (
     sha256_prefixed,
     utc_now_iso,
 )
+
+
+PCI_ID_RE = re.compile(r"^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-7]$")
 
 
 def _seed_for_request(run_id: str, req_id: str, prompt: str) -> int:
@@ -89,15 +97,155 @@ def _diff_hardware(expected: Any, actual: Any, path: str, out: list[dict[str, st
         out.append({"path": path, "expected": _value_repr(expected), "actual": _value_repr(actual)})
 
 
-def _extract_observed_hardware(
+def _normalize_pci_id(value: str) -> str:
+    lowered = value.strip().lower()
+    if PCI_ID_RE.match(lowered):
+        return lowered
+    return lowered
+
+
+def _parse_json_object(raw: str, *, name: str) -> dict[str, Any]:
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValidationError(f"{name} was not valid JSON: {exc}") from exc
+    if not isinstance(parsed, dict):
+        raise ValidationError(f"{name} must decode to a JSON object")
+    return parsed
+
+
+def _env_hardware_profile(expected_hardware: dict[str, Any]) -> tuple[dict[str, Any] | None, list[str]]:
+    observed = copy.deepcopy(expected_hardware)
+    evidence: list[str] = []
+
+    overrides = {
+        ("gpu", "model"): "RUNNER_GPU_MODEL",
+        ("gpu", "driver_version"): "RUNNER_GPU_DRIVER_VERSION",
+        ("gpu", "cuda_driver_version"): "RUNNER_GPU_CUDA_DRIVER_VERSION",
+        ("nic", "model"): "RUNNER_NIC_MODEL",
+        ("nic", "pci_id"): "RUNNER_NIC_PCI_ID",
+        ("nic", "firmware"): "RUNNER_NIC_FIRMWARE",
+        ("topology", "mode"): "RUNNER_TOPOLOGY_MODE",
+        ("topology", "collective_fabric"): "RUNNER_TOPOLOGY_COLLECTIVE_FABRIC",
+    }
+    for (section, key), env_key in overrides.items():
+        value = os.getenv(env_key)
+        if value is None or value.strip() == "":
+            continue
+        observed[section][key] = _normalize_pci_id(value) if key == "pci_id" else value.strip()
+        evidence.append(env_key)
+
+    int_overrides = {
+        ("gpu", "count"): "RUNNER_GPU_COUNT",
+        ("nic", "link_speed_gbps"): "RUNNER_NIC_LINK_SPEED_GBPS",
+        ("topology", "node_count"): "RUNNER_TOPOLOGY_NODE_COUNT",
+        ("topology", "rack_count"): "RUNNER_TOPOLOGY_RACK_COUNT",
+    }
+    for (section, key), env_key in int_overrides.items():
+        value = os.getenv(env_key)
+        if value is None or value.strip() == "":
+            continue
+        try:
+            observed[section][key] = int(value)
+        except ValueError as exc:
+            raise ValidationError(f"{env_key} must be an integer") from exc
+        evidence.append(env_key)
+
+    gpu_pci_ids = os.getenv("RUNNER_GPU_PCI_IDS")
+    if gpu_pci_ids:
+        observed["gpu"]["pci_ids"] = [_normalize_pci_id(item) for item in gpu_pci_ids.split(",") if item.strip()]
+        evidence.append("RUNNER_GPU_PCI_IDS")
+
+    nic_offloads = os.getenv("RUNNER_NIC_OFFLOADS_JSON")
+    if nic_offloads:
+        observed["nic"]["offloads"] = _parse_json_object(nic_offloads, name="RUNNER_NIC_OFFLOADS_JSON")
+        evidence.append("RUNNER_NIC_OFFLOADS_JSON")
+
+    if len(evidence) == 0:
+        return (None, [])
+    return (observed, evidence)
+
+
+def _probe_with_nvidia_smi(expected_hardware: dict[str, Any]) -> tuple[dict[str, Any], list[str]] | None:
+    if shutil.which("nvidia-smi") is None:
+        return None
+
+    cmd = ["nvidia-smi", "--query-gpu=name,driver_version,pci.bus_id", "--format=csv,noheader"]
+    try:
+        proc = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError:
+        return None
+
+    rows = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+    if len(rows) == 0:
+        return None
+
+    observed = copy.deepcopy(expected_hardware)
+    gpu_names: list[str] = []
+    driver_version = expected_hardware["gpu"]["driver_version"]
+    pci_ids: list[str] = []
+    for row in rows:
+        parts = [part.strip() for part in row.split(",")]
+        if len(parts) < 3:
+            continue
+        gpu_names.append(parts[0])
+        driver_version = parts[1] or driver_version
+        pci_ids.append(_normalize_pci_id(parts[2]))
+
+    if len(gpu_names) == 0:
+        return None
+
+    observed["gpu"]["model"] = gpu_names[0]
+    observed["gpu"]["count"] = len(gpu_names)
+    observed["gpu"]["driver_version"] = driver_version
+    observed["gpu"]["pci_ids"] = pci_ids
+    return (observed, ["nvidia-smi --query-gpu=name,driver_version,pci.bus_id"])
+
+
+def _probe_runtime_hardware(
     expected_hardware: dict[str, Any],
     runtime_hardware: dict[str, Any] | None,
-) -> dict[str, Any]:
-    if runtime_hardware is None:
-        return expected_hardware
-    if not isinstance(runtime_hardware, dict):
-        raise ValidationError("runtime_hardware must be a JSON object when provided")
-    return runtime_hardware
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    if runtime_hardware is not None:
+        if not isinstance(runtime_hardware, dict):
+            raise ValidationError("runtime_hardware must be a JSON object when provided")
+        return (
+            runtime_hardware,
+            {
+                "source": "runtime_hardware_file",
+                "evidence": ["--runtime-hardware"],
+            },
+        )
+
+    env_profile, env_evidence = _env_hardware_profile(expected_hardware)
+    if env_profile is not None:
+        return (
+            env_profile,
+            {
+                "source": "env_probe",
+                "evidence": env_evidence,
+            },
+        )
+
+    if os.getenv("RUNNER_ENABLE_HOST_PROBE", "").strip().lower() in {"1", "true", "yes"}:
+        nvidia_probe = _probe_with_nvidia_smi(expected_hardware)
+        if nvidia_probe is not None:
+            observed, evidence = nvidia_probe
+            return (
+                observed,
+                {
+                    "source": "nvidia_smi",
+                    "evidence": evidence,
+                },
+            )
+
+    return (
+        copy.deepcopy(expected_hardware),
+        {
+            "source": "expected_profile_fallback",
+            "evidence": ["Host probe disabled or unavailable; using manifest hardware_profile"],
+        },
+    )
 
 
 def _hardware_conformance_record(
@@ -125,6 +273,22 @@ def _hardware_conformance_record(
     return record
 
 
+def _artifact_by_type(lockfile: dict[str, Any], artifact_type: str) -> dict[str, Any]:
+    for item in lockfile["artifacts"]:
+        if item["artifact_type"] == artifact_type:
+            return item
+    raise ValidationError(f"Lockfile missing required artifact type: {artifact_type}")
+
+
+def _env_or_default(cli_value: str | None, env_key: str, default: str) -> str:
+    if cli_value is not None and cli_value.strip() != "":
+        return cli_value
+    env_value = os.getenv(env_key)
+    if env_value is not None and env_value.strip() != "":
+        return env_value
+    return default
+
+
 def run(
     manifest: dict[str, Any],
     lockfile: dict[str, Any],
@@ -132,6 +296,13 @@ def run(
     replica_id: str,
     *,
     runtime_hardware: dict[str, Any] | None = None,
+    pod_manifest_path: str,
+    pod_lockfile_path: str,
+    pod_runtime_closure_path: str,
+    pod_name: str,
+    node_name: str,
+    namespace: str,
+    invocation_argv: list[str],
 ) -> dict[str, Any]:
     validate_with_schema("manifest.v1.schema.json", manifest)
     validate_with_schema("lockfile.v1.schema.json", lockfile)
@@ -158,7 +329,7 @@ def run(
                 )
 
     expected_hardware = manifest["hardware_profile"]
-    observed_hardware = _extract_observed_hardware(expected_hardware, runtime_hardware)
+    observed_hardware, hardware_probe = _probe_runtime_hardware(expected_hardware, runtime_hardware)
     hardware_conformance = _hardware_conformance_record(
         expected_hardware,
         observed_hardware,
@@ -166,6 +337,8 @@ def run(
     )
     observed_gpu = observed_hardware.get("gpu", expected_hardware["gpu"])
     observed_nic = observed_hardware.get("nic", expected_hardware["nic"])
+    network_stack = _artifact_by_type(lockfile, "network_stack_binary")
+    pmd_driver = _artifact_by_type(lockfile, "pmd_driver")
 
     out_dir.mkdir(parents=True, exist_ok=True)
     manifest_copy = out_dir / "manifest.json"
@@ -253,6 +426,17 @@ def run(
     trace_digest = _write_json(trace_path, engine_events)
     network_digest = _write_json(network_path, frames)
 
+    rerun_metadata = {
+        "entrypoint": str(Path(__file__).resolve()),
+        "argv": invocation_argv,
+        "replica_id": replica_id,
+        "manifest_digest": manifest_digest,
+        "lockfile_digest": expected_lockfile_digest,
+        "runtime_closure_digest": lockfile["runtime_closure_digest"],
+        "artifact_count": len(lockfile["artifacts"]),
+        "attestation_digests": [item["statement_digest"] for item in lockfile.get("attestations", [])],
+    }
+
     run_bundle: dict[str, Any] = {
         "run_bundle_version": "v1",
         "run_id": manifest["run_id"],
@@ -282,23 +466,48 @@ def run(
             "gpu_inventory": [observed_gpu.get("model", expected_hardware["gpu"]["model"])],
             "hardware_fingerprint": hardware_conformance["actual_fingerprint"],
         },
+        "hardware_probe": hardware_probe,
         "hardware_conformance": hardware_conformance,
+        "execution_context": {
+            "entrypoint": str(Path(__file__).resolve()),
+            "argv": invocation_argv,
+            "cwd": str(Path.cwd()),
+            "replica_id": replica_id,
+            "pod": {
+                "name": pod_name,
+                "node_name": node_name,
+                "namespace": namespace,
+            },
+            "input_mounts": {
+                "manifest_path": pod_manifest_path,
+                "lockfile_path": pod_lockfile_path,
+                "runtime_closure_path": pod_runtime_closure_path,
+            },
+        },
         "execution_trace_metadata": {
             "actual_batch_sizes": [target_batch for _ in manifest["requests"]],
             "resolved_args": {
                 "batch_policy": manifest["runtime"]["batch_policy"],
                 "strict_hardware": str(manifest["runtime"]["strict_hardware"]).lower(),
+                "replica_id": replica_id,
             },
             "resolved_env": {
                 "CUBLAS_WORKSPACE_CONFIG": ":4096:8",
                 "CUDA_LAUNCH_BLOCKING": str(int(manifest["runtime"]["deterministic_knobs"]["cuda_launch_blocking"])),
+                "RUNNER_NETWORK_ROUTE_MODE": "deterministic_userspace_stack",
             },
         },
+        "rerun_metadata": rerun_metadata,
         "network_provenance": {
             "capture_path": str(network_path.relative_to(out_dir)),
             "capture_digest": network_digest,
             "frame_count": len(frames),
             "capture_mode": "userspace_pre_enqueue",
+            "capture_isolation": "pre_enqueue_mirror",
+            "capture_non_perturbing": True,
+            "route_mode": "deterministic_userspace_stack",
+            "network_stack_artifact_digest": network_stack["digest"],
+            "pmd_driver_artifact_digest": pmd_driver["digest"],
             "nic_fingerprint": sha256_prefixed(canonical_json_bytes(observed_nic)),
             "security_mode": manifest["network"]["security_mode"],
         },
@@ -328,7 +537,16 @@ def run(
             {
                 "attestation_type": "run_provenance",
                 "signer": "runner@deterministic-serving-stack",
-                "statement_digest": sha256_prefixed(canonical_json_bytes({"run_id": manifest["run_id"], "replica_id": replica_id})),
+                "statement_digest": sha256_prefixed(
+                    canonical_json_bytes(
+                        {
+                            "run_id": manifest["run_id"],
+                            "replica_id": replica_id,
+                            "runtime_closure_digest": lockfile["runtime_closure_digest"],
+                            "manifest_digest": manifest_digest,
+                        }
+                    )
+                ),
                 "timestamp": utc_now_iso(),
             }
         ],
@@ -348,6 +566,12 @@ def main() -> int:
     parser.add_argument("--out-dir", required=True, help="Output bundle directory")
     parser.add_argument("--replica-id", default="replica-0", help="Replica identifier")
     parser.add_argument("--runtime-hardware", help="Optional observed runtime hardware profile JSON path")
+    parser.add_argument("--pod-manifest-path", help="Mounted manifest path inside the pod")
+    parser.add_argument("--pod-lockfile-path", help="Mounted lockfile path inside the pod")
+    parser.add_argument("--pod-runtime-closure-path", help="Mounted runtime closure digest path inside the pod")
+    parser.add_argument("--pod-name", help="Pod name for provenance recording")
+    parser.add_argument("--node-name", help="Node name for provenance recording")
+    parser.add_argument("--namespace", help="Namespace for provenance recording")
     args = parser.parse_args()
 
     manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
@@ -362,6 +586,17 @@ def main() -> int:
         Path(args.out_dir),
         args.replica_id,
         runtime_hardware=runtime_hardware,
+        pod_manifest_path=_env_or_default(args.pod_manifest_path, "RUNNER_POD_MANIFEST_PATH", args.manifest),
+        pod_lockfile_path=_env_or_default(args.pod_lockfile_path, "RUNNER_POD_LOCKFILE_PATH", args.lockfile),
+        pod_runtime_closure_path=_env_or_default(
+            args.pod_runtime_closure_path,
+            "RUNNER_POD_RUNTIME_CLOSURE_PATH",
+            "lockfile.runtime_closure_digest",
+        ),
+        pod_name=_env_or_default(args.pod_name, "RUNNER_POD_NAME", "local-pod"),
+        node_name=_env_or_default(args.node_name, "RUNNER_NODE_NAME", "local-node"),
+        namespace=_env_or_default(args.namespace, "RUNNER_NAMESPACE", "default"),
+        invocation_argv=[str(Path(__file__).resolve()), *sys.argv[1:]],
     )
     return 0
 

@@ -4,7 +4,7 @@ import json
 import pathlib
 import unittest
 
-from jsonschema import Draft202012Validator
+from pkg.common.jsonschema_compat import DefaultValidator
 
 
 class TestSchemaFiles(unittest.TestCase):
@@ -14,7 +14,7 @@ class TestSchemaFiles(unittest.TestCase):
         for schema_file in schema_files:
             with self.subTest(file=str(schema_file)):
                 content = json.loads(schema_file.read_text(encoding="utf-8"))
-                Draft202012Validator.check_schema(content)
+                DefaultValidator.check_schema(content)
 
 
 if __name__ == "__main__":

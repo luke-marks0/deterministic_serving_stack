@@ -77,5 +77,7 @@ print("Mismatch report fields verified")
 PY
 
 python3 scripts/ci/mark_conformance.py --id SPEC-9.1-NETWORK-EGRESS
+python3 scripts/ci/mark_conformance.py --id SPEC-9.1-NETWORK-USERSPACE-ROUTING
+python3 scripts/ci/mark_conformance.py --id SPEC-9.3-CAPTURE-NONPERTURBING
 
 log "D5 passed"
