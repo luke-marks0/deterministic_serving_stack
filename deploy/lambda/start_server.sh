@@ -29,10 +29,26 @@ python3 cmd/resolver/main.py \
     --manifest-out "$RUN_DIR/manifest.resolved.json" \
     --resolve-hf --hf-resolution-mode online 2>&1 | tail -2
 
-python3 cmd/builder/main.py \
-    --lockfile "$RUN_DIR/lockfile.v1.json" \
-    --lockfile-out "$RUN_DIR/lockfile.built.v1.json" \
-    --builder-system equivalent 2>&1 | tail -2
+# Build — use real Nix closure digest if Nix is available
+BUILDER_ARGS="--lockfile $RUN_DIR/lockfile.v1.json --lockfile-out $RUN_DIR/lockfile.built.v1.json"
+if command -v nix &>/dev/null; then
+    CLOSURE_PATH=$(bash -l -c "nix build .#closure --print-out-paths --no-link 2>/dev/null" || true)
+    if [ -n "$CLOSURE_PATH" ] && [ -d "$CLOSURE_PATH" ]; then
+        CLOSURE_DIGEST=$(bash -l -c "nix path-info --json --recursive '$CLOSURE_PATH'" 2>/dev/null | python3 -c "
+import json, sys, hashlib
+data = json.load(sys.stdin)
+entries = [{'path': k, **v} for k, v in sorted(data.items())] if isinstance(data, dict) else sorted(data, key=lambda x: x.get('path', ''))
+print('sha256:' + hashlib.sha256(json.dumps(entries, sort_keys=True, separators=(',', ':')).encode()).hexdigest())
+")
+        echo "Nix closure digest: $CLOSURE_DIGEST"
+        BUILDER_ARGS="$BUILDER_ARGS --builder-system nix --closure-digest $CLOSURE_DIGEST"
+    else
+        BUILDER_ARGS="$BUILDER_ARGS --builder-system equivalent"
+    fi
+else
+    BUILDER_ARGS="$BUILDER_ARGS --builder-system equivalent"
+fi
+python3 cmd/builder/main.py $BUILDER_ARGS 2>&1 | tail -2
 
 # Start server in background
 nohup python3 cmd/server/main.py \

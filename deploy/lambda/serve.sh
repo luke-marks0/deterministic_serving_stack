@@ -48,14 +48,41 @@ python3 "${REPO_ROOT}/cmd/resolver/main.py" \
 echo "Lockfile: ${LOCKFILE}"
 echo "Resolved manifest: ${RESOLVED_MANIFEST}"
 
-# Step 2: Build (reference descriptor)
+# Step 2: Build — use real Nix closure digest if available
 echo "--- Step 2: Builder ---"
 BUILT_LOCKFILE="${RUN_DIR}/lockfile.built.v1.json"
+BUILDER_ARGS=(
+    --lockfile "${LOCKFILE}"
+    --lockfile-out "${BUILT_LOCKFILE}"
+)
 
-python3 "${REPO_ROOT}/cmd/builder/main.py" \
-    --lockfile "${LOCKFILE}" \
-    --lockfile-out "${BUILT_LOCKFILE}" \
-    --builder-system equivalent
+if command -v nix &>/dev/null; then
+    echo "  Nix detected — building real closure..."
+    CLOSURE_PATH=$(bash -l -c "nix build '${REPO_ROOT}#closure' --print-out-paths --no-link 2>/dev/null" || true)
+    if [ -n "$CLOSURE_PATH" ] && [ -d "$CLOSURE_PATH" ]; then
+        CLOSURE_DIGEST=$(bash -l -c "nix path-info --json --recursive '$CLOSURE_PATH'" 2>/dev/null | python3 -c "
+import json, sys, hashlib
+data = json.load(sys.stdin)
+if isinstance(data, dict):
+    entries = [{'path': k, **v} for k, v in sorted(data.items())]
+else:
+    entries = sorted(data, key=lambda x: x.get('path', ''))
+canonical = json.dumps(entries, sort_keys=True, separators=(',', ':'))
+print('sha256:' + hashlib.sha256(canonical.encode()).hexdigest())
+")
+        echo "  Closure: ${CLOSURE_PATH}"
+        echo "  runtime_closure_digest: ${CLOSURE_DIGEST}"
+        BUILDER_ARGS+=(--builder-system nix --closure-digest "${CLOSURE_DIGEST}")
+    else
+        echo "  Nix build failed, falling back to equivalent"
+        BUILDER_ARGS+=(--builder-system equivalent)
+    fi
+else
+    echo "  Nix not available, using equivalent builder"
+    BUILDER_ARGS+=(--builder-system equivalent)
+fi
+
+python3 "${REPO_ROOT}/cmd/builder/main.py" "${BUILDER_ARGS[@]}"
 
 echo "Built lockfile: ${BUILT_LOCKFILE}"
 

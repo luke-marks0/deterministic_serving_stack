@@ -280,6 +280,7 @@ def build_runtime(
     *,
     builder_system: str = "nix",
     nix_store_paths: list[str] | None = None,
+    closure_digest: str | None = None,
 ) -> dict[str, Any]:
     if builder_system not in {"nix", "equivalent"}:
         raise ValidationError(f"Unsupported builder_system: {builder_system}")
@@ -307,6 +308,13 @@ def build_runtime(
     reference_digest = sha256_prefixed(canonical_json_bytes(closure_seed))
     if nix_store_paths:
         nix_closure = _query_nix_closure(nix_store_paths)
+    elif closure_digest:
+        # Pre-computed closure digest (e.g. from a prior `nix path-info` run)
+        nix_closure = _reference_nix_closure(
+            artifacts,
+            closure_digest,
+            source="nix_cli",
+        )
     else:
         nix_closure = _reference_nix_closure(
             artifacts,
@@ -370,6 +378,10 @@ def main() -> int:
         default=[],
         help="Optional Nix store path to query via nix path-info for closure metadata",
     )
+    parser.add_argument(
+        "--closure-digest",
+        help="Pre-computed runtime closure digest (sha256:...) from a prior Nix build",
+    )
     args = parser.parse_args()
 
     lockfile_path = Path(args.lockfile)
@@ -380,6 +392,7 @@ def main() -> int:
         lockfile,
         builder_system=args.builder_system,
         nix_store_paths=[str(item) for item in args.nix_store_path],
+        closure_digest=args.closure_digest,
     )
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
