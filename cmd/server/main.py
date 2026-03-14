@@ -16,6 +16,7 @@ import sys
 import threading
 import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from socketserver import ThreadingMixIn
 from pathlib import Path
 from typing import Any
 from urllib.request import Request, urlopen
@@ -356,7 +357,10 @@ def main() -> int:
     ProxyHandler.vllm_port = args.vllm_port
     ProxyHandler.capture_log = capture_log
 
-    proxy = HTTPServer((args.host, args.port), ProxyHandler)
+    class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
+        daemon_threads = True
+
+    proxy = ThreadedHTTPServer((args.host, args.port), ProxyHandler)
     proxy_thread = threading.Thread(target=proxy.serve_forever, daemon=True)
     proxy_thread.start()
 
