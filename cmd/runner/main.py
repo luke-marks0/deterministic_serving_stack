@@ -405,6 +405,7 @@ def run(
     manifest_copy.write_text(canonical_json_text(manifest), encoding="utf-8")
     lockfile_copy.write_text(canonical_json_text(lockfile), encoding="utf-8")
 
+    target_batch = manifest["runtime"]["batch_cardinality"]["target_batch_size"]
     vllm_env_info: dict[str, Any] | None = None
 
     if mode == "vllm":

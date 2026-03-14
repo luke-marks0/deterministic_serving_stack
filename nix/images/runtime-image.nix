@@ -11,7 +11,7 @@ pkgs.dockerTools.buildLayeredImage {
   tag = "0.1.0";
   contents = [ runtimeClosure pkgs.python310 pkgs.bash ];
   config = {
-    Cmd = [ "python3" "/app/cmd/server/main.py" ];
+    Cmd = [ "${runtimeClosure}/bin/python3" "${runtimeClosure}/cmd/server/main.py" ];
     WorkingDir = "/workspace";
     Env = [
       "PYTHONPATH=/app"

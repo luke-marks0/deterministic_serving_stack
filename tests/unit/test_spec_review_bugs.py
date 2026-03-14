@@ -142,8 +142,8 @@ class TestBug3UlpComparisonWrong(unittest.TestCase):
             )
 
     def test_ulp_comparison_large_values(self) -> None:
-        """Near 1e10, 1 ULP is ~1e-7 * 1e10 = ~1e3. Fixed 1e-7 is way too small."""
-        import importlib, sys
+        """At large magnitude, values 1 ULP apart should pass with ulp=1."""
+        import importlib, sys, struct
         spec = importlib.util.spec_from_file_location(
             "verifier_main", "cmd/verifier/main.py",
             submodule_search_locations=[],
@@ -159,18 +159,30 @@ class TestBug3UlpComparisonWrong(unittest.TestCase):
 
         _compare_observable = mod._compare_observable
 
-        baseline = [1e10]
-        candidate = [1e10 + 500]  # Well within 1 ULP at this magnitude
+        # Construct two values exactly 1 ULP apart at large magnitude
+        val = 1e10
+        bits = struct.unpack(">q", struct.pack(">d", val))[0]
+        next_val = struct.unpack(">d", struct.pack(">q", bits + 1))[0]
+
+        baseline = [val]
+        candidate = [next_val]
         comp = {"mode": "ulp", "ulp": 1}
 
         result = _compare_observable("ulp", baseline, candidate, comp)
 
-        if not result:
-            self.fail(
-                "Bug #3 confirmed: ULP comparison failed for values within 1 ULP "
-                "at large magnitude (1e10 vs 1e10+500 with ulp=1). "
-                "The fixed epsilon 1e-7 is too restrictive for large values."
-            )
+        self.assertTrue(
+            result,
+            f"ULP comparison should pass for values 1 ULP apart "
+            f"({val} vs {next_val}, diff={next_val - val})"
+        )
+
+        # And 2 ULPs apart should fail with ulp=1
+        two_away = struct.unpack(">d", struct.pack(">q", bits + 2))[0]
+        result2 = _compare_observable("ulp", [val], [two_away], comp)
+        self.assertFalse(
+            result2,
+            f"ULP comparison should fail for values 2 ULPs apart with ulp=1"
+        )
 
 
 class TestBug4RelativeSchemaPath(unittest.TestCase):
