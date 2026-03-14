@@ -38,15 +38,27 @@ from pkg.common.deterministic import (
     sha256_prefixed,
     utc_now_iso,
 )
+from pkg.hardware.rack_policy import (
+    CapacityTracker,
+    DeterminismSLO,
+    DeterministicRetry,
+    FailureDomain,
+    RackTopology,
+)
 
 
 class ReplicaPool:
-    """Manages a set of server replicas with health checking."""
+    """Manages a set of server replicas with health checking and failure domains."""
 
-    def __init__(self, urls: list[str]):
+    def __init__(self, urls: list[str], rack_count: int = 1):
         self.urls = urls
         self.healthy: list[bool] = [False] * len(urls)
         self._lock = threading.Lock()
+        self.topology = RackTopology(rack_count=rack_count, nodes_per_rack=max(1, len(urls) // rack_count))
+        self.failure_domain = FailureDomain(self.topology)
+        self.capacity = CapacityTracker(self.topology)
+        self.slo = DeterminismSLO()
+        self.retry = DeterministicRetry(max_retries=2)
 
     def check_health(self) -> dict[str, Any]:
         results = {}
@@ -57,17 +69,26 @@ class ReplicaPool:
             except Exception:
                 self.healthy[i] = False
             results[url] = self.healthy[i]
+            rack = self.topology.rack_for_node(i)
+            if self.healthy[i]:
+                self.failure_domain.mark_rack_healthy(rack)
+            else:
+                # Only mark rack failed if all nodes in rack are down
+                rack_nodes = self.topology.nodes_in_rack(rack)
+                if all(not self.healthy[n] for n in rack_nodes if n < len(self.healthy)):
+                    self.failure_domain.mark_rack_failed(rack)
         return results
 
     def get_replica(self, index: int) -> str | None:
         idx = index % len(self.urls)
         if self.healthy[idx]:
             return self.urls[idx]
-        # Fall through to first healthy
-        for i in range(len(self.urls)):
-            candidate = (idx + i) % len(self.urls)
-            if self.healthy[candidate]:
-                return self.urls[candidate]
+        # Deterministic retry: try next replicas in order
+        failed_indices = {i for i, h in enumerate(self.healthy) if not h}
+        targets = self.retry.retry_targets(idx, len(self.urls), failed_indices)
+        for target in targets:
+            if self.healthy[target]:
+                return self.urls[target]
         return None
 
 

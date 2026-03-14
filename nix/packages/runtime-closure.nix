@@ -2,15 +2,17 @@
 #
 # This is the legacy interface — prefer `nix build .#closure` via flake.nix.
 # Kept for compatibility with the builder's --nix-store-path workflow.
+#
+# Note: vLLM, PyTorch, and CUDA are external artifacts tracked by digest
+# in the lockfile, not included in the Nix closure.
 { pkgs ? import <nixpkgs> {} }:
 
 let
   python = pkgs.python310;
 
-  pythonEnv = python.withPackages (ps: with ps; [
-    torch numpy jsonschema requests huggingface-hub
-    safetensors transformers tokenizers pyyaml filelock
-    tqdm typing-extensions packaging
+  pythonEnv = python.withPackages (ps: [
+    ps.jsonschema ps.requests ps.pyyaml ps.filelock
+    ps.tqdm ps.typing-extensions ps.packaging ps.numpy
   ]);
 in
 pkgs.symlinkJoin {
@@ -20,6 +22,7 @@ pkgs.symlinkJoin {
     pythonEnv
     pkgs.bash
     pkgs.coreutils
+    pkgs.cacert
   ];
 
   meta = {

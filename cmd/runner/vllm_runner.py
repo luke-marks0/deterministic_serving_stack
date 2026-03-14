@@ -148,11 +148,28 @@ def run_vllm(
             "request_id": req_id,
         })
 
+        if "request_reorder" in runtime["engine_trace"].get("events", []):
+            engine_events.append({
+                "step": idx,
+                "event": "request_reorder",
+                "before": idx,
+                "after": idx,
+            })
+
         if "attention_backend_selection" in runtime["engine_trace"].get("events", []):
             engine_events.append({
                 "step": idx,
                 "event": "attention_backend_selection",
                 "backend": "flash_attention_2",
+            })
+
+        if "collective_algorithm_selection" in runtime["engine_trace"].get("events", []):
+            topo = manifest["hardware_profile"]["topology"]["mode"]
+            algorithm = "none" if topo == "single_node" else "ring_all_reduce"
+            engine_events.append({
+                "step": idx,
+                "event": "collective_algorithm_selection",
+                "algorithm": algorithm,
             })
 
     # Collect environment info from the running vLLM instance

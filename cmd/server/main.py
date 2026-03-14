@@ -157,10 +157,15 @@ class CaptureLog:
         with open(self.path, "w") as f:
             f.write("")
 
-    def append(self, entry: dict[str, Any]) -> None:
+    def next_seq(self) -> int:
+        """Assign a sequence number at request arrival time (under lock)."""
         with self._lock:
             self._seq += 1
-            entry["seq"] = self._seq
+            return self._seq
+
+    def append(self, entry: dict[str, Any]) -> None:
+        """Write a pre-sequenced entry. seq must already be set by next_seq()."""
+        with self._lock:
             entry["captured_at"] = utc_now_iso()
             with open(self.path, "a") as f:
                 f.write(canonical_json_text(entry))
@@ -175,6 +180,10 @@ class ProxyHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         content_length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(content_length) if content_length > 0 else b""
+
+        # Assign sequence number at arrival time (before forwarding) so
+        # logging order matches arrival order regardless of thread scheduling.
+        arrival_seq = self.capture_log.next_seq() if self.capture_log else 0
 
         # Parse request for logging
         try:
@@ -201,9 +210,10 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 except json.JSONDecodeError:
                     response_data = {"raw": resp_body.decode("utf-8", errors="replace")}
 
-                # Log the exchange
+                # Log the exchange with pre-assigned arrival-order seq
                 if self.capture_log and self.path.startswith("/v1/"):
                     self.capture_log.append({
+                        "seq": arrival_seq,
                         "endpoint": self.path,
                         "request": request_data,
                         "response": response_data,

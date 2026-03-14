@@ -115,6 +115,61 @@ def cross_verify(
         "mismatches": env_mismatches,
     })
 
+    # 4. Compare observables across replicas (tokens, logits, activations)
+    observable_names = ["tokens", "logits", "activations", "engine_trace", "network_egress"]
+    replica_names = list(replica_bundles.keys())
+    observable_mismatches = []
+
+    if len(replica_names) >= 2:
+        baseline_name = replica_names[0]
+        baseline_bundle = replica_bundles[baseline_name]
+        baseline_dir = replica_dirs[baseline_name]
+
+        for obs_name in observable_names:
+            baseline_obs_info = baseline_bundle.get("observables", {}).get(obs_name)
+            if not baseline_obs_info:
+                continue
+            baseline_obs_path = baseline_dir / baseline_obs_info["path"]
+            if not baseline_obs_path.exists():
+                continue
+            baseline_obs = _load_json(baseline_obs_path)
+
+            for other_name in replica_names[1:]:
+                other_bundle = replica_bundles[other_name]
+                other_dir = replica_dirs[other_name]
+                other_obs_info = other_bundle.get("observables", {}).get(obs_name)
+                if not other_obs_info:
+                    observable_mismatches.append({
+                        "observable": obs_name,
+                        "replica": other_name,
+                        "reason": "observable missing from bundle",
+                    })
+                    continue
+                other_obs_path = other_dir / other_obs_info["path"]
+                if not other_obs_path.exists():
+                    observable_mismatches.append({
+                        "observable": obs_name,
+                        "replica": other_name,
+                        "reason": "observable file missing",
+                    })
+                    continue
+                other_obs = _load_json(other_obs_path)
+                if baseline_obs != other_obs:
+                    observable_mismatches.append({
+                        "observable": obs_name,
+                        "replicas": [baseline_name, other_name],
+                        "reason": "content mismatch",
+                        "baseline_digest": baseline_obs_info.get("digest", ""),
+                        "other_digest": other_obs_info.get("digest", ""),
+                    })
+
+    checks.append({
+        "check": "observables_cross_replica",
+        "outcome": "pass" if not observable_mismatches else "fail",
+        "detail": f"{len(observable_mismatches)} observable mismatch(es) across replicas",
+        "mismatches": observable_mismatches,
+    })
+
     # Overall status
     all_pass = all(c["outcome"] == "pass" for c in checks)
     report = {

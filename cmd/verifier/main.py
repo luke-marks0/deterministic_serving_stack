@@ -274,8 +274,12 @@ def verify(baseline_bundle_path: Path, candidate_bundle_path: Path, report_out: 
 
     environment_diffs = {
         "runtime_closure_digest_equal": runtime_equal,
+        "baseline_runtime_closure_digest": baseline["runtime_closure_digest"],
+        "candidate_runtime_closure_digest": candidate["runtime_closure_digest"],
         "version_diffs": version_diffs,
         "hardware_fingerprint_equal": hardware_equal,
+        "baseline_hardware_fingerprint": baseline["environment_info"]["hardware_fingerprint"],
+        "candidate_hardware_fingerprint": candidate["environment_info"]["hardware_fingerprint"],
     }
 
     checks = [
