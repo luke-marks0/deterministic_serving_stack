@@ -1,0 +1,158 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: deterministic-run-inputs
+  labels:
+    app.kubernetes.io/name: deterministic-serving-stack
+    app.kubernetes.io/component: run-inputs
+data:
+  manifest.json: |
+    {"manifest_version":"v1"}
+  lockfile.json: |
+    {"lockfile_version":"v1"}
+  runtime_closure_digest.txt: |
+    sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+---
+# Coordinator: deterministic request dispatcher
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deterministic-coordinator
+  labels:
+    app.kubernetes.io/name: deterministic-serving-stack
+    app.kubernetes.io/component: coordinator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: coordinator
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: deterministic-serving-stack
+        app.kubernetes.io/component: coordinator
+    spec:
+      containers:
+        - name: coordinator
+          image: registry.example/deterministic-serving/coordinator@sha256:placeholder
+          command: ["python3", "/app/cmd/coordinator/main.py"]
+          args:
+            - --manifest
+            - /run-inputs/manifest.json
+            - --lockfile
+            - /run-inputs/lockfile.json
+            - --replicas
+            - "http://deterministic-runner-0.deterministic-runner:8000,http://deterministic-runner-1.deterministic-runner:8000"
+            - --port
+            - "9000"
+          ports:
+            - containerPort: 9000
+          volumeMounts:
+            - name: run-inputs
+              mountPath: /run-inputs
+              readOnly: true
+      volumes:
+        - name: run-inputs
+          configMap:
+            name: deterministic-run-inputs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: deterministic-coordinator
+spec:
+  selector:
+    app.kubernetes.io/component: coordinator
+  ports:
+    - port: 9000
+      targetPort: 9000
+---
+# Runner replicas: identical vLLM servers behind the coordinator
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: deterministic-runner
+  labels:
+    app.kubernetes.io/name: deterministic-serving-stack
+    app.kubernetes.io/component: runner
+spec:
+  serviceName: deterministic-runner
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: runner
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: deterministic-serving-stack
+        app.kubernetes.io/component: runner
+    spec:
+      nodeSelector:
+        hardware.gpu.vendor: nvidia
+        hardware.gpu.model: H100-PCIe-80GB
+        hardware.nic.model: ConnectX-7
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: runner
+      containers:
+        - name: server
+          image: registry.example/deterministic-serving/server@sha256:placeholder
+          command: ["python3", "/app/cmd/server/main.py"]
+          args:
+            - --manifest
+            - /run-inputs/manifest.json
+            - --lockfile
+            - /run-inputs/lockfile.json
+            - --out-dir
+            - /var/run/deterministic-serving
+            - --host
+            - "0.0.0.0"
+            - --port
+            - "8000"
+          ports:
+            - containerPort: 8000
+          env:
+            - name: RUNNER_ENABLE_HOST_PROBE
+              value: "1"
+            - name: VLLM_BATCH_INVARIANT
+              value: "1"
+            - name: RUNNER_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: RUNNER_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: RUNNER_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          resources:
+            limits:
+              nvidia.com/gpu: "1"
+          volumeMounts:
+            - name: run-inputs
+              mountPath: /run-inputs
+              readOnly: true
+      volumes:
+        - name: run-inputs
+          configMap:
+            name: deterministic-run-inputs
+---
+# Headless service for StatefulSet DNS
+apiVersion: v1
+kind: Service
+metadata:
+  name: deterministic-runner
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/component: runner
+  ports:
+    - port: 8000
+      targetPort: 8000
