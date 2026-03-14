@@ -204,6 +204,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Resolve manifest into deterministic lockfile")
     parser.add_argument("--manifest", required=True, help="Path to manifest JSON")
     parser.add_argument("--lockfile-out", required=True, help="Path to lockfile JSON output")
+    parser.add_argument("--manifest-out", help="Path to write the resolved manifest (after HF resolution)")
     parser.add_argument("--resolve-hf", action="store_true", help="Resolve Hugging Face model files and digests")
     parser.add_argument("--hf-cache-dir", help="Optional HF cache directory")
     hf_token_group = parser.add_mutually_exclusive_group()
@@ -239,6 +240,12 @@ def main() -> int:
 
     lockfile_path.parent.mkdir(parents=True, exist_ok=True)
     lockfile_path.write_text(canonical_json_text(lockfile), encoding="utf-8")
+
+    if args.manifest_out:
+        manifest_out_path = Path(args.manifest_out)
+        manifest_out_path.parent.mkdir(parents=True, exist_ok=True)
+        manifest_out_path.write_text(canonical_json_text(manifest), encoding="utf-8")
+
     return 0
 
 

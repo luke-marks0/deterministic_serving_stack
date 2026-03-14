@@ -289,12 +289,71 @@ def _env_or_default(cli_value: str | None, env_key: str, default: str) -> str:
     return default
 
 
+def _synthetic_observables(
+    manifest: dict[str, Any],
+    replica_id: str,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    """Generate synthetic observables for testing/CI (no GPU required)."""
+    request_outputs: list[dict[str, Any]] = []
+    engine_events: list[dict[str, Any]] = []
+    frames: list[dict[str, Any]] = []
+
+    target_batch = manifest["runtime"]["batch_cardinality"]["target_batch_size"]
+    for idx, req in enumerate(manifest["requests"]):
+        seed = _seed_for_request(manifest["run_id"], req["id"], req["prompt"])
+        toks = _tokens(seed)
+        lgt = _logits(toks)
+        act = _activations(toks)
+
+        request_outputs.append({"id": req["id"], "tokens": toks, "logits": lgt, "activations": act})
+
+        engine_events.append({
+            "step": idx, "event": "batch_composition",
+            "batch_size": target_batch, "request_id": req["id"], "replica_id": replica_id,
+        })
+        if "request_reorder" in manifest["runtime"]["engine_trace"]["events"]:
+            engine_events.append({"step": idx, "event": "request_reorder", "before": idx, "after": idx})
+        if "attention_backend_selection" in manifest["runtime"]["engine_trace"]["events"]:
+            engine_events.append({"step": idx, "event": "attention_backend_selection", "backend": "flash_attention_2"})
+        if "collective_algorithm_selection" in manifest["runtime"]["engine_trace"]["events"]:
+            topo = manifest["hardware_profile"]["topology"]["mode"]
+            algorithm = "none" if topo == "single_node" else "ring_all_reduce"
+            engine_events.append({"step": idx, "event": "collective_algorithm_selection", "algorithm": algorithm})
+
+        frames.append({"request_id": req["id"], "frame_hex": _network_frame_hex(seed, req["id"])})
+
+    return request_outputs, engine_events, frames
+
+
+def _vllm_observables(
+    manifest: dict[str, Any],
+    lockfile: dict[str, Any],
+    replica_id: str,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+    """Run real vLLM inference and return observables + env_info."""
+    from cmd.runner.vllm_runner import run_vllm
+
+    result = run_vllm(manifest, lockfile)
+
+    request_outputs = result["request_outputs"]
+    engine_events = result["engine_events"]
+
+    # Generate network frames (still synthetic since we don't have a real userspace net stack)
+    frames: list[dict[str, Any]] = []
+    for req in manifest["requests"]:
+        seed = _seed_for_request(manifest["run_id"], req["id"], req["prompt"])
+        frames.append({"request_id": req["id"], "frame_hex": _network_frame_hex(seed, req["id"])})
+
+    return request_outputs, engine_events, frames, result["env_info"]
+
+
 def run(
     manifest: dict[str, Any],
     lockfile: dict[str, Any],
     out_dir: Path,
     replica_id: str,
     *,
+    mode: str = "synthetic",
     runtime_hardware: dict[str, Any] | None = None,
     pod_manifest_path: str,
     pod_lockfile_path: str,
@@ -346,72 +405,14 @@ def run(
     manifest_copy.write_text(canonical_json_text(manifest), encoding="utf-8")
     lockfile_copy.write_text(canonical_json_text(lockfile), encoding="utf-8")
 
-    request_outputs: list[dict[str, Any]] = []
-    engine_events: list[dict[str, Any]] = []
-    frames: list[dict[str, Any]] = []
+    vllm_env_info: dict[str, Any] | None = None
 
-    target_batch = manifest["runtime"]["batch_cardinality"]["target_batch_size"]
-    for idx, req in enumerate(manifest["requests"]):
-        seed = _seed_for_request(manifest["run_id"], req["id"], req["prompt"])
-        toks = _tokens(seed)
-        lgt = _logits(toks)
-        act = _activations(toks)
-
-        request_outputs.append(
-            {
-                "id": req["id"],
-                "tokens": toks,
-                "logits": lgt,
-                "activations": act,
-            }
+    if mode == "vllm":
+        request_outputs, engine_events, frames, vllm_env_info = _vllm_observables(
+            manifest, lockfile, replica_id,
         )
-
-        engine_events.append(
-            {
-                "step": idx,
-                "event": "batch_composition",
-                "batch_size": target_batch,
-                "request_id": req["id"],
-                "replica_id": replica_id,
-            }
-        )
-
-        if "request_reorder" in manifest["runtime"]["engine_trace"]["events"]:
-            engine_events.append(
-                {
-                    "step": idx,
-                    "event": "request_reorder",
-                    "before": idx,
-                    "after": idx,
-                }
-            )
-
-        if "attention_backend_selection" in manifest["runtime"]["engine_trace"]["events"]:
-            engine_events.append(
-                {
-                    "step": idx,
-                    "event": "attention_backend_selection",
-                    "backend": "flash_attention_2",
-                }
-            )
-
-        if "collective_algorithm_selection" in manifest["runtime"]["engine_trace"]["events"]:
-            topo = manifest["hardware_profile"]["topology"]["mode"]
-            algorithm = "none" if topo == "single_node" else "ring_all_reduce"
-            engine_events.append(
-                {
-                    "step": idx,
-                    "event": "collective_algorithm_selection",
-                    "algorithm": algorithm,
-                }
-            )
-
-        frames.append(
-            {
-                "request_id": req["id"],
-                "frame_hex": _network_frame_hex(seed, req["id"]),
-            }
-        )
+    else:
+        request_outputs, engine_events, frames = _synthetic_observables(manifest, replica_id)
 
     observables_dir = out_dir / "observables"
     tokens_path = observables_dir / "tokens.json"
@@ -459,11 +460,11 @@ def run(
             for a in lockfile["artifacts"]
         ],
         "environment_info": {
-            "vllm_version": "0.1.0",
-            "torch_version": "2.5.0",
-            "cuda_version": "12.4",
-            "driver_version": observed_gpu.get("driver_version", expected_hardware["gpu"]["driver_version"]),
-            "gpu_inventory": [observed_gpu.get("model", expected_hardware["gpu"]["model"])],
+            "vllm_version": vllm_env_info["vllm_version"] if vllm_env_info else "0.1.0-synthetic",
+            "torch_version": vllm_env_info["torch_version"] if vllm_env_info else "2.5.0-synthetic",
+            "cuda_version": vllm_env_info["cuda_version"] if vllm_env_info else "12.4",
+            "driver_version": vllm_env_info["driver_version"] if vllm_env_info else observed_gpu.get("driver_version", expected_hardware["gpu"]["driver_version"]),
+            "gpu_inventory": vllm_env_info["gpu_inventory"] if vllm_env_info else [observed_gpu.get("model", expected_hardware["gpu"]["model"])],
             "hardware_fingerprint": hardware_conformance["actual_fingerprint"],
         },
         "hardware_probe": hardware_probe,
@@ -491,7 +492,7 @@ def run(
                 "strict_hardware": str(manifest["runtime"]["strict_hardware"]).lower(),
                 "replica_id": replica_id,
             },
-            "resolved_env": {
+            "resolved_env": vllm_env_info.get("resolved_env", {}) if vllm_env_info else {
                 "CUBLAS_WORKSPACE_CONFIG": ":4096:8",
                 "CUDA_LAUNCH_BLOCKING": str(int(manifest["runtime"]["deterministic_knobs"]["cuda_launch_blocking"])),
                 "RUNNER_NETWORK_ROUTE_MODE": "deterministic_userspace_stack",
@@ -565,6 +566,8 @@ def main() -> int:
     parser.add_argument("--lockfile", required=True, help="Lockfile JSON path")
     parser.add_argument("--out-dir", required=True, help="Output bundle directory")
     parser.add_argument("--replica-id", default="replica-0", help="Replica identifier")
+    parser.add_argument("--mode", default="synthetic", choices=["synthetic", "vllm"],
+                        help="Execution mode: synthetic (no GPU) or vllm (real inference)")
     parser.add_argument("--runtime-hardware", help="Optional observed runtime hardware profile JSON path")
     parser.add_argument("--pod-manifest-path", help="Mounted manifest path inside the pod")
     parser.add_argument("--pod-lockfile-path", help="Mounted lockfile path inside the pod")
@@ -585,6 +588,7 @@ def main() -> int:
         lockfile,
         Path(args.out_dir),
         args.replica_id,
+        mode=args.mode,
         runtime_hardware=runtime_hardware,
         pod_manifest_path=_env_or_default(args.pod_manifest_path, "RUNNER_POD_MANIFEST_PATH", args.manifest),
         pod_lockfile_path=_env_or_default(args.pod_lockfile_path, "RUNNER_POD_LOCKFILE_PATH", args.lockfile),
