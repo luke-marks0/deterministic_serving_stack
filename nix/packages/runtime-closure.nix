@@ -1,20 +1,28 @@
+# Runtime closure derivation.
+#
+# This is the legacy interface — prefer `nix build .#closure` via flake.nix.
+# Kept for compatibility with the builder's --nix-store-path workflow.
 { pkgs ? import <nixpkgs> {} }:
 
-pkgs.stdenv.mkDerivation {
-  pname = "deterministic-serving-runtime";
+let
+  python = pkgs.python310;
+
+  pythonEnv = python.withPackages (ps: with ps; [
+    torch numpy jsonschema requests huggingface-hub
+    safetensors transformers tokenizers pyyaml filelock
+    tqdm typing-extensions packaging
+  ]);
+in
+pkgs.symlinkJoin {
+  name = "deterministic-serving-runtime-closure";
   version = "0.1.0";
-
-  src = ../..;
-  dontBuild = true;
-
-  installPhase = ''
-    mkdir -p "$out/bin"
-    cp -r "$src/cmd" "$out/bin/cmd"
-    cp -r "$src/pkg" "$out/bin/pkg"
-    cp -r "$src/schemas" "$out/bin/schemas"
-  '';
+  paths = [
+    pythonEnv
+    pkgs.bash
+    pkgs.coreutils
+  ];
 
   meta = {
-    description = "Reference runtime closure for deterministic serving stack";
+    description = "Hermetic runtime closure for deterministic vLLM serving";
   };
 }
