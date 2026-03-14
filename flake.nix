@@ -11,87 +11,67 @@
       let
         pkgs = import nixpkgs {
           inherit system;
-          config = {
-            allowUnfree = true;
-            cudaSupport = true;
-          };
+          config.allowUnfree = true;
         };
 
         python = pkgs.python310;
 
-        # Pinned Python packages via pip2nix-style overrides.
-        # These SHAs are locked to exact versions for reproducibility.
-        pythonEnv = python.withPackages (ps: with ps; [
-          # Core serving stack
-          ps.torch       # PyTorch (CUDA build via nixpkgs cudaSupport)
-          ps.numpy
+        # Base Python environment: deps that Nix can build hermetically.
+        # vLLM + PyTorch + CUDA are external artifacts pinned in the lockfile,
+        # not in the Nix closure — they require CUDA toolkits and GPU-specific
+        # compilation that doesn't fit the Nix model cleanly.
+        pythonEnv = python.withPackages (ps: [
           ps.jsonschema
           ps.requests
-          ps.huggingface-hub
-          ps.safetensors
-          ps.transformers
-          ps.tokenizers
           ps.pyyaml
           ps.filelock
           ps.tqdm
           ps.typing-extensions
           ps.packaging
+          ps.numpy
         ]);
 
-        # vLLM is not in nixpkgs — build from pinned source.
-        vllm = python.pkgs.buildPythonPackage rec {
-          pname = "vllm";
-          version = "0.17.1";
-          format = "wheel";
-
-          src = pkgs.fetchurl {
-            url = "https://files.pythonhosted.org/packages/cp310/v/vllm/vllm-${version}-cp310-cp310-manylinux1_x86_64.whl";
-            # Placeholder — replace with actual hash after first build
-            hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
-          };
-
-          propagatedBuildInputs = with python.pkgs; [
-            torch numpy transformers tokenizers safetensors
-            huggingface-hub requests pyyaml tqdm packaging
-          ];
-
-          # Skip import check since it needs CUDA at import time
-          pythonImportsCheck = [];
+        # Application code as a derivation
+        appSrc = pkgs.stdenv.mkDerivation {
+          pname = "deterministic-serving-stack";
+          version = "0.1.0";
+          src = self;
+          dontBuild = true;
+          installPhase = ''
+            mkdir -p $out
+            cp -r cmd $out/cmd
+            cp -r pkg $out/pkg
+            cp -r schemas $out/schemas
+            cp -r manifests $out/manifests 2>/dev/null || true
+          '';
         };
 
-        # The hermetic runtime closure: everything needed to run the server.
+        # The hermetic runtime closure: Python + system deps + our code.
+        # This is what runtime_closure_digest is computed from.
         runtimeClosure = pkgs.symlinkJoin {
           name = "deterministic-serving-runtime-closure";
           version = "0.1.0";
           paths = [
             pythonEnv
+            appSrc
             pkgs.bash
             pkgs.coreutils
+            pkgs.cacert  # for HTTPS
           ];
         };
 
-        # OCI image built from the closure, pinned by digest.
+        # OCI image: the closure + entrypoint config.
+        # vLLM/PyTorch/CUDA are expected to be in the base image or
+        # volume-mounted — they're tracked by digest in the lockfile.
         ociImage = pkgs.dockerTools.buildLayeredImage {
           name = "deterministic-serving-runtime";
           tag = self.rev or "dev";
-          contents = [
-            runtimeClosure
-            (pkgs.writeTextDir "app/cmd" "")
-          ];
-
-          extraCommands = ''
-            mkdir -p app
-            cp -r ${self}/cmd app/
-            cp -r ${self}/pkg app/
-            cp -r ${self}/schemas app/
-            cp -r ${self}/manifests app/ 2>/dev/null || true
-          '';
-
+          contents = [ runtimeClosure ];
           config = {
-            Cmd = [ "${pythonEnv}/bin/python3" "/app/cmd/server/main.py" ];
+            Cmd = [ "${pythonEnv}/bin/python3" "${appSrc}/cmd/server/main.py" ];
             WorkingDir = "/workspace";
             Env = [
-              "PYTHONPATH=/app"
+              "PYTHONPATH=${appSrc}"
               "VLLM_BATCH_INVARIANT=1"
               "CUBLAS_WORKSPACE_CONFIG=:4096:8"
               "PYTHONHASHSEED=0"
@@ -103,10 +83,10 @@
         packages = {
           default = runtimeClosure;
           closure = runtimeClosure;
+          app = appSrc;
           oci = ociImage;
         };
 
-        # `nix develop` shell for local development
         devShells.default = pkgs.mkShell {
           packages = [
             pythonEnv
