@@ -8,7 +8,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-VENV="/home/ubuntu/venv"
+VENV="${VIRTUAL_ENV:-/home/ubuntu/venv}"
 MANIFEST="${REPO_ROOT}/manifests/qwen3-1.7b.manifest.json"
 OUT_BASE="/home/ubuntu/server-runs"
 PORT=8000
