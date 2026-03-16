@@ -102,6 +102,15 @@ def _probe_hardware(manifest: dict[str, Any]) -> dict[str, Any]:
         })
         record["status"] = "conformant"
 
+        # Record software versions for provenance
+        record["torch_version"] = torch.__version__
+        record["cuda_version"] = torch.version.cuda or "unknown"
+        try:
+            import vllm
+            record["vllm_version"] = getattr(vllm, "__version__", "unknown")
+        except ImportError:
+            record["vllm_version"] = "not_installed"
+
     except ImportError:
         record["status"] = "torch_not_available"
 

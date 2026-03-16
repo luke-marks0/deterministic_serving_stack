@@ -233,9 +233,9 @@ def capture_to_bundle(
             for a in lockfile.get("artifacts", [])
         ],
         "environment_info": {
-            "vllm_version": boot_record.get("vllm_version", "unknown"),
-            "torch_version": boot_record.get("torch_version", "unknown"),
-            "cuda_version": boot_record.get("cuda_version", "unknown"),
+            "vllm_version": boot_record.get("vllm_version") or hw.get("vllm_version", "unknown"),
+            "torch_version": boot_record.get("torch_version") or hw.get("torch_version", "unknown"),
+            "cuda_version": boot_record.get("cuda_version") or hw.get("cuda_version", "unknown"),
             "driver_version": hw.get("driver_version", "unknown"),
             "gpu_inventory": [hw.get("gpu_name", "unknown")],
             "hardware_fingerprint": hw.get("actual_fingerprint", sha256_prefixed(canonical_json_bytes(hw))),
