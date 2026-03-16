@@ -138,15 +138,26 @@ def _build_vllm_cmd(manifest: dict[str, Any], host: str, port: int) -> list[str]
     if batch_inv.get("enforce_eager", False):
         cmd.append("--enforce-eager")
 
+    # Serving engine config — prefer manifest, fall back to env vars
+    engine = runtime.get("serving_engine", {})
+
     if batch_inv.get("enabled", False):
-        backend = os.getenv("VLLM_ATTENTION_BACKEND", "FLASH_ATTN")
+        backend = engine.get("attention_backend") or os.getenv("VLLM_ATTENTION_BACKEND", "FLASH_ATTN")
         cmd.extend(["--attention-backend", backend])
 
-    max_model_len = os.getenv("RUNNER_MAX_MODEL_LEN", "8192")
+    max_model_len = str(engine.get("max_model_len") or os.getenv("RUNNER_MAX_MODEL_LEN", "8192"))
     cmd.extend(["--max-model-len", max_model_len])
 
-    gpu_mem = os.getenv("RUNNER_GPU_MEM_UTIL", "0.90")
+    gpu_mem = str(engine.get("gpu_memory_utilization") or os.getenv("RUNNER_GPU_MEM_UTIL", "0.90"))
     cmd.extend(["--gpu-memory-utilization", gpu_mem])
+
+    max_num_seqs = engine.get("max_num_seqs")
+    if max_num_seqs:
+        cmd.extend(["--max-num-seqs", str(max_num_seqs)])
+
+    dtype = engine.get("dtype")
+    if dtype and dtype != "auto":
+        cmd.extend(["--dtype", dtype])
 
     api_key = os.getenv("VLLM_API_KEY")
     if api_key:
