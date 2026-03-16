@@ -342,11 +342,9 @@
       "dtype": "auto",
       "attention_backend": "FLASH_ATTN"
     },
-    "software_pins": {
-      "vllm_version": "0.17.1",
-      "torch_version": "2.10.0+cu128",
-      "cuda_version": "12.8",
-      "python_version": "3.10"
+    "nix_pin": {
+      "flake_ref": "github:derpyplops/deterministic_serving_stack/14e3014",
+      "flake_hash": "sha256:ba03e13047769b98c15c8c7f382a49814d0799c5d0d429e4df893cfbe46094a2"
     }
   }
 }
