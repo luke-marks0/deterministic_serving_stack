@@ -148,6 +148,10 @@ def _build_vllm_cmd(manifest: dict[str, Any], host: str, port: int) -> list[str]
     gpu_mem = os.getenv("RUNNER_GPU_MEM_UTIL", "0.90")
     cmd.extend(["--gpu-memory-utilization", gpu_mem])
 
+    api_key = os.getenv("VLLM_API_KEY")
+    if api_key:
+        cmd.extend(["--api-key", api_key])
+
     if manifest["model"].get("trust_remote_code", False):
         cmd.append("--trust-remote-code")
 
@@ -185,8 +189,27 @@ class ProxyHandler(BaseHTTPRequestHandler):
 
     vllm_port: int = 8001
     capture_log: CaptureLog | None = None
+    api_key: str | None = None
+
+    def _check_auth(self) -> bool:
+        """Reject requests without valid API key (if configured)."""
+        if not self.api_key:
+            return True
+        auth = self.headers.get("Authorization", "")
+        if auth == f"Bearer {self.api_key}":
+            return True
+        error = json.dumps({"error": "Unauthorized"}).encode()
+        self.send_response(401)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(error)))
+        self.end_headers()
+        self.wfile.write(error)
+        return False
 
     def do_POST(self):
+        if not self._check_auth():
+            return
+
         content_length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(content_length) if content_length > 0 else b""
 
@@ -244,6 +267,10 @@ class ProxyHandler(BaseHTTPRequestHandler):
             self.wfile.write(error_msg)
 
     def do_GET(self):
+        # Allow /health without auth for load balancer probes
+        if self.path != "/health" and not self._check_auth():
+            return
+
         url = f"http://127.0.0.1:{self.vllm_port}{self.path}"
         try:
             with urlopen(url) as resp:
@@ -375,6 +402,7 @@ def main() -> int:
     capture_log = CaptureLog(out_dir / "capture.jsonl")
     ProxyHandler.vllm_port = args.vllm_port
     ProxyHandler.capture_log = capture_log
+    ProxyHandler.api_key = os.getenv("VLLM_API_KEY")
 
     class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
         daemon_threads = True
@@ -387,6 +415,7 @@ def main() -> int:
     print(f"  Endpoint: http://{args.host}:{args.port}/v1/chat/completions")
     print(f"  Model: {manifest['model']['source']}")
     print(f"  Batch invariance: {'ON' if batch_inv.get('enabled') else 'OFF'}")
+    print(f"  Auth: {'API key required' if os.getenv('VLLM_API_KEY') else 'OPEN (no VLLM_API_KEY set)'}")
     print(f"  Capture log: {out_dir / 'capture.jsonl'}")
     print(f"  Boot record: {boot_path}")
     print()
