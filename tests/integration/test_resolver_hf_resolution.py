@@ -193,6 +193,10 @@ def _base_manifest() -> dict[str, object]:
         "runtime": {
             "strict_hardware": True,
             "batch_policy": "fixed",
+            "batch_invariance": {
+                "enabled": True,
+                "enforce_eager": True,
+            },
             "batch_cardinality": {
                 "min_requests": 1,
                 "target_batch_size": 1,
