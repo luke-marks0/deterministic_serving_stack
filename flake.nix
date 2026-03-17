@@ -1,117 +1,242 @@
 {
-  description = "Deterministic vLLM serving stack — hermetic runtime closure";
+  description = "Deterministic vLLM serving stack — fully hermetic, built from source";
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Build strategy
+  # ───────────────────────────────────────────────────────────────────────────
+  # This flake builds PyTorch and vLLM entirely from source inside Nix so that
+  # every shared library (including CUDA kernels) links against Nix's glibc,
+  # libstdc++, and CUDA toolkit.  No manylinux wheels, no autoPatchelfHook,
+  # no FHS escape hatches.
+  #
+  # Trade-off: a clean build takes 30–60 min on a beefy machine (torch alone
+  # is ~20 min with parallelism).  Subsequent builds hit the Nix store cache.
+  #
+  # Placeholder hashes are marked "TODO: replace after first build" — Nix will
+  # tell you the correct hash on the first attempt.
+  # ───────────────────────────────────────────────────────────────────────────
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
+    # nixos-unstable has better CUDA / torch support than 24.11, especially
+    # on aarch64-linux where 24.11's torch lacks CUDA entirely.
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
   outputs = { self, nixpkgs, flake-utils }:
     flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" ] (system:
       let
+        # ── nixpkgs with CUDA enabled ──────────────────────────────────────
         pkgs = import nixpkgs {
           inherit system;
-          config.allowUnfree = true;
-        };
-
-        python = pkgs.python310;
-
-        # Pre-built wheel URLs and hashes per architecture.
-        # These are the exact binaries pip would install — pinned by SHA256.
-        wheelSources = {
-          "aarch64-linux" = {
-            vllm = {
-              url = "https://files.pythonhosted.org/packages/f5/02/ff63919abb341b0819f33a400c83698d095e5fd461ae3e44f3ff91f6489f/vllm-0.17.1-cp38-abi3-manylinux_2_31_aarch64.whl";
-              hash = "sha256:f04d63a94d0415b2323b0a0d3ab89a8d4d9bd346251ff60d47a7df679f7b3ff8";
-            };
-            torch = {
-              url = "https://download.pytorch.org/whl/cu128/torch-2.10.0%2Bcu128-cp310-cp310-manylinux_2_28_aarch64.whl";
-              hash = "sha256:e186f57ef1de1aa877943259819468fc6f27efb583b4a91f9215ada7b7f4e6cc";
-            };
-          };
-          "x86_64-linux" = {
-            vllm = {
-              # Placeholder — replace with actual x86_64 wheel hash
-              url = "https://files.pythonhosted.org/packages/cp310/v/vllm/vllm-0.17.1-cp38-abi3-manylinux_2_31_x86_64.whl";
-              hash = "sha256:0000000000000000000000000000000000000000000000000000000000000000";
-            };
-            torch = {
-              url = "https://download.pytorch.org/whl/cu128/torch-2.10.0%2Bcu128-cp310-cp310-manylinux_2_28_x86_64.whl";
-              hash = "sha256:0000000000000000000000000000000000000000000000000000000000000000";
-            };
+          config = {
+            allowUnfree = true;          # CUDA is unfree
+            cudaSupport = true;          # propagate to all packages
+            cudaCapabilities = [ "9.0" ]; # H100 / Hopper — trim fat from other archs
           };
         };
 
-        wheels = wheelSources.${system} or wheelSources."x86_64-linux";
+        python = pkgs.python312;
+        pythonPackages = pkgs.python312Packages;
 
-        # Fetch pinned wheels
-        vllmWheel = pkgs.fetchurl {
-          url = wheels.vllm.url;
-          sha256 = wheels.vllm.hash;
+        # ── PyTorch from source (via nixpkgs) ─────────────────────────────
+        torch = pythonPackages.torch;
+
+        # ── vLLM 0.17.1 from source ───────────────────────────────────────
+        vllmSrc = pkgs.fetchFromGitHub {
+          owner = "vllm-project";
+          repo = "vllm";
+          rev = "v0.17.1";
+          hash = "sha256-EZozwA+GIjN8/CBNhtdeM3HsPhVdx1/J0B9gvvn2qKU=";
+          fetchSubmodules = true;
         };
 
-        torchWheel = pkgs.fetchurl {
-          url = wheels.torch.url;
-          sha256 = wheels.torch.hash;
+        # ── Pre-fetched C++ dependencies for vLLM's cmake FetchContent ────
+        # The Nix sandbox blocks network access during builds, so we
+        # pre-fetch every repo that CMakeLists.txt would git-clone via
+        # FetchContent, then point the corresponding *_SRC_DIR env vars
+        # at the Nix store paths.
+
+        cutlassSrc = pkgs.fetchFromGitHub {
+          owner = "nvidia";
+          repo = "cutlass";
+          rev = "v4.2.1";
+          hash = "sha256-iP560D5Vwuj6wX1otJhwbvqe/X4mYVeKTpK533Wr5gY=";
         };
 
-        # NVIDIA runtime wheels — CUDA libs that torch needs at runtime
-        nvidiaWheelDefs = {
-          "aarch64-linux" = [
-            { url = "https://files.pythonhosted.org/packages/29/99/db44d685f0e257ff0e213ade1964fc459b4a690a73293220e98feb3307cf/nvidia_cublas_cu12-12.8.4.1-py3-none-manylinux_2_27_aarch64.whl"; hash = "b86f6dd8935884615a0683b663891d43781b819ac4f2ba2b0c9604676af346d0"; }
-            { url = "https://files.pythonhosted.org/packages/7c/75/f865a3b236e4647605ea34cc450900854ba123834a5f1598e160b9530c3a/nvidia_cuda_runtime_cu12-12.8.90-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl"; hash = "52bf7bbee900262ffefe5e9d5a2a69a30d97e2bc5bb6cc866688caa976966e3d"; }
-            { url = "https://files.pythonhosted.org/packages/eb/d1/e50d0acaab360482034b84b6e27ee83c6738f7d32182b987f9c7a4e32962/nvidia_cuda_nvrtc_cu12-12.8.93-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl"; hash = "fc1fec1e1637854b4c0a65fb9a8346b51dd9ee69e61ebaccc82058441f15bce8"; }
-            { url = "https://files.pythonhosted.org/packages/fa/41/e79269ce215c857c935fd86bcfe91a451a584dfc27f1e068f568b9ad1ab7/nvidia_cudnn_cu12-9.10.2.21-py3-none-manylinux_2_27_aarch64.whl"; hash = "c9132cc3f8958447b4910a1720036d9eff5928cc3179b0a51fb6d167c6cc87d8"; }
-            { url = "https://files.pythonhosted.org/packages/60/bc/7771846d3a0272026c416fbb7e5f4c1f146d6d80704534d0b187dd6f4800/nvidia_cufft_cu12-11.3.3.83-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl"; hash = "848ef7224d6305cdb2a4df928759dca7b1201874787083b6e7550dd6765ce69a"; }
-            { url = "https://files.pythonhosted.org/packages/45/5e/92aa15eca622a388b80fbf8375d4760738df6285b1e92c43d37390a33a9a/nvidia_curand_cu12-10.3.9.90-py3-none-manylinux_2_27_aarch64.whl"; hash = "dfab99248034673b779bc6decafdc3404a8a6f502462201f2f31f11354204acd"; }
-            { url = "https://files.pythonhosted.org/packages/c8/32/f7cd6ce8a7690544d084ea21c26e910a97e077c9b7f07bf5de623ee19981/nvidia_cusolver_cu12-11.7.3.90-py3-none-manylinux_2_27_aarch64.whl"; hash = "db9ed69dbef9715071232caa9b69c52ac7de3a95773c2db65bdba85916e4e5c0"; }
-            { url = "https://files.pythonhosted.org/packages/bc/f7/cd777c4109681367721b00a106f491e0d0d15cfa1fd59672ce580ce42a97/nvidia_cusparse_cu12-12.5.8.93-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl"; hash = "9b6c161cb130be1a07a27ea6923df8141f3c295852f4b260c65f18f3e0a091dc"; }
-            { url = "https://files.pythonhosted.org/packages/73/b9/598f6ff36faaece4b3c50d26f50e38661499ff34346f00e057760b35cc9d/nvidia_cusparselt_cu12-0.7.1-py3-none-manylinux2014_aarch64.whl"; hash = "8878dce784d0fac90131b6817b607e803c36e629ba34dc5b433471382196b6a5"; }
-            { url = "https://files.pythonhosted.org/packages/bb/1c/857979db0ef194ca5e21478a0612bcdbbe59458d7694361882279947b349/nvidia_nccl_cu12-2.27.5-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl"; hash = "31432ad4d1fb1004eb0c56203dc9bc2178a1ba69d1d9e02d64a6938ab5e40e7a"; }
-            { url = "https://files.pythonhosted.org/packages/2a/a2/8cee5da30d13430e87bf99bb33455d2724d0a4a9cb5d7926d80ccb96d008/nvidia_nvjitlink_cu12-12.8.93-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl"; hash = "adccd7161ace7261e01bb91e44e88da350895c270d23f744f0820c818b7229e7"; }
-            { url = "https://files.pythonhosted.org/packages/10/c0/1b303feea90d296f6176f32a2a70b5ef230f9bdeb3a72bddb0dc922dc137/nvidia_nvtx_cu12-12.8.90-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl"; hash = "d7ad891da111ebafbf7e015d34879f7112832fc239ff0d7d776b6cb685274615"; }
-            { url = "https://files.pythonhosted.org/packages/d5/1f/b3bd73445e5cb342727fd24fe1f7b748f690b460acadc27ea22f904502c8/nvidia_cuda_cupti_cu12-12.8.90-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl"; hash = "4412396548808ddfed3f17a467b104ba7751e6b58678a4b840675c56d21cf7ed"; }
-            { url = "https://files.pythonhosted.org/packages/1e/f5/5607710447a6fe9fd9b3283956fceeee8a06cda1d2f56ce31371f595db2a/nvidia_cufile_cu12-1.13.1.3-py3-none-manylinux_2_27_aarch64.whl"; hash = "4beb6d4cce47c1a0f1013d72e02b0994730359e17801d395bdcbf20cfb3bb00a"; }
-            { url = "https://files.pythonhosted.org/packages/1d/6a/03aa43cc9bd3ad91553a88b5f6fb25ed6a3752ae86ce2180221962bc2aa5/nvidia_nvshmem_cu12-3.4.5-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl"; hash = "0b48363fc6964dede448029434c6abed6c5e37f823cb43c3bcde7ecfc0457e15"; }
+        vllmFlashAttnSrc = pkgs.fetchgit {
+          url = "https://github.com/vllm-project/flash-attention.git";
+          rev = "140c00c0241bb60cc6e44e7c1be9998d4b20d8d2";
+          hash = "sha256-GgLNpj44O2p6iitmSW82bENdS0tOmfdccngNlr4cKVY=";
+          fetchSubmodules = true;
+        };
+
+        tritonSrc = pkgs.fetchFromGitHub {
+          owner = "triton-lang";
+          repo = "triton";
+          rev = "v3.6.0";
+          # TODO: replace after first build
+          hash = "sha256-JFSpQn+WsNnh7CAPlcpOcUp0nyKXNbJEANdXqmkt4Tc=";
+        };
+
+        flashmlaSrc = pkgs.fetchFromGitHub {
+          owner = "vllm-project";
+          repo = "FlashMLA";
+          rev = "692917b1cda61b93ac9ee2d846ec54e75afe87b1";
+          # TODO: replace after first build
+          hash = "sha256-GH7X25dy/PQiLIsItEzNa/N5r8VmOQRilIWLJdHj7kE=";
+          fetchSubmodules = true;
+        };
+
+        qutlassSrc = pkgs.fetchFromGitHub {
+          owner = "IST-DASLab";
+          repo = "qutlass";
+          rev = "830d2c4537c7396e14a02a46fbddd18b5d107c65";
+          # TODO: replace after first build
+          hash = "sha256-wXCQ5XlV8rKmctYCKDBc2aUqmHZX8qwXgGZY2BGyw5I=";
+          fetchSubmodules = true;
+        };
+
+        vllm = pythonPackages.buildPythonPackage rec {
+          pname = "vllm";
+          version = "0.17.1";
+          format = "setuptools";
+
+          # Prevent Nix cmake hook from running its own configure phase.
+          # vLLM's setup.py invokes cmake itself with the correct flags.
+          dontUseCmakeConfigure = true;
+
+          src = vllmSrc;
+
+          # ── Build-time dependencies ────────────────────────────────────
+          nativeBuildInputs = [
+            pkgs.cmake
+            pkgs.ninja
+            pkgs.which
+            pkgs.git            # setup.py shells out to git for version
+            pythonPackages.setuptools
+            pythonPackages.setuptools-scm
+            pythonPackages.wheel
+            pythonPackages.packaging
           ];
-          "x86_64-linux" = []; # Placeholders — fill after first x86 build
+
+          # ── Propagated runtime + build dependencies ────────────────────
+          buildInputs = [
+            # CUDA toolkit components
+            pkgs.cudaPackages.cuda_cudart
+            pkgs.cudaPackages.cuda_nvcc
+            pkgs.cudaPackages.cuda_nvrtc
+            pkgs.cudaPackages.cuda_cupti
+            pkgs.cudaPackages.libcublas
+            pkgs.cudaPackages.libcusolver
+            pkgs.cudaPackages.libcusparse
+            pkgs.cudaPackages.libcufft
+            pkgs.cudaPackages.libcurand
+            pkgs.cudaPackages.nccl
+            pkgs.cudaPackages.cudnn
+
+            # System libs
+            pkgs.stdenv.cc.cc.lib  # libstdc++
+            pkgs.zlib
+            pkgs.openssl
+          ];
+
+          propagatedBuildInputs = [
+            torch
+            pythonPackages.numpy
+            pythonPackages.transformers
+            pythonPackages.tokenizers
+            pythonPackages.sentencepiece
+            pythonPackages.huggingface-hub
+            pythonPackages.safetensors
+            pythonPackages.requests
+            pythonPackages.pyyaml
+            pythonPackages.tqdm
+            pythonPackages.filelock
+            pythonPackages.typing-extensions
+            pythonPackages.packaging
+            pythonPackages.psutil
+            pythonPackages.py-cpuinfo
+            pythonPackages.pydantic
+            pythonPackages.fastapi
+            pythonPackages.uvicorn
+            pythonPackages.uvloop
+            pythonPackages.prometheus-client
+            pythonPackages.aiohttp
+            pythonPackages.ray
+            pythonPackages.msgpack
+            pythonPackages.pillow
+            pythonPackages.openai
+            pythonPackages.lm-format-enforcer or null
+            pythonPackages.outlines or null
+          ];
+
+          # ── Build environment ──────────────────────────────────────────
+          env = {
+            CUDA_HOME = "${pkgs.cudaPackages.cuda_nvcc}";
+            TORCH_CUDA_ARCH_LIST = "9.0";
+            MAX_JOBS = "8";
+            SETUPTOOLS_SCM_PRETEND_VERSION = version;
+            VLLM_PYTHON_EXECUTABLE = "${python}/bin/python3";
+            # Pre-fetched sources for cmake FetchContent (no network in sandbox)
+            VLLM_CUTLASS_SRC_DIR = "${cutlassSrc}";
+            VLLM_FLASH_ATTN_SRC_DIR = "${vllmFlashAttnSrc}";
+            # triton_kernels expects the full triton repo; cmake uses SOURCE_SUBDIR
+            # but with TRITON_KERNELS_SRC_DIR it points directly to the python/triton_kernels/triton_kernels subdir
+            TRITON_KERNELS_SRC_DIR = "${tritonSrc}/python/triton_kernels/triton_kernels";
+            FLASH_MLA_SRC_DIR = "${flashmlaSrc}";
+            QUTLASS_SRC_DIR = "${qutlassSrc}";
+          };
+
+          # vLLM's setup.py invokes cmake directly; we need CUDA on PATH
+          preBuild = ''
+            export PATH="${pkgs.cudaPackages.cuda_nvcc}/bin:$PATH"
+            export CUDA_HOME="${pkgs.cudaPackages.cuda_nvcc}"
+            export CMAKE_PREFIX_PATH="${torch}/${python.sitePackages}/torch/share/cmake:$CMAKE_PREFIX_PATH"
+            export VLLM_PYTHON_EXECUTABLE="${python}/bin/python3"
+            export VLLM_CUTLASS_SRC_DIR="${cutlassSrc}"
+            export VLLM_FLASH_ATTN_SRC_DIR="${vllmFlashAttnSrc}"
+            export TRITON_KERNELS_SRC_DIR="${tritonSrc}/python/triton_kernels/triton_kernels"
+            export FLASH_MLA_SRC_DIR="${flashmlaSrc}"
+            export QUTLASS_SRC_DIR="${qutlassSrc}"
+          '';
+
+          # Skip tests — they require a live GPU
+          doCheck = false;
+
+          postFixup = ''
+            # vLLM installs some scripts; ensure they point to our python
+            for f in $out/bin/*; do
+              if [ -f "$f" ]; then
+                substituteInPlace "$f" \
+                  --replace "/usr/bin/env python" "${python}/bin/python3" || true
+              fi
+            done
+          '';
+
+          meta = with pkgs.lib; {
+            description = "High-throughput LLM serving engine";
+            homepage = "https://github.com/vllm-project/vllm";
+            license = licenses.asl20;
+          };
         };
 
-        nvidiaWheels = builtins.map
-          (w: pkgs.fetchurl { url = w.url; sha256 = w.hash; })
-          (nvidiaWheelDefs.${system} or []);
-
-        # Python environment with all deps from nixpkgs + pinned wheels
+        # ── Python environment ─────────────────────────────────────────────
         pythonEnv = python.withPackages (ps: [
+          torch
+          vllm
           ps.numpy
           ps.jsonschema
           ps.requests
           ps.pyyaml
+          ps.huggingface-hub
           ps.filelock
           ps.tqdm
           ps.typing-extensions
           ps.packaging
         ]);
 
-        # Unzip wheels directly into site-packages (no pip needed)
-        vllmInstall = pkgs.stdenv.mkDerivation {
-          pname = "vllm-torch-wheels";
-          version = "0.17.1";
-          dontUnpack = true;
-          nativeBuildInputs = [ pkgs.unzip ];
-          dontAutoPatchelf = false;
-          installPhase = ''
-            mkdir -p $out/${python.sitePackages}
-            unzip -qo ${torchWheel} -d $out/${python.sitePackages}
-            unzip -qo ${vllmWheel} -d $out/${python.sitePackages}
-            ${builtins.concatStringsSep "\n" (builtins.map (w: "unzip -qo ${w} -d $out/${python.sitePackages}") nvidiaWheels)}
-          '';
-          # autoPatchelfHook runs in fixupPhase automatically.
-          # It rewrites RUNPATH in all ELF binaries under $out to reference
-          # the Nix store paths for libstdc++, glibc, CUDA libs, etc.
-        };
-
-        # Application code
+        # ── Application source ─────────────────────────────────────────────
         appSrc = pkgs.stdenv.mkDerivation {
           pname = "deterministic-serving-stack";
           version = "0.1.0";
@@ -126,13 +251,12 @@
           '';
         };
 
-        # Full runtime closure
+        # ── Full runtime closure ───────────────────────────────────────────
         runtimeClosure = pkgs.symlinkJoin {
           name = "deterministic-serving-runtime-closure";
           version = "0.1.0";
           paths = [
             pythonEnv
-            vllmInstall
             appSrc
             pkgs.bash
             pkgs.coreutils
@@ -140,19 +264,23 @@
           ];
         };
 
-        # OCI image
+        # ── OCI image ──────────────────────────────────────────────────────
         ociImage = pkgs.dockerTools.buildLayeredImage {
           name = "deterministic-serving-runtime";
           tag = self.rev or "dev";
-          contents = [ runtimeClosure ];
+          contents = [ runtimeClosure (pkgs.writeTextDir "etc/passwd" "root:x:0:0:root:/tmp:/bin/bash\n") (pkgs.writeTextDir "etc/group" "root:x:0:\n") ];
           config = {
             Cmd = [ "${pythonEnv}/bin/python3" "${appSrc}/cmd/server/main.py" ];
             WorkingDir = "/workspace";
             Env = [
-              "PYTHONPATH=${appSrc}:${vllmInstall}/${python.sitePackages}"
+              "PYTHONPATH=${appSrc}:${pythonEnv}/${python.sitePackages}"
               "VLLM_BATCH_INVARIANT=1"
               "CUBLAS_WORKSPACE_CONFIG=:4096:8"
               "PYTHONHASHSEED=0"
+              "NVIDIA_VISIBLE_DEVICES=all"
+              "NVIDIA_DRIVER_CAPABILITIES=compute,utility"
+              "LD_LIBRARY_PATH=/usr/lib64:/usr/lib/aarch64-linux-gnu:/usr/lib/x86_64-linux-gnu"
+              "HOME=/tmp"
             ];
           };
         };
@@ -163,6 +291,7 @@
           closure = runtimeClosure;
           app = appSrc;
           oci = ociImage;
+          inherit torch vllm;
         };
 
         devShells.default = pkgs.mkShell {
