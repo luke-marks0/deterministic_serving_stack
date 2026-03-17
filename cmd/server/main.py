@@ -8,6 +8,7 @@ All requests/responses are logged to an append-only capture file.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import signal
@@ -170,14 +171,15 @@ def _build_vllm_cmd(manifest: dict[str, Any], host: str, port: int) -> list[str]
 
 
 class CaptureLog:
-    """Append-only request/response log for provenance."""
+    """Append-only request/response log for provenance with egress hashing."""
 
     def __init__(self, path: Path):
         self.path = path
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
         self._seq = 0
-        # Write header
+        self._egress_hasher = hashlib.sha256()
+        self._egress_count = 0
         with open(self.path, "w") as f:
             f.write("")
 
@@ -193,6 +195,22 @@ class CaptureLog:
             entry["captured_at"] = utc_now_iso()
             with open(self.path, "a") as f:
                 f.write(canonical_json_text(entry))
+
+    def record_egress(self, payload_digest: str) -> None:
+        """Add a response payload digest to the running egress hash."""
+        with self._lock:
+            self._egress_hasher.update(bytes.fromhex(payload_digest))
+            self._egress_count += 1
+
+    @property
+    def egress_digest(self) -> str:
+        with self._lock:
+            return f"sha256:{self._egress_hasher.hexdigest()}"
+
+    @property
+    def egress_count(self) -> int:
+        with self._lock:
+            return self._egress_count
 
 
 class ProxyHandler(BaseHTTPRequestHandler):
@@ -253,6 +271,14 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 except json.JSONDecodeError:
                     response_data = {"raw": resp_body.decode("utf-8", errors="replace")}
 
+                # Compute deterministic payload digest (strip nondeterministic fields)
+                payload_for_digest = response_data
+                if isinstance(payload_for_digest, dict):
+                    payload_for_digest = {k: v for k, v in payload_for_digest.items()
+                                          if k not in ("id", "created", "system_fingerprint")}
+                canonical_payload = json.dumps(payload_for_digest, sort_keys=True, separators=(",", ":")).encode()
+                payload_digest = hashlib.sha256(canonical_payload).hexdigest()
+
                 # Log the exchange with pre-assigned arrival-order seq
                 if self.capture_log and self.path.startswith("/v1/"):
                     self.capture_log.append({
@@ -260,8 +286,10 @@ class ProxyHandler(BaseHTTPRequestHandler):
                         "endpoint": self.path,
                         "request": request_data,
                         "response": response_data,
+                        "payload_digest": payload_digest,
                         "status": status,
                     })
+                    self.capture_log.record_egress(payload_digest)
 
                 self.send_response(status)
                 self.send_header("Content-Type", "application/json")
@@ -279,7 +307,20 @@ class ProxyHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         # Allow /health without auth for load balancer probes
-        if self.path != "/health" and not self._check_auth():
+        if self.path not in ("/health", "/egress-digest") and not self._check_auth():
+            return
+
+        # Egress digest endpoint — returns the running digest of all response payloads
+        if self.path == "/egress-digest" and self.capture_log:
+            body = json.dumps({
+                "egress_digest": self.capture_log.egress_digest,
+                "egress_count": self.capture_log.egress_count,
+            }).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
             return
 
         url = f"http://127.0.0.1:{self.vllm_port}{self.path}"
@@ -446,6 +487,8 @@ def main() -> int:
             "shutdown_time": utc_now_iso(),
             "capture_entries": capture_log._seq,
             "capture_digest": sha256_prefixed(Path(capture_log.path).read_bytes()) if capture_log.path.exists() else "",
+            "egress_digest": capture_log.egress_digest,
+            "egress_count": capture_log.egress_count,
         }
         (out_dir / "shutdown_record.json").write_text(
             canonical_json_text(shutdown_record), encoding="utf-8"
