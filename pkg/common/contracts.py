@@ -6,7 +6,7 @@ from typing import Any
 
 from pkg.common.jsonschema_compat import DefaultValidator
 
-SCHEMA_DIR = Path("schemas")
+SCHEMA_DIR = Path(__file__).resolve().parents[2] / "schemas"
 
 
 class ValidationError(Exception):

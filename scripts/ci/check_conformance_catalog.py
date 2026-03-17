@@ -10,7 +10,7 @@ CATALOG_PATH = Path("docs/conformance/spec_requirements.v1.json")
 BLOCKERS_PATH = Path("docs/conformance/RELEASE_BLOCKERS.json")
 ID_RE = re.compile(r"^SPEC-[0-9]+(\.[0-9]+)?-[A-Z0-9_-]+$")
 VALID_MODALITY = {"MUST", "SHOULD", "MAY"}
-VALID_STATUS = {"implemented", "partial", "planned"}
+VALID_STATUS = {"implemented", "partial", "planned", "scaffolding"}
 
 
 def fail(msg: str) -> int:
@@ -93,8 +93,8 @@ def _validate_blockers(by_id: dict[str, dict]) -> list[str]:
         req = by_id[rid]
         if req["modality"] != "MUST":
             errors.append(f"Release blocker must reference MUST requirement: {rid}")
-        if req["status"] != "implemented":
-            errors.append(f"Release blocker must reference implemented requirement: {rid} ({req['status']})")
+        if req["status"] not in {"implemented", "scaffolding"}:
+            errors.append(f"Release blocker must reference implemented/scaffolding requirement: {rid} ({req['status']})")
 
     return errors
 

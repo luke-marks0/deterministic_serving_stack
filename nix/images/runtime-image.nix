@@ -1,3 +1,6 @@
+# OCI image derivation.
+#
+# This is the legacy interface — prefer `nix build .#oci` via flake.nix.
 { pkgs ? import <nixpkgs> {} }:
 
 let
@@ -6,9 +9,16 @@ in
 pkgs.dockerTools.buildLayeredImage {
   name = "deterministic-serving-runtime";
   tag = "0.1.0";
-  contents = [ runtimeClosure pkgs.python3 pkgs.bash ];
+  # runtimeClosure already includes Python — do not add pkgs.python310 again
+  contents = [ runtimeClosure ];
   config = {
-    Cmd = [ "python3" "/bin/cmd/runner/main.py" ];
+    Cmd = [ "${runtimeClosure}/bin/python3" "${runtimeClosure}/cmd/server/main.py" ];
     WorkingDir = "/workspace";
+    Env = [
+      "PYTHONPATH=${runtimeClosure}"
+      "VLLM_BATCH_INVARIANT=1"
+      "CUBLAS_WORKSPACE_CONFIG=:4096:8"
+      "PYTHONHASHSEED=0"
+    ];
   };
 }

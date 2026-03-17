@@ -65,11 +65,27 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+          resources:
+            limits:
+              nvidia.com/gpu: "1"
           volumeMounts:
             - name: run-inputs
               mountPath: /run-inputs
               readOnly: true
+            - name: run-output
+              mountPath: /var/run/deterministic-serving
+        # Optional: netstack sidecar for deterministic userspace networking (§14)
+        # Uncomment when a real DPDK/F-Stack networking stack is available.
+        # - name: netstack
+        #   image: registry.example/deterministic-serving/netstack@sha256:placeholder
+        #   securityContext:
+        #     privileged: true
+        #   volumeMounts:
+        #     - name: run-output
+        #       mountPath: /var/run/deterministic-serving
       volumes:
         - name: run-inputs
           configMap:
             name: deterministic-run-inputs
+        - name: run-output
+          emptyDir: {}

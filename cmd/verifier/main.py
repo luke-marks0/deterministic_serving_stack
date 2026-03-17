@@ -79,12 +79,24 @@ def _compare_observable(mode: str, baseline: Any, candidate: Any, comp: dict[str
     if mode == "hash":
         return canonical_json_bytes(baseline) == canonical_json_bytes(candidate)
     if mode == "ulp":
-        tol = float(comp["ulp"]) * 1e-7
+        import struct
+        max_ulp = int(comp["ulp"])
         lvals = flatten_numbers(baseline)
         rvals = flatten_numbers(candidate)
         if len(lvals) != len(rvals):
             return False
-        return all(abs(a - b) <= tol for a, b in zip(lvals, rvals))
+        for a, b in zip(lvals, rvals):
+            # Convert to float64 bit representation and compute ULP distance
+            a_bits = struct.unpack(">q", struct.pack(">d", a))[0]
+            b_bits = struct.unpack(">q", struct.pack(">d", b))[0]
+            # Handle sign: make both positive in two's complement sense
+            if a_bits < 0:
+                a_bits = 0x8000000000000000 - a_bits
+            if b_bits < 0:
+                b_bits = 0x8000000000000000 - b_bits
+            if abs(a_bits - b_bits) > max_ulp:
+                return False
+        return True
     if mode == "absrel":
         atol = float(comp["atol"])
         rtol = float(comp["rtol"])
@@ -262,8 +274,12 @@ def verify(baseline_bundle_path: Path, candidate_bundle_path: Path, report_out: 
 
     environment_diffs = {
         "runtime_closure_digest_equal": runtime_equal,
+        "baseline_runtime_closure_digest": baseline["runtime_closure_digest"],
+        "candidate_runtime_closure_digest": candidate["runtime_closure_digest"],
         "version_diffs": version_diffs,
         "hardware_fingerprint_equal": hardware_equal,
+        "baseline_hardware_fingerprint": baseline["environment_info"]["hardware_fingerprint"],
+        "candidate_hardware_fingerprint": candidate["environment_info"]["hardware_fingerprint"],
     }
 
     checks = [

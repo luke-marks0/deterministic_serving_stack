@@ -1,0 +1,287 @@
+{
+  "manifest_version": "v1",
+  "run_id": "qwen3-1.7b-batch-invariance-001",
+  "created_at": "2026-03-14T00:00:00Z",
+  "model": {
+    "source": "hf://Qwen/Qwen3-1.7B",
+    "requested_revision": "main",
+    "resolved_revision": "0000000000000000000000000000000000000000",
+    "tokenizer_revision": "0000000000000000000000000000000000000000",
+    "weights_revision": "0000000000000000000000000000000000000000",
+    "trust_remote_code": false,
+    "required_files": [
+      {
+        "role": "weights_shard",
+        "path": "model.safetensors",
+        "uri": "hf://Qwen/Qwen3-1.7B/model.safetensors",
+        "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "size_bytes": 1
+      },
+      {
+        "role": "config",
+        "path": "config.json",
+        "uri": "hf://Qwen/Qwen3-1.7B/config.json",
+        "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "size_bytes": 1
+      },
+      {
+        "role": "tokenizer",
+        "path": "tokenizer.json",
+        "uri": "hf://Qwen/Qwen3-1.7B/tokenizer.json",
+        "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "size_bytes": 1
+      },
+      {
+        "role": "tokenizer",
+        "path": "tokenizer_config.json",
+        "uri": "hf://Qwen/Qwen3-1.7B/tokenizer_config.json",
+        "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "size_bytes": 1
+      },
+      {
+        "role": "generation_config",
+        "path": "generation_config.json",
+        "uri": "hf://Qwen/Qwen3-1.7B/generation_config.json",
+        "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "size_bytes": 1
+      },
+      {
+        "role": "chat_template",
+        "path": "tokenizer_config.json",
+        "uri": "hf://Qwen/Qwen3-1.7B/tokenizer_config.json",
+        "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "size_bytes": 1
+      }
+    ]
+  },
+  "hardware_profile": {
+    "gpu": {
+      "vendor": "nvidia",
+      "model": "H100-PCIe-80GB",
+      "count": 1,
+      "driver_version": "550.54.15",
+      "cuda_driver_version": "12.4",
+      "pci_ids": ["0000:41:00.0"]
+    },
+    "nic": {
+      "model": "ConnectX-7",
+      "pci_id": "0000:17:00.0",
+      "firmware": "28.40.1000",
+      "link_speed_gbps": 200,
+      "offloads": {
+        "tso": false,
+        "gso": false,
+        "checksum": false,
+        "vlan_strip": false
+      }
+    },
+    "topology": {
+      "mode": "single_node",
+      "node_count": 1,
+      "rack_count": 1,
+      "collective_fabric": "none"
+    }
+  },
+  "runtime": {
+    "strict_hardware": false,
+    "batch_policy": "fixed",
+    "batch_invariance": {
+      "enabled": true,
+      "enforce_eager": true
+    },
+    "batch_cardinality": {
+      "min_requests": 1,
+      "target_batch_size": 4,
+      "max_requests": 4
+    },
+    "engine_trace": {
+      "enabled": true,
+      "events": [
+        "batch_composition",
+        "request_reorder",
+        "attention_backend_selection"
+      ]
+    },
+    "deterministic_knobs": {
+      "seed": 42,
+      "torch_deterministic": true,
+      "cuda_launch_blocking": true
+    },
+    "allow_non_reproducible_egress": false
+  },
+  "network": {
+    "egress_reproducibility": true,
+    "security_mode": "plaintext",
+    "mtu": 1500,
+    "mss": 1460,
+    "tso": false,
+    "gso": false,
+    "checksum_offload": false,
+    "queue_mapping": {
+      "tx_queues": 1,
+      "rx_queues": 1,
+      "mapping_policy": "fixed_core_queue"
+    },
+    "ring_sizes": {
+      "tx": 512,
+      "rx": 512
+    },
+    "thread_affinity": [2, 3],
+    "internal_batching": {
+      "enabled": false,
+      "max_burst": 1
+    }
+  },
+  "requests": [
+    {
+      "id": "req-warmup",
+      "prompt": "Hello",
+      "max_new_tokens": 4,
+      "temperature": 0
+    },
+    {
+      "id": "req-determinism-check-1",
+      "prompt": "The capital of France is",
+      "max_new_tokens": 32,
+      "temperature": 0
+    },
+    {
+      "id": "req-determinism-check-2",
+      "prompt": "Explain quantum computing in one sentence:",
+      "max_new_tokens": 64,
+      "temperature": 0
+    },
+    {
+      "id": "req-determinism-check-3",
+      "prompt": "Write a Python function that computes the factorial of n:",
+      "max_new_tokens": 128,
+      "temperature": 0
+    }
+  ],
+  "comparison": {
+    "tokens": { "mode": "exact" },
+    "logits": { "mode": "absrel", "atol": 1e-6, "rtol": 0.0001 },
+    "activations": { "mode": "ulp", "ulp": 2 },
+    "network_egress": { "mode": "hash", "algorithm": "sha256" }
+  },
+  "deterministic_dispatcher": {
+    "enabled": false,
+    "algorithm": "round_robin_hash",
+    "request_order_source": "ingress_sequence",
+    "replay_log_required": false
+  },
+  "artifact_inputs": [
+    {
+      "artifact_id": "qwen3-1.7b-weights",
+      "artifact_type": "model_weights",
+      "source_kind": "hf",
+      "source_uri": "hf://Qwen/Qwen3-1.7B/model.safetensors",
+      "immutable_ref": "0000000000000000000000000000000000000000"
+    },
+    {
+      "artifact_id": "qwen3-1.7b-config",
+      "artifact_type": "model_config",
+      "source_kind": "hf",
+      "source_uri": "hf://Qwen/Qwen3-1.7B/config.json",
+      "immutable_ref": "0000000000000000000000000000000000000000"
+    },
+    {
+      "artifact_id": "qwen3-1.7b-tokenizer",
+      "artifact_type": "tokenizer",
+      "source_kind": "hf",
+      "source_uri": "hf://Qwen/Qwen3-1.7B/tokenizer.json",
+      "immutable_ref": "0000000000000000000000000000000000000000"
+    },
+    {
+      "artifact_id": "qwen3-1.7b-gen-config",
+      "artifact_type": "generation_config",
+      "source_kind": "hf",
+      "source_uri": "hf://Qwen/Qwen3-1.7B/generation_config.json",
+      "immutable_ref": "0000000000000000000000000000000000000000"
+    },
+    {
+      "artifact_id": "qwen3-1.7b-chat-template",
+      "artifact_type": "chat_template",
+      "source_kind": "hf",
+      "source_uri": "hf://Qwen/Qwen3-1.7B/tokenizer_config.json",
+      "immutable_ref": "0000000000000000000000000000000000000000"
+    },
+    {
+      "artifact_id": "qwen3-1.7b-prompt-formatter",
+      "artifact_type": "prompt_formatter",
+      "source_kind": "hf",
+      "source_uri": "hf://Qwen/Qwen3-1.7B/tokenizer_config.json",
+      "immutable_ref": "0000000000000000000000000000000000000000"
+    },
+    {
+      "artifact_id": "serving-stack-vllm",
+      "artifact_type": "serving_stack",
+      "source_kind": "oci",
+      "source_uri": "oci://vllm/vllm-openai@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "immutable_ref": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "artifact_id": "cuda-12.4",
+      "artifact_type": "cuda_lib",
+      "source_kind": "oci",
+      "source_uri": "oci://nvidia/cuda@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "immutable_ref": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "artifact_id": "flash-attn",
+      "artifact_type": "kernel_library",
+      "source_kind": "s3",
+      "source_uri": "s3://mirror/flash-attn.whl",
+      "immutable_ref": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "artifact_id": "network-stack",
+      "artifact_type": "network_stack_binary",
+      "source_kind": "s3",
+      "source_uri": "s3://mirror/netstack.tar.zst",
+      "immutable_ref": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "artifact_id": "pmd-driver",
+      "artifact_type": "pmd_driver",
+      "source_kind": "s3",
+      "source_uri": "s3://mirror/mlx5-pmd.so",
+      "immutable_ref": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "artifact_id": "runtime-knobs",
+      "artifact_type": "runtime_knob_set",
+      "source_kind": "inline",
+      "source_uri": "inline://runtime-knobs",
+      "immutable_ref": "v1"
+    },
+    {
+      "artifact_id": "request-set",
+      "artifact_type": "request_set",
+      "source_kind": "inline",
+      "source_uri": "inline://requests",
+      "immutable_ref": "v1"
+    },
+    {
+      "artifact_id": "batching-policy",
+      "artifact_type": "batching_policy",
+      "source_kind": "inline",
+      "source_uri": "inline://batching-policy",
+      "immutable_ref": "v1"
+    },
+    {
+      "artifact_id": "nic-link-config",
+      "artifact_type": "nic_link_config",
+      "source_kind": "inline",
+      "source_uri": "inline://nic-link-config",
+      "immutable_ref": "v1"
+    },
+    {
+      "artifact_id": "compiled-ext",
+      "artifact_type": "compiled_extension",
+      "source_kind": "s3",
+      "source_uri": "s3://mirror/xformers.whl",
+      "immutable_ref": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ]
+}
