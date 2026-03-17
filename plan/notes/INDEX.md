@@ -10,6 +10,7 @@ Use this index to locate active note directories.
 - `governance-conformance-hf-resolution/`: governance artifacts, conformance catalog mapping, HF resolver integration, and HF mirror/offline hardening notes.
 - `phase2-builder-runner-hardware-conformance/`: builder closure hardening and runner strict/non-strict hardware conformance notes.
 - `phase2-runtime-deploy-conformance/`: Nix-aware builder metadata, deploy manifests, runner rerun provenance, and remaining MUST conformance closure notes.
+- `networkdet-userspace-stack/`: deterministic userspace networking stack implementation (ADR-0004, MRF-based protocol field pinning, sim/dpdk backend abstraction).
 
 ## Bugs
 

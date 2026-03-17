@@ -1,0 +1,8 @@
+# 2026-03-17 - Phase 2: Pure-Python Deterministic Networking Stack
+
+- Commit: NO_COMMIT_YET
+- Change summary: Implemented the full `pkg/networkdet/` package with 10 modules: config parser, checksums (RFC 1071), Ethernet/IPv4/TCP frame builders, deterministic TCP state machine, capture ring, backend abstraction (sim + dpdk placeholder), conformance validator, and public facade API. Created ADR-0004 documenting the architecture decision. Added 5 unit test files with 44 tests covering checksums, config validation, TCP state machine, capture ring, and frame builder determinism.
+- Motivation: Spec section 9 (SPEC-9.1-9.4) requires bitwise-reproducible L2 egress through a deterministic userspace networking stack. The existing `pkg/networkdet/` was an empty scaffold with synthetic network frames. Applied the Minimal Requisite Fidelity (MRF) principle from active warden research to pin every protocol field to minimum semantic entropy.
+- Risks/Tradeoffs: The pure-Python stack is not performant enough for production (Phase 4 adds DPDK C backend). The sim backend provides determinism by construction but does not exercise real NIC hardware paths. Frame format change from synthetic to real protocol bytes will require regenerating golden fixtures (Phase 3).
+- Validation/Test follow-up: All 44 new tests pass. All 63 unit tests pass. All 27 integration/determinism tests pass (10 skipped for hardware). Phase 3 (pipeline integration) will replace synthetic frames in runner/capture with real frames from this stack.
+- Open questions: Whether to support IPv6 in addition to IPv4. Whether the deterministic TLS mode (tls_deterministic_test_only) needs a separate CSPRNG implementation or can use Python's random module with fixed seed.
