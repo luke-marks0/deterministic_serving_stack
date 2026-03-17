@@ -26,6 +26,7 @@ from pkg.common.deterministic import (
     utc_now_iso,
 )
 from pkg.networkdet import create_net_stack
+from pkg.networkdet.conformance import validate_nic_config
 
 
 PCI_ID_RE = re.compile(r"^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-7]$")
@@ -425,6 +426,14 @@ def run(
     )
     observed_gpu = observed_hardware.get("gpu", expected_hardware["gpu"])
     observed_nic = observed_hardware.get("nic", expected_hardware["nic"])
+
+    # NIC conformance validation (SPEC-9.2).
+    nic_violations = validate_nic_config(manifest, observed_nic)
+    if nic_violations and bool(manifest["runtime"]["strict_hardware"]):
+        raise ValidationError(
+            "NIC conformance failed (strict_hardware=true): " + nic_violations[0]
+        )
+
     network_stack = _artifact_by_type(lockfile, "network_stack_binary")
     pmd_driver = _artifact_by_type(lockfile, "pmd_driver")
 
