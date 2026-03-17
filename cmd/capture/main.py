@@ -32,6 +32,7 @@ from pkg.common.deterministic import (
     sha256_prefixed,
     utc_now_iso,
 )
+from pkg.networkdet import create_net_stack
 
 
 def _load_json(path: Path) -> Any:
@@ -167,13 +168,13 @@ def capture_to_bundle(
             "request_id": req_id,
         })
 
-        # Network frame: deterministic hash of request content (not seq/timestamp)
-        req_content = entry.get("request", {})
-        frame_seed = canonical_json_bytes({"req_id": req_id, "content": req_content})
-        network_frames.append({
-            "request_id": req_id,
-            "frame_hex": frame_seed.hex(),
-        })
+    # Build deterministic L2 frames via the real net stack.
+    net = create_net_stack(manifest, lockfile, backend="sim")
+    for idx, entry in enumerate(entries):
+        resp = entry.get("response", {})
+        response_bytes = canonical_json_bytes(resp)
+        net.process_response(conn_index=idx, response_bytes=response_bytes)
+    network_frames = net.capture_frames_hex()
 
     # Write observable files
     out_dir.mkdir(parents=True, exist_ok=True)

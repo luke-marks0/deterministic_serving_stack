@@ -25,6 +25,7 @@ from pkg.common.deterministic import (
     sha256_prefixed,
     utc_now_iso,
 )
+from pkg.networkdet import create_net_stack
 
 
 PCI_ID_RE = re.compile(r"^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-7]$")
@@ -52,7 +53,8 @@ def _activations(tokens: list[int]) -> list[float]:
     return [round(((tok * 3) % 991) / 991.0, 8) for tok in tokens]
 
 
-def _network_frame_hex(seed: int, req_id: str) -> str:
+def _network_frame_hex_legacy(seed: int, req_id: str) -> str:
+    """Legacy synthetic network frame (kept for --network-backend=legacy)."""
     payload = canonical_json_text({"req_id": req_id, "seed": seed}).encode("utf-8")
     return payload.hex()
 
@@ -291,14 +293,21 @@ def _env_or_default(cli_value: str | None, env_key: str, default: str) -> str:
 
 def _synthetic_observables(
     manifest: dict[str, Any],
+    lockfile: dict[str, Any],
     replica_id: str,
+    *,
+    network_backend: str = "sim",
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     """Generate synthetic observables for testing/CI (no GPU required)."""
     request_outputs: list[dict[str, Any]] = []
     engine_events: list[dict[str, Any]] = []
-    frames: list[dict[str, Any]] = []
 
     target_batch = manifest["runtime"]["batch_cardinality"]["target_batch_size"]
+
+    # Build deterministic network frames via the real net stack.
+    use_legacy = network_backend == "legacy"
+    net = None if use_legacy else create_net_stack(manifest, lockfile, backend="sim")
+
     for idx, req in enumerate(manifest["requests"]):
         seed = _seed_for_request(manifest["run_id"], req["id"], req["prompt"])
         toks = _tokens(seed)
@@ -320,7 +329,18 @@ def _synthetic_observables(
             algorithm = "none" if topo == "single_node" else "ring_all_reduce"
             engine_events.append({"step": idx, "event": "collective_algorithm_selection", "algorithm": algorithm})
 
-        frames.append({"request_id": req["id"], "frame_hex": _network_frame_hex(seed, req["id"])})
+        if not use_legacy:
+            # Build real L2 frames for this request's synthetic response.
+            response_bytes = canonical_json_bytes({"id": req["id"], "tokens": toks, "logits": lgt})
+            net.process_response(conn_index=idx, response_bytes=response_bytes)
+
+    if use_legacy:
+        frames: list[dict[str, Any]] = []
+        for req in manifest["requests"]:
+            seed = _seed_for_request(manifest["run_id"], req["id"], req["prompt"])
+            frames.append({"request_id": req["id"], "frame_hex": _network_frame_hex_legacy(seed, req["id"])})
+    else:
+        frames = net.capture_frames_hex()
 
     return request_outputs, engine_events, frames
 
@@ -329,6 +349,8 @@ def _vllm_observables(
     manifest: dict[str, Any],
     lockfile: dict[str, Any],
     replica_id: str,
+    *,
+    network_backend: str = "sim",
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
     """Run real vLLM inference and return observables + env_info."""
     from cmd.runner.vllm_runner import run_vllm
@@ -338,11 +360,17 @@ def _vllm_observables(
     request_outputs = result["request_outputs"]
     engine_events = result["engine_events"]
 
-    # Generate network frames (still synthetic since we don't have a real userspace net stack)
-    frames: list[dict[str, Any]] = []
-    for req in manifest["requests"]:
-        seed = _seed_for_request(manifest["run_id"], req["id"], req["prompt"])
-        frames.append({"request_id": req["id"], "frame_hex": _network_frame_hex(seed, req["id"])})
+    if network_backend == "legacy":
+        frames: list[dict[str, Any]] = []
+        for req in manifest["requests"]:
+            seed = _seed_for_request(manifest["run_id"], req["id"], req["prompt"])
+            frames.append({"request_id": req["id"], "frame_hex": _network_frame_hex_legacy(seed, req["id"])})
+    else:
+        net = create_net_stack(manifest, lockfile, backend="sim")
+        for idx, output in enumerate(request_outputs):
+            response_bytes = canonical_json_bytes(output)
+            net.process_response(conn_index=idx, response_bytes=response_bytes)
+        frames = net.capture_frames_hex()
 
     return request_outputs, engine_events, frames, result["env_info"]
 
@@ -354,6 +382,7 @@ def run(
     replica_id: str,
     *,
     mode: str = "synthetic",
+    network_backend: str = "sim",
     runtime_hardware: dict[str, Any] | None = None,
     pod_manifest_path: str,
     pod_lockfile_path: str,
@@ -410,10 +439,12 @@ def run(
 
     if mode == "vllm":
         request_outputs, engine_events, frames, vllm_env_info = _vllm_observables(
-            manifest, lockfile, replica_id,
+            manifest, lockfile, replica_id, network_backend=network_backend,
         )
     else:
-        request_outputs, engine_events, frames = _synthetic_observables(manifest, replica_id)
+        request_outputs, engine_events, frames = _synthetic_observables(
+            manifest, lockfile, replica_id, network_backend=network_backend,
+        )
 
     observables_dir = out_dir / "observables"
     tokens_path = observables_dir / "tokens.json"
@@ -569,6 +600,8 @@ def main() -> int:
     parser.add_argument("--replica-id", default="replica-0", help="Replica identifier")
     parser.add_argument("--mode", default="synthetic", choices=["synthetic", "vllm"],
                         help="Execution mode: synthetic (no GPU) or vllm (real inference)")
+    parser.add_argument("--network-backend", default="sim", choices=["sim", "dpdk", "legacy"],
+                        help="Network backend: sim (deterministic frames), dpdk (real NIC), legacy (synthetic hex)")
     parser.add_argument("--runtime-hardware", help="Optional observed runtime hardware profile JSON path")
     parser.add_argument("--pod-manifest-path", help="Mounted manifest path inside the pod")
     parser.add_argument("--pod-lockfile-path", help="Mounted lockfile path inside the pod")
@@ -590,6 +623,7 @@ def main() -> int:
         Path(args.out_dir),
         args.replica_id,
         mode=args.mode,
+        network_backend=args.network_backend,
         runtime_hardware=runtime_hardware,
         pod_manifest_path=_env_or_default(args.pod_manifest_path, "RUNNER_POD_MANIFEST_PATH", args.manifest),
         pod_lockfile_path=_env_or_default(args.pod_lockfile_path, "RUNNER_POD_LOCKFILE_PATH", args.lockfile),
