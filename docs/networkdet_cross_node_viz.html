@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cross-Node Network Determinism</title>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --border: #30363d;
+    --text: #e6edf3; --dim: #7d8590; --green: #3fb950;
+    --blue: #58a6ff; --purple: #bc8cff; --orange: #d29922;
+    --red: #f85149; --cyan: #39d2c0; --pink: #f778ba;
+    --eth-bg: #1a2332; --ip-bg: #1a2a1a; --tcp-bg: #2a1a2a;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace; font-size: 13px; padding: 32px; }
+  h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+  .subtitle { color: var(--dim); font-size: 13px; margin-bottom: 32px; }
+
+  .digest-banner {
+    background: linear-gradient(135deg, #0d2818, #0d1117);
+    border: 1px solid #238636; border-radius: 8px;
+    padding: 20px 24px; margin-bottom: 32px; display: flex;
+    align-items: center; gap: 16px;
+  }
+  .digest-banner .check { font-size: 32px; color: var(--green); }
+  .digest-banner .label { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+  .digest-banner .hash { color: var(--green); font-size: 12px; word-break: break-all; }
+
+  .servers { display: grid; grid-template-columns: 1fr 48px 1fr; gap: 0; margin-bottom: 32px; align-items: start; }
+  .server-col { display: flex; flex-direction: column; gap: 0; }
+  .server-header {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px 8px 0 0;
+    padding: 12px 16px; text-align: center;
+  }
+  .server-header .name { font-weight: 600; font-size: 14px; }
+  .server-header .ip { color: var(--dim); font-size: 11px; }
+  .server-header .hw { color: var(--cyan); font-size: 11px; }
+
+  .match-col { display: flex; flex-direction: column; align-items: center; justify-content: start; padding-top: 52px; }
+  .match-icon { color: var(--green); font-size: 16px; padding: 4px 0; line-height: 1; }
+
+  .frame-pair { display: contents; }
+  .frame-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-top: none; padding: 10px 12px; font-size: 11px;
+    transition: border-color 0.2s;
+  }
+  .frame-card:last-child { border-radius: 0 0 8px 8px; }
+  .frame-card:hover { border-color: var(--blue); }
+  .frame-card .frame-idx { color: var(--dim); font-size: 10px; margin-bottom: 4px; }
+
+  .layer { display: flex; gap: 6px; flex-wrap: wrap; margin: 2px 0; align-items: center; }
+  .layer-tag {
+    display: inline-block; padding: 1px 6px; border-radius: 3px;
+    font-size: 10px; font-weight: 600; letter-spacing: 0.5px;
+  }
+  .layer-tag.eth { background: #1f3a5f; color: #79c0ff; }
+  .layer-tag.ip  { background: #1f3a1f; color: #7ee787; }
+  .layer-tag.tcp { background: #3a1f3a; color: #d2a8ff; }
+  .field { color: var(--dim); }
+  .field .val { color: var(--text); }
+  .field .val.fixed { color: var(--green); }
+  .field .val.derived { color: var(--orange); }
+  .field .val.zero { color: #484f58; }
+
+  .hex-row {
+    margin-top: 6px; font-size: 10px; color: #484f58;
+    word-break: break-all; line-height: 1.5;
+    max-height: 32px; overflow: hidden; transition: max-height 0.3s;
+  }
+  .hex-row.expanded { max-height: 400px; }
+  .hex-row:hover { color: var(--dim); cursor: pointer; }
+
+  .hex-byte { display: inline; }
+  .hex-byte.eth-h { color: #58a6ff; }
+  .hex-byte.ip-h { color: #7ee787; }
+  .hex-byte.tcp-h { color: #d2a8ff; }
+  .hex-byte.payload-h { color: #7d8590; }
+
+  .mrf-table {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 20px 24px; margin-bottom: 32px;
+  }
+  .mrf-table h2 { font-size: 14px; margin-bottom: 12px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; color: var(--dim); font-size: 10px; text-transform: uppercase; letter-spacing: 1px; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  td { padding: 5px 8px; border-bottom: 1px solid #21262d; font-size: 12px; }
+  td.layer-name { font-weight: 600; }
+  td.layer-name.l2 { color: #79c0ff; }
+  td.layer-name.l3 { color: #7ee787; }
+  td.layer-name.l4 { color: #d2a8ff; }
+  td .pinned { color: var(--green); }
+  td .counter { color: var(--orange); }
+  td .semantic { color: var(--cyan); }
+
+  .stats {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 32px;
+  }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 16px 20px; text-align: center;
+  }
+  .stat-card .num { font-size: 28px; font-weight: 700; }
+  .stat-card .num.green { color: var(--green); }
+  .stat-card .num.blue { color: var(--blue); }
+  .stat-card .num.purple { color: var(--purple); }
+  .stat-card .num.cyan { color: var(--cyan); }
+  .stat-card .desc { color: var(--dim); font-size: 11px; margin-top: 4px; }
+
+  .frame-nav { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .frame-nav button {
+    background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    padding: 4px 10px; border-radius: 4px; cursor: pointer; font-family: inherit; font-size: 11px;
+  }
+  .frame-nav button:hover { border-color: var(--blue); }
+  .frame-nav button.active { background: #1f6feb; border-color: #1f6feb; }
+</style>
+</head>
+<body>
+
+<h1>Cross-Node Network Determinism Proof</h1>
+<p class="subtitle">Two independent GH200 instances (ConnectX mlx5) produce bitwise-identical L2 frame sequences</p>
+
+<div class="digest-banner">
+  <div class="check">&#10003;</div>
+  <div>
+    <div class="label">Capture Digest (SHA-256) &mdash; identical across both nodes</div>
+    <div class="hash" id="digest-hash"></div>
+  </div>
+</div>
+
+<div class="stats">
+  <div class="stat-card"><div class="num green" id="stat-frames"></div><div class="desc">L2 frames per node</div></div>
+  <div class="stat-card"><div class="num blue" id="stat-match"></div><div class="desc">byte-identical frames</div></div>
+  <div class="stat-card"><div class="num purple" id="stat-mrf"></div><div class="desc">MRF-pinned fields per frame</div></div>
+  <div class="stat-card"><div class="num cyan" id="stat-zero"></div><div class="desc">entropy sources eliminated</div></div>
+</div>
+
+<div class="mrf-table">
+  <h2>Minimal Requisite Fidelity (MRF) Field Policy</h2>
+  <table>
+    <thead><tr><th>Layer</th><th>Field</th><th>MRF Value</th><th>Kernel Default</th><th>Entropy Eliminated</th></tr></thead>
+    <tbody>
+      <tr><td class="layer-name l2">Ethernet</td><td>dst_mac</td><td><span class="pinned">02:00:00:00:00:02</span></td><td>ARP resolution (variable)</td><td>48 bits</td></tr>
+      <tr><td class="layer-name l2">Ethernet</td><td>src_mac</td><td><span class="pinned">02:00:00:00:00:01</span></td><td>NIC hardware addr</td><td>48 bits</td></tr>
+      <tr><td class="layer-name l2">Ethernet</td><td>ethertype</td><td><span class="pinned">0x0800</span></td><td>0x0800</td><td>0 bits</td></tr>
+      <tr><td class="layer-name l3">IPv4</td><td>DSCP/ECN</td><td><span class="pinned">0</span></td><td>varies</td><td>8 bits</td></tr>
+      <tr><td class="layer-name l3">IPv4</td><td>ID</td><td><span class="counter">counter(0,1,2...)</span></td><td>random / hash</td><td>16 bits</td></tr>
+      <tr><td class="layer-name l3">IPv4</td><td>Flags</td><td><span class="pinned">DF=1, MF=0</span></td><td>varies</td><td>3 bits</td></tr>
+      <tr><td class="layer-name l3">IPv4</td><td>TTL</td><td><span class="pinned">64</span></td><td>64 (usually, but configurable)</td><td>8 bits</td></tr>
+      <tr><td class="layer-name l3">IPv4</td><td>Options</td><td><span class="pinned">none (IHL=5)</span></td><td>may include timestamps</td><td>0-320 bits</td></tr>
+      <tr><td class="layer-name l3">IPv4</td><td>Checksum</td><td><span class="semantic">software-computed</span></td><td>NIC offload (firmware-dep.)</td><td>0 bits (deterministic)</td></tr>
+      <tr><td class="layer-name l4">TCP</td><td>ISN</td><td><span class="counter">sha256(run_id:conn_idx)</span></td><td>random (SipHash / clock)</td><td>32 bits</td></tr>
+      <tr><td class="layer-name l4">TCP</td><td>Timestamps</td><td><span class="pinned">disabled</span></td><td>RFC 7323 (clock-based)</td><td>64 bits</td></tr>
+      <tr><td class="layer-name l4">TCP</td><td>SACK</td><td><span class="pinned">disabled</span></td><td>enabled</td><td>variable</td></tr>
+      <tr><td class="layer-name l4">TCP</td><td>Window Scaling</td><td><span class="pinned">disabled</span></td><td>RFC 7323</td><td>24 bits</td></tr>
+      <tr><td class="layer-name l4">TCP</td><td>Reserved bits</td><td><span class="pinned">0</span></td><td>0 (but not enforced)</td><td>4 bits</td></tr>
+      <tr><td class="layer-name l4">TCP</td><td>Urgent pointer</td><td><span class="pinned">0</span></td><td>0 (but not zeroed when URG=0)</td><td>16 bits</td></tr>
+      <tr><td class="layer-name l4">TCP</td><td>Checksum</td><td><span class="semantic">software-computed</span></td><td>NIC offload (firmware-dep.)</td><td>0 bits (deterministic)</td></tr>
+      <tr><td class="layer-name l4">TCP</td><td>Nagle</td><td><span class="pinned">disabled</span></td><td>enabled (timing-dependent)</td><td>timing</td></tr>
+    </tbody>
+  </table>
+  <div style="display: flex; gap: 24px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 11px;">
+    <div><span style="color: var(--green);">&#9632;</span> <span style="color: var(--dim);">Pinned &mdash; hardcoded constant, identical in every packet</span></div>
+    <div><span style="color: var(--orange);">&#9632;</span> <span style="color: var(--dim);">Derived &mdash; deterministic but varies per connection/packet, computed from inputs</span></div>
+    <div><span style="color: var(--cyan);">&#9632;</span> <span style="color: var(--dim);">Semantic &mdash; pure function of other fields in the same packet (e.g. checksums)</span></div>
+  </div>
+</div>
+
+<h2 style="font-size: 14px; margin-bottom: 12px;">Frame-by-Frame Comparison</h2>
+<div class="frame-nav" id="frame-nav"></div>
+
+<div class="servers" id="frame-grid"></div>
+
+<script>
+const DATA = {"server1": {"digest": "sha256:131a9a6ac66e8a67b8997f7ecead07cdb126aca37da888ccb0ec0f2f392b216e", "frame_count": 16, "frames": [{"index": 0, "total_bytes": 94, "hex": "02000000000202000000000108004500005000004000400626a60a0000010a0000021f400050255ecc930000000050180200f01300007b226964223a227265712d30222c2270726f6d7074223a22746573742070726f6d70742030227d0a", "ethernet": {"dst_mac": "02:00:00:00:00:02", "src_mac": "02:00:00:00:00:01", "ethertype": "0x0800"}, "ip": {"version": 4, "ihl": 5, "tos": 0, "total_length": 80, "id": 0, "flags_frag": "0x4000", "ttl": 64, "protocol": 6, "checksum": "0x26a6", "src": "10.0.0.1", "dst": "10.0.0.2"}, "tcp": {"src_port": 8000, "dst_port": 80, "seq": 626969747, "ack": 0, "data_offset": 20, "flags": "ACK|PSH", "window": 512, "checksum": "0xf013", "urgent_ptr": 0, "payload_len": 40}}, {"index": 1, "total_bytes": 115, "hex": "02000000000202000000000108004500006500014000400626900a0000010a0000021f400050255eccbb0000000050180200979300007b226964223a227265712d30222c226c6f67697473223a5b302e302c302e302c302e305d2c22746f6b656e73223a5b3130302c3230302c3330305d7d0a", "ethernet": {"dst_mac": "02:00:00:00:00:02", "src_mac": "02:00:00:00:00:01", "ethertype": "0x0800"}, "ip": {"version": 4, "ihl": 5, "tos": 0, "total_length": 101, "id": 1, "flags_frag": "0x4000", "ttl": 64, "protocol": 6, "checksum": "0x2690", "src": "10.0.0.1", "dst": "10.0.0.2"}, "tcp": {"src_port": 8000, "dst_port": 80, "seq": 626969787, "ack": 0, "data_offset": 20, "flags": "ACK|PSH", "window": 512, "checksum": "0x9793", "urgent_ptr": 0, "payload_len": 61}}, {"index": 2, "total_bytes": 94, "hex": "02000000000202000000000108004500005000004000400626a60a0000010a0000021f4000507a3cacbb0000000050180200ba0c00007b226964223a227265712d31222c2270726f6d7074223a22746573742070726f6d70742031227d0a", "ethernet": {"dst_mac": "02:00:00:00:00:02", "src_mac": "02:00:00:00:00:01", "ethertype": "0x0800"}, "ip": {"version": 4, "ihl": 5, "tos": 0, "total_length": 80, "id": 0, "flags_frag": "0x4000", "ttl": 64, "protocol": 6, "checksum": "0x26a6", "src": "10.0.0.1", "dst": "10.0.0.2"}, "tcp": {"src_port": 8000, "dst_port": 80, "seq": 2050796731, "ack": 0, "data_offset": 20, "flags": "ACK|PSH", "window": 512, "checksum": "0xba0c", "urgent_ptr": 0, "payload_len": 40}}, {"index": 3, "total_bytes": 115, "hex": "02000000000202000000000108004500006500014000400626900a0000010a0000021f4000507a3cace300000000501802005c8900007b226964223a227265712d31222c226c6f67697473223a5b302e312c302e322c302e335d2c22746f6b656e73223a5b3130312c3230312c3330315d7d0a", "ethernet": {"dst_mac": "02:00:00:00:00:02", "src_mac": "02:00:00:00:00:01", "ethertype": "0x0800"}, "ip": {"version": 4, "ihl": 5, "tos": 0, "total_length": 101, "id": 1, "flags_frag": "0x4000", "ttl": 64, "protocol": 6, "checksum": "0x2690", "src": "10.0.0.1", "dst": "10.0.0.2"}, "tcp": {"src_port": 8000, "dst_port": 80, "seq": 2050796771, "ack": 0, "data_offset": 20, "flags": "ACK|PSH", "window": 512, "checksum": "0x5c89", "urgent_ptr": 0, "payload_len": 61}}, {"index": 4, "total_bytes": 94, "hex": "02000000000202000000000108004500005000004000400626a60a0000010a0000021f40005066873d2500000000501802003c5700007b226964223a227265712d32222c2270726f6d7074223a22746573742070726f6d70742032227d0a", "ethernet": {"dst_mac": "02:00:00:00:00:02", "src_mac": "02:00:00:00:00:01", "ethertype": "0x0800"}, "ip": {"version": 4, "ihl": 5, "tos": 0, "total_length": 80, "id": 0, "flags_frag": "0x4000", "ttl": 64, "protocol": 6, "checksum": "0x26a6", "src": "10.0.0.1", "dst": "10.0.0.2"}, "tcp": {"src_port": 8000, "dst_port": 80, "seq": 1720139045, "ack": 0, "data_offset": 20, "flags": "ACK|PSH", "window": 512, "checksum": "0x3c57", "urgent_ptr": 0, "payload_len": 40}}, {"index": 5, "total_bytes": 115, "hex": "02000000000202000000000108004500006500014000400626900a0000010a0000021f40005066873d4d0000000050180200d9d000007b226964223a227265712d32222c226c6f67697473223a5b302e322c302e342c302e365d2c22746f6b656e73223a5b3130322c3230322c3330325d7d0a", "ethernet": {"dst_mac": "02:00:00:00:00:02", "src_mac": "02:00:00:00:00:01", "ethertype": "0x0800"}, "ip": {"version": 4, "ihl": 5, "tos": 0, "total_length": 101, "id": 1, "flags_frag": "0x4000", "ttl": 64, "protocol": 6, "checksum": "0x2690", "src": "10.0.0.1", "dst": "10.0.0.2"}, "tcp": {"src_port": 8000, "dst_port": 80, "seq": 1720139085, "ack": 0, "data_offset": 20, "flags": "ACK|PSH", "window": 512, "checksum": "0xd9d0", "urgent_ptr": 0, "payload_len": 61}}, {"index": 6, "total_bytes": 94, "hex": "02000000000202000000000108004500005000004000400626a60a0000010a0000021f4000505ba7d5570000000050180200ae0300007b226964223a227265712d33222c2270726f6d7074223a22746573742070726f6d70742033227d0a", "ethernet": {"dst_mac": "02:00:00:00:00:02", "src_mac": "02:00:00:00:00:01", "ethertype": "0x0800"}, "ip": {"version": 4, "ihl": 5, "tos": 0, "total_length": 80, "id": 0, "flags_frag": "0x4000", "ttl": 64, "protocol": 6, "checksum": "0x26a6", "src": "10.0.0.1", "dst": "10.0.0.2"}, "tcp": {"src_port": 8000, "dst_port": 80, "seq": 1537725783, "ack": 0, "data_offset": 20, "flags": "ACK|PSH", "window": 512, "checksum": "0xae03", "urgent_ptr": 0, "payload_len": 40}}, {"index": 7, "total_bytes": 161, "hex": "02000000000202000000000108004500009300014000400626620a0000010a0000021f4000505ba7d57f0000000050180200b4a900007b226964223a227265712d33222c226c6f67697473223a5b302e33303030303030303030303030303030342c302e363030303030303030303030303030312c302e383939393939393939393939393939395d2c22746f6b656e73223a5b3130332c3230332c3330335d7d0a", "ethernet": {"dst_mac": "02:00:00:00:00:02", "src_mac": "02:00:00:00:00:01", "ethertype": "0x0800"}, "ip": {"version": 4, "ihl": 5, "tos": 0, "total_length": 147, "id": 1, "flags_frag": "0x4000", "ttl": 64, "protocol": 6, "checksum": "0x2662", "src": "10.0.0.1", "dst": "10.0.0.2"}, "tcp": {"src_port": 8000, "dst_port": 80, "seq": 1537725823, "ack": 0, "data_offset": 20, "flags": "ACK|PSH", "window": 512, "checksum": "0xb4a9", "urgent_ptr": 0, "payload_len": 107}}, {"index": 8, "total_bytes": 94, "hex": "02000000000202000000000108004500005000004000400626a60a0000010a0000021f4000507283b3250000000050180200b85800007b226964223a227265712d34222c2270726f6d7074223a22746573742070726f6d70742034227d0a", "ethernet": {"dst_mac": "02:00:00:00:00:02", "src_mac": "02:00:00:00:00:01", "ethertype": "0x0800"}, "ip": {"version": 4, "ihl": 5, "tos": 0, "total_length": 80, "id": 0, "flags_frag": "0x4000", "ttl": 64, "protocol": 6, "checksum": "0x26a6", "src": "10.0.0.1", "dst": "10.0.0.2"}, "tcp": {"src_port": 8000, "dst_port": 80, "seq": 1921233701, "ack": 0, "data_offset": 20, "flags": "ACK|PSH", "window": 512, "checksum": "0xb858", "urgent_ptr": 0, "payload_len": 40}}, {"index": 9, "total_bytes": 115, "hex": "02000000000202000000000108004500006500014000400626900a0000010a0000021f4000507283b34d000000005018020054cc00007b226964223a227265712d34222c226c6f67697473223a5b302e342c302e382c312e325d2c22746f6b656e73223a5b3130342c3230342c3330345d7d0a", "ethernet": {"dst_mac": "02:00:00:00:00:02", "src_mac": "02:00:00:00:00:01", "ethertype": "0x0800"}, "ip": {"version": 4, "ihl": 5, "tos": 0, "total_length": 101, "id": 1, "flags_frag": "0x4000", "ttl": 64, "protocol": 6, "checksum": "0x2690", "src": "10.0.0.1", "dst": "10.0.0.2"}, "tcp": {"src_port": 8000, "dst_port": 80, "seq": 1921233741, "ack": 0, "data_offset": 20, "flags": "ACK|PSH", "window": 512, "checksum": "0x54cc", "urgent_ptr": 0, "payload_len": 61}}, {"index": 10, "total_bytes": 94, "hex": "02000000000202000000000108004500005000004000400626a60a0000010a0000021f40005055928daa0000000050180200f9c300007b226964223a227265712d35222c2270726f6d7074223a22746573742070726f6d70742035227d0a", "ethernet": {"dst_mac": "02:00:00:00:00:02", "src_mac": "02:00:00:00:00:01", "ethertype": "0x0800"}, "ip": {"version": 4, "ihl": 5, "tos": 0, "total_length": 80, "id": 0, "flags_frag": "0x4000", "ttl": 64, "protocol": 6, "checksum": "0x26a6", "src": "10.0.0.1", "dst": "10.0.0.2"}, "tcp": {"src_port": 8000, "dst_port": 80, "seq": 1435667882, "ack": 0, "data_offset": 20, "flags": "ACK|PSH", "window": 512, "checksum": "0xf9c3", "urgent_ptr": 0, "payload_len": 40}}, {"index": 11, "total_bytes": 115, "hex": "02000000000202000000000108004500006500014000400626900a0000010a0000021f40005055928dd200000000501802009a3400007b226964223a227265712d35222c226c6f67697473223a5b302e352c312e302c312e355d2c22746f6b656e73223a5b3130352c3230352c3330355d7d0a", "ethernet": {"dst_mac": "02:00:00:00:00:02", "src_mac": "02:00:00:00:00:01", "ethertype": "0x0800"}, "ip": {"version": 4, "ihl": 5, "tos": 0, "total_length": 101, "id": 1, "flags_frag": "0x4000", "ttl": 64, "protocol": 6, "checksum": "0x2690", "src": "10.0.0.1", "dst": "10.0.0.2"}, "tcp": {"src_port": 8000, "dst_port": 80, "seq": 1435667922, "ack": 0, "data_offset": 20, "flags": "ACK|PSH", "window": 512, "checksum": "0x9a34", "urgent_ptr": 0, "payload_len": 61}}, {"index": 12, "total_bytes": 94, "hex": "02000000000202000000000108004500005000004000400626a60a0000010a0000021f400050f9a30faf0000000050180200d2ac00007b226964223a227265712d36222c2270726f6d7074223a22746573742070726f6d70742036227d0a", "ethernet": {"dst_mac": "02:00:00:00:00:02", "src_mac": "02:00:00:00:00:01", "ethertype": "0x0800"}, "ip": {"version": 4, "ihl": 5, "tos": 0, "total_length": 80, "id": 0, "flags_frag": "0x4000", "ttl": 64, "protocol": 6, "checksum": "0x26a6", "src": "10.0.0.1", "dst": "10.0.0.2"}, "tcp": {"src_port": 8000, "dst_port": 80, "seq": 4188213167, "ack": 0, "data_offset": 20, "flags": "ACK|PSH", "window": 512, "checksum": "0xd2ac", "urgent_ptr": 0, "payload_len": 40}}, {"index": 13, "total_bytes": 160, "hex": "02000000000202000000000108004500009200014000400626630a0000010a0000021f400050f9a30fd70000000050180200a2b700007b226964223a227265712d36222c226c6f67697473223a5b302e363030303030303030303030303030312c312e323030303030303030303030303030322c312e373939393939393939393939393939385d2c22746f6b656e73223a5b3130362c3230362c3330365d7d0a", "ethernet": {"dst_mac": "02:00:00:00:00:02", "src_mac": "02:00:00:00:00:01", "ethertype": "0x0800"}, "ip": {"version": 4, "ihl": 5, "tos": 0, "total_length": 146, "id": 1, "flags_frag": "0x4000", "ttl": 64, "protocol": 6, "checksum": "0x2663", "src": "10.0.0.1", "dst": "10.0.0.2"}, "tcp": {"src_port": 8000, "dst_port": 80, "seq": 4188213207, "ack": 0, "data_offset": 20, "flags": "ACK|PSH", "window": 512, "checksum": "0xa2b7", "urgent_ptr": 0, "payload_len": 106}}, {"index": 14, "total_bytes": 94, "hex": "02000000000202000000000108004500005000004000400626a60a0000010a0000021f4000501016bd2900000000501802000dbf00007b226964223a227265712d37222c2270726f6d7074223a22746573742070726f6d70742037227d0a", "ethernet": {"dst_mac": "02:00:00:00:00:02", "src_mac": "02:00:00:00:00:01", "ethertype": "0x0800"}, "ip": {"version": 4, "ihl": 5, "tos": 0, "total_length": 80, "id": 0, "flags_frag": "0x4000", "ttl": 64, "protocol": 6, "checksum": "0x26a6", "src": "10.0.0.1", "dst": "10.0.0.2"}, "tcp": {"src_port": 8000, "dst_port": 80, "seq": 269925673, "ack": 0, "data_offset": 20, "flags": "ACK|PSH", "window": 512, "checksum": "0x0dbf", "urgent_ptr": 0, "payload_len": 40}}, {"index": 15, "total_bytes": 145, "hex": "02000000000202000000000108004500008300014000400626720a0000010a0000021f4000501016bd510000000050180200e42c00007b226964223a227265712d37222c226c6f67697473223a5b302e373030303030303030303030303030312c312e343030303030303030303030303030312c322e315d2c22746f6b656e73223a5b3130372c3230372c3330375d7d0a", "ethernet": {"dst_mac": "02:00:00:00:00:02", "src_mac": "02:00:00:00:00:01", "ethertype": "0x0800"}, "ip": {"version": 4, "ihl": 5, "tos": 0, "total_length": 131, "id": 1, "flags_frag": "0x4000", "ttl": 64, "protocol": 6, "checksum": "0x2672", "src": "10.0.0.1", "dst": "10.0.0.2"}, "tcp": {"src_port": 8000, "dst_port": 80, "seq": 269925713, "ack": 0, "data_offset": 20, "flags": "ACK|PSH", "window": 512, "checksum": "0xe42c", "urgent_ptr": 0, "payload_len": 91}}]}, "server2": {"digest": "sha256:131a9a6ac66e8a67b8997f7ecead07cdb126aca37da888ccb0ec0f2f392b216e", "frame_count": 16, "frames": [{"index": 0, "total_bytes": 94, "hex": "02000000000202000000000108004500005000004000400626a60a0000010a0000021f400050255ecc930000000050180200f01300007b226964223a227265712d30222c2270726f6d7074223a22746573742070726f6d70742030227d0a", "ethernet": {"dst_mac": "02:00:00:00:00:02", "src_mac": "02:00:00:00:00:01", "ethertype": "0x0800"}, "ip": {"version": 4, "ihl": 5, "tos": 0, "total_length": 80, "id": 0, "flags_frag": "0x4000", "ttl": 64, "protocol": 6, "checksum": "0x26a6", "src": "10.0.0.1", "dst": "10.0.0.2"}, "tcp": {"src_port": 8000, "dst_port": 80, "seq": 626969747, "ack": 0, "data_offset": 20, "flags": "ACK|PSH", "window": 512, "checksum": "0xf013", "urgent_ptr": 0, "payload_len": 40}}, {"index": 1, "total_bytes": 115, "hex": "02000000000202000000000108004500006500014000400626900a0000010a0000021f400050255eccbb0000000050180200979300007b226964223a227265712d30222c226c6f67697473223a5b302e302c302e302c302e305d2c22746f6b656e73223a5b3130302c3230302c3330305d7d0a", "ethernet": {"dst_mac": "02:00:00:00:00:02", "src_mac": "02:00:00:00:00:01", "ethertype": "0x0800"}, "ip": {"version": 4, "ihl": 5, "tos": 0, "total_length": 101, "id": 1, "flags_frag": "0x4000", "ttl": 64, "protocol": 6, "checksum": "0x2690", "src": "10.0.0.1", "dst": "10.0.0.2"}, "tcp": {"src_port": 8000, "dst_port": 80, "seq": 626969787, "ack": 0, "data_offset": 20, "flags": "ACK|PSH", "window": 512, "checksum": "0x9793", "urgent_ptr": 0, "payload_len": 61}}, {"index": 2, "total_bytes": 94, "hex": "02000000000202000000000108004500005000004000400626a60a0000010a0000021f4000507a3cacbb0000000050180200ba0c00007b226964223a227265712d31222c2270726f6d7074223a22746573742070726f6d70742031227d0a", "ethernet": {"dst_mac": "02:00:00:00:00:02", "src_mac": "02:00:00:00:00:01", "ethertype": "0x0800"}, "ip": {"version": 4, "ihl": 5, "tos": 0, "total_length": 80, "id": 0, "flags_frag": "0x4000", "ttl": 64, "protocol": 6, "checksum": "0x26a6", "src": "10.0.0.1", "dst": "10.0.0.2"}, "tcp": {"src_port": 8000, "dst_port": 80, "seq": 2050796731, "ack": 0, "data_offset": 20, "flags": "ACK|PSH", "window": 512, "checksum": "0xba0c", "urgent_ptr": 0, "payload_len": 40}}, {"index": 3, "total_bytes": 115, "hex": "02000000000202000000000108004500006500014000400626900a0000010a0000021f4000507a3cace300000000501802005c8900007b226964223a227265712d31222c226c6f67697473223a5b302e312c302e322c302e335d2c22746f6b656e73223a5b3130312c3230312c3330315d7d0a", "ethernet": {"dst_mac": "02:00:00:00:00:02", "src_mac": "02:00:00:00:00:01", "ethertype": "0x0800"}, "ip": {"version": 4, "ihl": 5, "tos": 0, "total_length": 101, "id": 1, "flags_frag": "0x4000", "ttl": 64, "protocol": 6, "checksum": "0x2690", "src": "10.0.0.1", "dst": "10.0.0.2"}, "tcp": {"src_port": 8000, "dst_port": 80, "seq": 2050796771, "ack": 0, "data_offset": 20, "flags": "ACK|PSH", "window": 512, "checksum": "0x5c89", "urgent_ptr": 0, "payload_len": 61}}, {"index": 4, "total_bytes": 94, "hex": "02000000000202000000000108004500005000004000400626a60a0000010a0000021f40005066873d2500000000501802003c5700007b226964223a227265712d32222c2270726f6d7074223a22746573742070726f6d70742032227d0a", "ethernet": {"dst_mac": "02:00:00:00:00:02", "src_mac": "02:00:00:00:00:01", "ethertype": "0x0800"}, "ip": {"version": 4, "ihl": 5, "tos": 0, "total_length": 80, "id": 0, "flags_frag": "0x4000", "ttl": 64, "protocol": 6, "checksum": "0x26a6", "src": "10.0.0.1", "dst": "10.0.0.2"}, "tcp": {"src_port": 8000, "dst_port": 80, "seq": 1720139045, "ack": 0, "data_offset": 20, "flags": "ACK|PSH", "window": 512, "checksum": "0x3c57", "urgent_ptr": 0, "payload_len": 40}}, {"index": 5, "total_bytes": 115, "hex": "02000000000202000000000108004500006500014000400626900a0000010a0000021f40005066873d4d0000000050180200d9d000007b226964223a227265712d32222c226c6f67697473223a5b302e322c302e342c302e365d2c22746f6b656e73223a5b3130322c3230322c3330325d7d0a", "ethernet": {"dst_mac": "02:00:00:00:00:02", "src_mac": "02:00:00:00:00:01", "ethertype": "0x0800"}, "ip": {"version": 4, "ihl": 5, "tos": 0, "total_length": 101, "id": 1, "flags_frag": "0x4000", "ttl": 64, "protocol": 6, "checksum": "0x2690", "src": "10.0.0.1", "dst": "10.0.0.2"}, "tcp": {"src_port": 8000, "dst_port": 80, "seq": 1720139085, "ack": 0, "data_offset": 20, "flags": "ACK|PSH", "window": 512, "checksum": "0xd9d0", "urgent_ptr": 0, "payload_len": 61}}, {"index": 6, "total_bytes": 94, "hex": "02000000000202000000000108004500005000004000400626a60a0000010a0000021f4000505ba7d5570000000050180200ae0300007b226964223a227265712d33222c2270726f6d7074223a22746573742070726f6d70742033227d0a", "ethernet": {"dst_mac": "02:00:00:00:00:02", "src_mac": "02:00:00:00:00:01", "ethertype": "0x0800"}, "ip": {"version": 4, "ihl": 5, "tos": 0, "total_length": 80, "id": 0, "flags_frag": "0x4000", "ttl": 64, "protocol": 6, "checksum": "0x26a6", "src": "10.0.0.1", "dst": "10.0.0.2"}, "tcp": {"src_port": 8000, "dst_port": 80, "seq": 1537725783, "ack": 0, "data_offset": 20, "flags": "ACK|PSH", "window": 512, "checksum": "0xae03", "urgent_ptr": 0, "payload_len": 40}}, {"index": 7, "total_bytes": 161, "hex": "02000000000202000000000108004500009300014000400626620a0000010a0000021f4000505ba7d57f0000000050180200b4a900007b226964223a227265712d33222c226c6f67697473223a5b302e33303030303030303030303030303030342c302e363030303030303030303030303030312c302e383939393939393939393939393939395d2c22746f6b656e73223a5b3130332c3230332c3330335d7d0a", "ethernet": {"dst_mac": "02:00:00:00:00:02", "src_mac": "02:00:00:00:00:01", "ethertype": "0x0800"}, "ip": {"version": 4, "ihl": 5, "tos": 0, "total_length": 147, "id": 1, "flags_frag": "0x4000", "ttl": 64, "protocol": 6, "checksum": "0x2662", "src": "10.0.0.1", "dst": "10.0.0.2"}, "tcp": {"src_port": 8000, "dst_port": 80, "seq": 1537725823, "ack": 0, "data_offset": 20, "flags": "ACK|PSH", "window": 512, "checksum": "0xb4a9", "urgent_ptr": 0, "payload_len": 107}}, {"index": 8, "total_bytes": 94, "hex": "02000000000202000000000108004500005000004000400626a60a0000010a0000021f4000507283b3250000000050180200b85800007b226964223a227265712d34222c2270726f6d7074223a22746573742070726f6d70742034227d0a", "ethernet": {"dst_mac": "02:00:00:00:00:02", "src_mac": "02:00:00:00:00:01", "ethertype": "0x0800"}, "ip": {"version": 4, "ihl": 5, "tos": 0, "total_length": 80, "id": 0, "flags_frag": "0x4000", "ttl": 64, "protocol": 6, "checksum": "0x26a6", "src": "10.0.0.1", "dst": "10.0.0.2"}, "tcp": {"src_port": 8000, "dst_port": 80, "seq": 1921233701, "ack": 0, "data_offset": 20, "flags": "ACK|PSH", "window": 512, "checksum": "0xb858", "urgent_ptr": 0, "payload_len": 40}}, {"index": 9, "total_bytes": 115, "hex": "02000000000202000000000108004500006500014000400626900a0000010a0000021f4000507283b34d000000005018020054cc00007b226964223a227265712d34222c226c6f67697473223a5b302e342c302e382c312e325d2c22746f6b656e73223a5b3130342c3230342c3330345d7d0a", "ethernet": {"dst_mac": "02:00:00:00:00:02", "src_mac": "02:00:00:00:00:01", "ethertype": "0x0800"}, "ip": {"version": 4, "ihl": 5, "tos": 0, "total_length": 101, "id": 1, "flags_frag": "0x4000", "ttl": 64, "protocol": 6, "checksum": "0x2690", "src": "10.0.0.1", "dst": "10.0.0.2"}, "tcp": {"src_port": 8000, "dst_port": 80, "seq": 1921233741, "ack": 0, "data_offset": 20, "flags": "ACK|PSH", "window": 512, "checksum": "0x54cc", "urgent_ptr": 0, "payload_len": 61}}, {"index": 10, "total_bytes": 94, "hex": "02000000000202000000000108004500005000004000400626a60a0000010a0000021f40005055928daa0000000050180200f9c300007b226964223a227265712d35222c2270726f6d7074223a22746573742070726f6d70742035227d0a", "ethernet": {"dst_mac": "02:00:00:00:00:02", "src_mac": "02:00:00:00:00:01", "ethertype": "0x0800"}, "ip": {"version": 4, "ihl": 5, "tos": 0, "total_length": 80, "id": 0, "flags_frag": "0x4000", "ttl": 64, "protocol": 6, "checksum": "0x26a6", "src": "10.0.0.1", "dst": "10.0.0.2"}, "tcp": {"src_port": 8000, "dst_port": 80, "seq": 1435667882, "ack": 0, "data_offset": 20, "flags": "ACK|PSH", "window": 512, "checksum": "0xf9c3", "urgent_ptr": 0, "payload_len": 40}}, {"index": 11, "total_bytes": 115, "hex": "02000000000202000000000108004500006500014000400626900a0000010a0000021f40005055928dd200000000501802009a3400007b226964223a227265712d35222c226c6f67697473223a5b302e352c312e302c312e355d2c22746f6b656e73223a5b3130352c3230352c3330355d7d0a", "ethernet": {"dst_mac": "02:00:00:00:00:02", "src_mac": "02:00:00:00:00:01", "ethertype": "0x0800"}, "ip": {"version": 4, "ihl": 5, "tos": 0, "total_length": 101, "id": 1, "flags_frag": "0x4000", "ttl": 64, "protocol": 6, "checksum": "0x2690", "src": "10.0.0.1", "dst": "10.0.0.2"}, "tcp": {"src_port": 8000, "dst_port": 80, "seq": 1435667922, "ack": 0, "data_offset": 20, "flags": "ACK|PSH", "window": 512, "checksum": "0x9a34", "urgent_ptr": 0, "payload_len": 61}}, {"index": 12, "total_bytes": 94, "hex": "02000000000202000000000108004500005000004000400626a60a0000010a0000021f400050f9a30faf0000000050180200d2ac00007b226964223a227265712d36222c2270726f6d7074223a22746573742070726f6d70742036227d0a", "ethernet": {"dst_mac": "02:00:00:00:00:02", "src_mac": "02:00:00:00:00:01", "ethertype": "0x0800"}, "ip": {"version": 4, "ihl": 5, "tos": 0, "total_length": 80, "id": 0, "flags_frag": "0x4000", "ttl": 64, "protocol": 6, "checksum": "0x26a6", "src": "10.0.0.1", "dst": "10.0.0.2"}, "tcp": {"src_port": 8000, "dst_port": 80, "seq": 4188213167, "ack": 0, "data_offset": 20, "flags": "ACK|PSH", "window": 512, "checksum": "0xd2ac", "urgent_ptr": 0, "payload_len": 40}}, {"index": 13, "total_bytes": 160, "hex": "02000000000202000000000108004500009200014000400626630a0000010a0000021f400050f9a30fd70000000050180200a2b700007b226964223a227265712d36222c226c6f67697473223a5b302e363030303030303030303030303030312c312e323030303030303030303030303030322c312e373939393939393939393939393939385d2c22746f6b656e73223a5b3130362c3230362c3330365d7d0a", "ethernet": {"dst_mac": "02:00:00:00:00:02", "src_mac": "02:00:00:00:00:01", "ethertype": "0x0800"}, "ip": {"version": 4, "ihl": 5, "tos": 0, "total_length": 146, "id": 1, "flags_frag": "0x4000", "ttl": 64, "protocol": 6, "checksum": "0x2663", "src": "10.0.0.1", "dst": "10.0.0.2"}, "tcp": {"src_port": 8000, "dst_port": 80, "seq": 4188213207, "ack": 0, "data_offset": 20, "flags": "ACK|PSH", "window": 512, "checksum": "0xa2b7", "urgent_ptr": 0, "payload_len": 106}}, {"index": 14, "total_bytes": 94, "hex": "02000000000202000000000108004500005000004000400626a60a0000010a0000021f4000501016bd2900000000501802000dbf00007b226964223a227265712d37222c2270726f6d7074223a22746573742070726f6d70742037227d0a", "ethernet": {"dst_mac": "02:00:00:00:00:02", "src_mac": "02:00:00:00:00:01", "ethertype": "0x0800"}, "ip": {"version": 4, "ihl": 5, "tos": 0, "total_length": 80, "id": 0, "flags_frag": "0x4000", "ttl": 64, "protocol": 6, "checksum": "0x26a6", "src": "10.0.0.1", "dst": "10.0.0.2"}, "tcp": {"src_port": 8000, "dst_port": 80, "seq": 269925673, "ack": 0, "data_offset": 20, "flags": "ACK|PSH", "window": 512, "checksum": "0x0dbf", "urgent_ptr": 0, "payload_len": 40}}, {"index": 15, "total_bytes": 145, "hex": "02000000000202000000000108004500008300014000400626720a0000010a0000021f4000501016bd510000000050180200e42c00007b226964223a227265712d37222c226c6f67697473223a5b302e373030303030303030303030303030312c312e343030303030303030303030303030312c322e315d2c22746f6b656e73223a5b3130372c3230372c3330375d7d0a", "ethernet": {"dst_mac": "02:00:00:00:00:02", "src_mac": "02:00:00:00:00:01", "ethertype": "0x0800"}, "ip": {"version": 4, "ihl": 5, "tos": 0, "total_length": 131, "id": 1, "flags_frag": "0x4000", "ttl": 64, "protocol": 6, "checksum": "0x2672", "src": "10.0.0.1", "dst": "10.0.0.2"}, "tcp": {"src_port": 8000, "dst_port": 80, "seq": 269925713, "ack": 0, "data_offset": 20, "flags": "ACK|PSH", "window": 512, "checksum": "0xe42c", "urgent_ptr": 0, "payload_len": 91}}]}};
+
+const s1 = DATA.server1, s2 = DATA.server2;
+
+document.getElementById('digest-hash').textContent = s1.digest;
+document.getElementById('stat-frames').textContent = s1.frame_count;
+document.getElementById('stat-match').textContent = s1.frames.filter((f,i) => f.hex === s2.frames[i].hex).length + '/' + s1.frame_count;
+document.getElementById('stat-mrf').textContent = '17';
+document.getElementById('stat-zero').textContent = '8';
+
+function colorHex(hex, ipIhl) {
+  const ethEnd = 28;
+  const ipEnd = ethEnd + (ipIhl || 5) * 8;
+  const tcpDataOff = 5;
+  const tcpEnd = ipEnd + tcpDataOff * 8;
+  let out = '';
+  for (let i = 0; i < hex.length; i += 2) {
+    const byteIdx = i / 2;
+    let cls = 'payload-h';
+    if (byteIdx < 14) cls = 'eth-h';
+    else if (byteIdx < 14 + (ipIhl||5)*4) cls = 'ip-h';
+    else if (byteIdx < 14 + (ipIhl||5)*4 + tcpDataOff*4) cls = 'tcp-h';
+    out += `<span class="hex-byte ${cls}">${hex.substr(i,2)}</span>`;
+    if ((i + 2) % 32 === 0) out += '\n';
+    else if ((i + 2) % 2 === 0) out += ' ';
+  }
+  return out;
+}
+
+function renderFrame(f, side) {
+  const e = f.ethernet, ip = f.ip, tcp = f.tcp;
+  return `
+    <div class="frame-card" id="frame-${side}-${f.index}">
+      <div class="frame-idx">Frame #${f.index} &mdash; ${f.total_bytes} bytes</div>
+      <div class="layer">
+        <span class="layer-tag eth">ETH</span>
+        <span class="field">${e.src_mac} &rarr; ${e.dst_mac} <span class="val fixed">${e.ethertype}</span></span>
+      </div>
+      <div class="layer">
+        <span class="layer-tag ip">IP</span>
+        <span class="field">
+          ${ip.src} &rarr; ${ip.dst}
+          id=<span class="val derived">${ip.id}</span>
+          ttl=<span class="val fixed">${ip.ttl}</span>
+          flags=<span class="val fixed">${ip.flags_frag}</span>
+          len=<span class="val">${ip.total_length}</span>
+          cksum=<span class="val derived">${ip.checksum}</span>
+        </span>
+      </div>
+      <div class="layer">
+        <span class="layer-tag tcp">TCP</span>
+        <span class="field">
+          :${tcp.src_port} &rarr; :${tcp.dst_port}
+          seq=<span class="val derived">${tcp.seq}</span>
+          [<span class="val">${tcp.flags}</span>]
+          win=<span class="val fixed">${tcp.window}</span>
+          urg=<span class="val zero">${tcp.urgent_ptr}</span>
+          payload=<span class="val">${tcp.payload_len}B</span>
+        </span>
+      </div>
+      <div class="hex-row" onclick="this.classList.toggle('expanded')">${colorHex(f.hex, ip.ihl)}</div>
+    </div>`;
+}
+
+// Build frame nav buttons
+const nav = document.getElementById('frame-nav');
+for (let i = 0; i < s1.frame_count; i++) {
+  const btn = document.createElement('button');
+  btn.textContent = `#${i}`;
+  btn.onclick = () => {
+    document.getElementById(`frame-left-${i}`).scrollIntoView({behavior:'smooth', block:'center'});
+    nav.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  };
+  nav.appendChild(btn);
+}
+
+// Build the comparison grid
+const grid = document.getElementById('frame-grid');
+let html = `
+  <div class="server-col">
+    <div class="server-header">
+      <div class="name">Server 1</div>
+      <div class="ip">192.222.50.183</div>
+      <div class="hw">GH200 &middot; ConnectX mlx5 &middot; FW 32.42.1000</div>
+    </div>`;
+for (const f of s1.frames) html += renderFrame(f, 'left');
+html += `</div><div class="match-col">
+    <div style="height:60px"></div>`;
+for (let i = 0; i < s1.frame_count; i++) {
+  const match = s1.frames[i].hex === s2.frames[i].hex;
+  html += `<div class="match-icon" style="height:${document.querySelector('.frame-card')?.offsetHeight || 88}px; display:flex; align-items:center;" title="${match ? 'Identical' : 'MISMATCH'}">${match ? '&#9552;' : '&#10007;'}</div>`;
+}
+html += `</div><div class="server-col">
+    <div class="server-header">
+      <div class="name">Server 2</div>
+      <div class="ip">192.222.56.186</div>
+      <div class="hw">GH200 &middot; ConnectX mlx5 &middot; FW 32.42.1000</div>
+    </div>`;
+for (const f of s2.frames) html += renderFrame(f, 'right');
+html += `</div>`;
+grid.innerHTML = html;
+</script>
+
+</body>
+</html>
