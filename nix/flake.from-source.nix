@@ -36,75 +36,35 @@
           };
         };
 
-        python = pkgs.python312;
-        pythonPackages = pkgs.python312Packages;
+        python = pkgs.python310;
+        pythonPackages = pkgs.python310Packages;
 
         # ── PyTorch from source (via nixpkgs) ─────────────────────────────
+        # With cudaSupport = true in the nixpkgs config, python310Packages.torch
+        # is already built from source with CUDA.  nixpkgs handles the cmake
+        # build, NCCL, cuDNN, etc.  We just reference it.
+        #
+        # If the nixpkgs version doesn't match the exact torch version you
+        # need, override the source below.
         torch = pythonPackages.torch;
 
         # ── vLLM 0.17.1 from source ───────────────────────────────────────
+        # vLLM is not in nixpkgs, so we write a buildPythonPackage derivation.
+        # vLLM's build system uses cmake + ninja to compile CUDA/C++ extensions
+        # (attention kernels, paged-attention, moe kernels, etc.).
         vllmSrc = pkgs.fetchFromGitHub {
           owner = "vllm-project";
           repo = "vllm";
           rev = "v0.17.1";
-          hash = "sha256-EZozwA+GIjN8/CBNhtdeM3HsPhVdx1/J0B9gvvn2qKU=";
-          fetchSubmodules = true;
-        };
-
-        # ── Pre-fetched C++ dependencies for vLLM's cmake FetchContent ────
-        # The Nix sandbox blocks network access during builds, so we
-        # pre-fetch every repo that CMakeLists.txt would git-clone via
-        # FetchContent, then point the corresponding *_SRC_DIR env vars
-        # at the Nix store paths.
-
-        cutlassSrc = pkgs.fetchFromGitHub {
-          owner = "nvidia";
-          repo = "cutlass";
-          rev = "v4.2.1";
-          hash = "sha256-iP560D5Vwuj6wX1otJhwbvqe/X4mYVeKTpK533Wr5gY=";
-        };
-
-        vllmFlashAttnSrc = pkgs.fetchgit {
-          url = "https://github.com/vllm-project/flash-attention.git";
-          rev = "140c00c0241bb60cc6e44e7c1be9998d4b20d8d2";
-          hash = "sha256-GgLNpj44O2p6iitmSW82bENdS0tOmfdccngNlr4cKVY=";
-          fetchSubmodules = true;
-        };
-
-        tritonSrc = pkgs.fetchFromGitHub {
-          owner = "triton-lang";
-          repo = "triton";
-          rev = "v3.6.0";
-          # TODO: replace after first build
-          hash = "sha256-JFSpQn+WsNnh7CAPlcpOcUp0nyKXNbJEANdXqmkt4Tc=";
-        };
-
-        flashmlaSrc = pkgs.fetchFromGitHub {
-          owner = "vllm-project";
-          repo = "FlashMLA";
-          rev = "692917b1cda61b93ac9ee2d846ec54e75afe87b1";
-          # TODO: replace after first build
-          hash = "sha256-GH7X25dy/PQiLIsItEzNa/N5r8VmOQRilIWLJdHj7kE=";
-          fetchSubmodules = true;
-        };
-
-        qutlassSrc = pkgs.fetchFromGitHub {
-          owner = "IST-DASLab";
-          repo = "qutlass";
-          rev = "830d2c4537c7396e14a02a46fbddd18b5d107c65";
-          # TODO: replace after first build
-          hash = "sha256-wXCQ5XlV8rKmctYCKDBc2aUqmHZX8qwXgGZY2BGyw5I=";
-          fetchSubmodules = true;
+          # TODO: replace after first build — Nix will print the correct hash
+          hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+          fetchSubmodules = true;  # vLLM vendors cutlass, flashinfer, etc.
         };
 
         vllm = pythonPackages.buildPythonPackage rec {
           pname = "vllm";
           version = "0.17.1";
           format = "setuptools";
-
-          # Prevent Nix cmake hook from running its own configure phase.
-          # vLLM's setup.py invokes cmake itself with the correct flags.
-          dontUseCmakeConfigure = true;
 
           src = vllmSrc;
 
@@ -121,6 +81,8 @@
           ];
 
           # ── Propagated runtime + build dependencies ────────────────────
+          # These are both needed at build time (for cmake find_package /
+          # header includes) and at runtime (Python imports).
           buildInputs = [
             # CUDA toolkit components
             pkgs.cudaPackages.cuda_cudart
@@ -172,38 +134,34 @@
           ];
 
           # ── Build environment ──────────────────────────────────────────
+          # Tell cmake where to find CUDA and which GPU architectures to
+          # compile for.  TORCH_CUDA_ARCH_LIST must match cudaCapabilities.
           env = {
             CUDA_HOME = "${pkgs.cudaPackages.cuda_nvcc}";
             TORCH_CUDA_ARCH_LIST = "9.0";
+            # Limit parallel compilation to avoid OOM on smaller machines.
+            # Adjust as needed — 8 is reasonable for 64 GB RAM.
             MAX_JOBS = "8";
+            # Tell vLLM's setup.py to skip the version check against git
             SETUPTOOLS_SCM_PRETEND_VERSION = version;
-            VLLM_PYTHON_EXECUTABLE = "${python}/bin/python3";
-            # Pre-fetched sources for cmake FetchContent (no network in sandbox)
-            VLLM_CUTLASS_SRC_DIR = "${cutlassSrc}";
-            VLLM_FLASH_ATTN_SRC_DIR = "${vllmFlashAttnSrc}";
-            # triton_kernels expects the full triton repo; cmake uses SOURCE_SUBDIR
-            # but with TRITON_KERNELS_SRC_DIR it points directly to the python/triton_kernels/triton_kernels subdir
-            TRITON_KERNELS_SRC_DIR = "${tritonSrc}/python/triton_kernels/triton_kernels";
-            FLASH_MLA_SRC_DIR = "${flashmlaSrc}";
-            QUTLASS_SRC_DIR = "${qutlassSrc}";
           };
 
           # vLLM's setup.py invokes cmake directly; we need CUDA on PATH
           preBuild = ''
             export PATH="${pkgs.cudaPackages.cuda_nvcc}/bin:$PATH"
             export CUDA_HOME="${pkgs.cudaPackages.cuda_nvcc}"
+            # Ensure torch's cmake modules are findable
             export CMAKE_PREFIX_PATH="${torch}/${python.sitePackages}/torch/share/cmake:$CMAKE_PREFIX_PATH"
-            export VLLM_PYTHON_EXECUTABLE="${python}/bin/python3"
-            export VLLM_CUTLASS_SRC_DIR="${cutlassSrc}"
-            export VLLM_FLASH_ATTN_SRC_DIR="${vllmFlashAttnSrc}"
-            export TRITON_KERNELS_SRC_DIR="${tritonSrc}/python/triton_kernels/triton_kernels"
-            export FLASH_MLA_SRC_DIR="${flashmlaSrc}"
-            export QUTLASS_SRC_DIR="${qutlassSrc}"
           '';
+
+          # The CUDA kernel compilation can't run in the sandbox without
+          # /dev/nvidia* but the *compilation* itself only needs nvcc, not a
+          # GPU.  The sandbox is fine.
 
           # Skip tests — they require a live GPU
           doCheck = false;
 
+          # Some optional deps may not be in nixpkgs; filter nulls
           postFixup = ''
             # vLLM installs some scripts; ensure they point to our python
             for f in $out/bin/*; do
@@ -222,9 +180,14 @@
         };
 
         # ── Python environment ─────────────────────────────────────────────
+        # All packages are from-source via nixpkgs.  torch and vllm pull in
+        # most transitive deps; we add a few extras for our app.
         pythonEnv = python.withPackages (ps: [
+          # Core ML stack (from source)
           torch
           vllm
+
+          # Additional app dependencies
           ps.numpy
           ps.jsonschema
           ps.requests
@@ -252,6 +215,9 @@
         };
 
         # ── Full runtime closure ───────────────────────────────────────────
+        # Every .so in this closure links against Nix's glibc — no manylinux
+        # wheels, no FHS compat layer.  `nix path-info -rsSh` will show you
+        # the exact set of store paths.
         runtimeClosure = pkgs.symlinkJoin {
           name = "deterministic-serving-runtime-closure";
           version = "0.1.0";
@@ -268,19 +234,19 @@
         ociImage = pkgs.dockerTools.buildLayeredImage {
           name = "deterministic-serving-runtime";
           tag = self.rev or "dev";
-          contents = [ runtimeClosure (pkgs.writeTextDir "etc/passwd" "root:x:0:0:root:/tmp:/bin/bash\n") (pkgs.writeTextDir "etc/group" "root:x:0:\n") ];
+          contents = [ runtimeClosure ];
           config = {
             Cmd = [ "${pythonEnv}/bin/python3" "${appSrc}/cmd/server/main.py" ];
             WorkingDir = "/workspace";
             Env = [
               "PYTHONPATH=${appSrc}:${pythonEnv}/${python.sitePackages}"
+              # Determinism knobs
               "VLLM_BATCH_INVARIANT=1"
               "CUBLAS_WORKSPACE_CONFIG=:4096:8"
               "PYTHONHASHSEED=0"
+              # CUDA visible to the container
               "NVIDIA_VISIBLE_DEVICES=all"
               "NVIDIA_DRIVER_CAPABILITIES=compute,utility"
-              "LD_LIBRARY_PATH=/usr/lib64:/usr/lib/aarch64-linux-gnu:/usr/lib/x86_64-linux-gnu"
-              "HOME=/tmp"
             ];
           };
         };
@@ -291,6 +257,7 @@
           closure = runtimeClosure;
           app = appSrc;
           oci = ociImage;
+          # Expose individual components for debugging / testing
           inherit torch vllm;
         };
 

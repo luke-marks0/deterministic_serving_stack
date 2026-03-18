@@ -211,6 +211,17 @@ def _base_manifest() -> dict[str, object]:
                 "torch_deterministic": True,
                 "cuda_launch_blocking": True,
             },
+            "serving_engine": {
+                "max_model_len": 8192,
+                "max_num_seqs": 256,
+                "gpu_memory_utilization": 0.9,
+                "dtype": "auto",
+                "attention_backend": "FLASH_ATTN",
+            },
+            "nix_pin": {
+                "flake_ref": "github:test/test/0000000",
+                "flake_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+            },
             "allow_non_reproducible_egress": False,
         },
         "hardware_profile": {

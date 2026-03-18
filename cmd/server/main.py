@@ -102,6 +102,15 @@ def _probe_hardware(manifest: dict[str, Any]) -> dict[str, Any]:
         })
         record["status"] = "conformant"
 
+        # Record software versions for provenance
+        record["torch_version"] = torch.__version__
+        record["cuda_version"] = torch.version.cuda or "unknown"
+        try:
+            import vllm
+            record["vllm_version"] = getattr(vllm, "__version__", "unknown")
+        except ImportError:
+            record["vllm_version"] = "not_installed"
+
     except ImportError:
         record["status"] = "torch_not_available"
 
@@ -129,15 +138,30 @@ def _build_vllm_cmd(manifest: dict[str, Any], host: str, port: int) -> list[str]
     if batch_inv.get("enforce_eager", False):
         cmd.append("--enforce-eager")
 
+    # Serving engine config — prefer manifest, fall back to env vars
+    engine = runtime.get("serving_engine", {})
+
     if batch_inv.get("enabled", False):
-        backend = os.getenv("VLLM_ATTENTION_BACKEND", "FLASH_ATTN")
+        backend = engine.get("attention_backend") or os.getenv("VLLM_ATTENTION_BACKEND", "FLASH_ATTN")
         cmd.extend(["--attention-backend", backend])
 
-    max_model_len = os.getenv("RUNNER_MAX_MODEL_LEN", "8192")
+    max_model_len = str(engine.get("max_model_len") or os.getenv("RUNNER_MAX_MODEL_LEN", "8192"))
     cmd.extend(["--max-model-len", max_model_len])
 
-    gpu_mem = os.getenv("RUNNER_GPU_MEM_UTIL", "0.90")
+    gpu_mem = str(engine.get("gpu_memory_utilization") or os.getenv("RUNNER_GPU_MEM_UTIL", "0.90"))
     cmd.extend(["--gpu-memory-utilization", gpu_mem])
+
+    max_num_seqs = engine.get("max_num_seqs")
+    if max_num_seqs:
+        cmd.extend(["--max-num-seqs", str(max_num_seqs)])
+
+    dtype = engine.get("dtype")
+    if dtype and dtype != "auto":
+        cmd.extend(["--dtype", dtype])
+
+    api_key = os.getenv("VLLM_API_KEY")
+    if api_key:
+        cmd.extend(["--api-key", api_key])
 
     if manifest["model"].get("trust_remote_code", False):
         cmd.append("--trust-remote-code")
@@ -176,8 +200,27 @@ class ProxyHandler(BaseHTTPRequestHandler):
 
     vllm_port: int = 8001
     capture_log: CaptureLog | None = None
+    api_key: str | None = None
+
+    def _check_auth(self) -> bool:
+        """Reject requests without valid API key (if configured)."""
+        if not self.api_key:
+            return True
+        auth = self.headers.get("Authorization", "")
+        if auth == f"Bearer {self.api_key}":
+            return True
+        error = json.dumps({"error": "Unauthorized"}).encode()
+        self.send_response(401)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(error)))
+        self.end_headers()
+        self.wfile.write(error)
+        return False
 
     def do_POST(self):
+        if not self._check_auth():
+            return
+
         content_length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(content_length) if content_length > 0 else b""
 
@@ -235,6 +278,10 @@ class ProxyHandler(BaseHTTPRequestHandler):
             self.wfile.write(error_msg)
 
     def do_GET(self):
+        # Allow /health without auth for load balancer probes
+        if self.path != "/health" and not self._check_auth():
+            return
+
         url = f"http://127.0.0.1:{self.vllm_port}{self.path}"
         try:
             with urlopen(url) as resp:
@@ -366,6 +413,7 @@ def main() -> int:
     capture_log = CaptureLog(out_dir / "capture.jsonl")
     ProxyHandler.vllm_port = args.vllm_port
     ProxyHandler.capture_log = capture_log
+    ProxyHandler.api_key = os.getenv("VLLM_API_KEY")
 
     class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
         daemon_threads = True
@@ -378,6 +426,7 @@ def main() -> int:
     print(f"  Endpoint: http://{args.host}:{args.port}/v1/chat/completions")
     print(f"  Model: {manifest['model']['source']}")
     print(f"  Batch invariance: {'ON' if batch_inv.get('enabled') else 'OFF'}")
+    print(f"  Auth: {'API key required' if os.getenv('VLLM_API_KEY') else 'OPEN (no VLLM_API_KEY set)'}")
     print(f"  Capture log: {out_dir / 'capture.jsonl'}")
     print(f"  Boot record: {boot_path}")
     print()

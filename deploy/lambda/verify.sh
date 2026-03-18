@@ -8,7 +8,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-VENV="/home/ubuntu/venv"
+VENV="${VIRTUAL_ENV:-/home/ubuntu/venv}"
 HOST="127.0.0.1"
 PORT=8000
 NUM_REQUESTS=8

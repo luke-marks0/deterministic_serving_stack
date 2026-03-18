@@ -32,6 +32,7 @@ from pkg.common.deterministic import (
     sha256_prefixed,
     utc_now_iso,
 )
+from pkg.networkdet import create_net_stack
 
 
 def _load_json(path: Path) -> Any:
@@ -167,13 +168,13 @@ def capture_to_bundle(
             "request_id": req_id,
         })
 
-        # Network frame: deterministic hash of request content (not seq/timestamp)
-        req_content = entry.get("request", {})
-        frame_seed = canonical_json_bytes({"req_id": req_id, "content": req_content})
-        network_frames.append({
-            "request_id": req_id,
-            "frame_hex": frame_seed.hex(),
-        })
+    # Build deterministic L2 frames via the real net stack.
+    net = create_net_stack(manifest, lockfile, backend="sim")
+    for idx, entry in enumerate(entries):
+        resp = entry.get("response", {})
+        response_bytes = canonical_json_bytes(resp)
+        net.process_response(conn_index=idx, response_bytes=response_bytes)
+    network_frames = net.capture_frames_hex()
 
     # Write observable files
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -233,9 +234,9 @@ def capture_to_bundle(
             for a in lockfile.get("artifacts", [])
         ],
         "environment_info": {
-            "vllm_version": boot_record.get("vllm_version", "unknown"),
-            "torch_version": boot_record.get("torch_version", "unknown"),
-            "cuda_version": boot_record.get("cuda_version", "unknown"),
+            "vllm_version": boot_record.get("vllm_version") or hw.get("vllm_version", "unknown"),
+            "torch_version": boot_record.get("torch_version") or hw.get("torch_version", "unknown"),
+            "cuda_version": boot_record.get("cuda_version") or hw.get("cuda_version", "unknown"),
             "driver_version": hw.get("driver_version", "unknown"),
             "gpu_inventory": [hw.get("gpu_name", "unknown")],
             "hardware_fingerprint": hw.get("actual_fingerprint", sha256_prefixed(canonical_json_bytes(hw))),
