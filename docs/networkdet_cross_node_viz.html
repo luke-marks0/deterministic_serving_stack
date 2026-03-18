@@ -108,6 +108,25 @@
   .stat-card .num.cyan { color: var(--cyan); }
   .stat-card .desc { color: var(--dim); font-size: 11px; margin-top: 4px; }
 
+  .mrf-row { cursor: pointer; transition: background 0.15s; }
+  .mrf-row:hover { background: #1c2129; }
+  .mrf-row td:first-child::before {
+    content: '\25B6'; color: #484f58; font-size: 8px; margin-right: 6px;
+    display: inline-block; transition: transform 0.2s;
+  }
+  .mrf-row.open td:first-child::before { transform: rotate(90deg); }
+  .mrf-explainer {
+    display: none; background: #0d1117;
+  }
+  .mrf-explainer.open { display: table-row; }
+  .mrf-explainer td {
+    padding: 10px 16px 14px 32px; border-bottom: 1px solid #21262d;
+    color: var(--dim); font-size: 11px; line-height: 1.65;
+  }
+  .mrf-explainer .safe { color: var(--green); font-weight: 600; }
+  .mrf-explainer .warn { color: var(--orange); font-weight: 600; }
+  .mrf-explainer .note { color: #8b949e; font-style: italic; }
+
   .frame-nav { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
   .frame-nav button {
     background: var(--surface); border: 1px solid var(--border); color: var(--text);
@@ -140,27 +159,78 @@
 <div class="mrf-table">
   <h2>Minimal Requisite Fidelity (MRF) Field Policy</h2>
   <table>
-    <thead><tr><th>Layer</th><th>Field</th><th>MRF Value</th><th>Kernel Default</th><th>Entropy Eliminated</th></tr></thead>
-    <tbody>
-      <tr><td class="layer-name l2">Ethernet</td><td>dst_mac</td><td><span class="pinned">02:00:00:00:00:02</span></td><td>ARP resolution (variable)</td><td>48 bits</td></tr>
-      <tr><td class="layer-name l2">Ethernet</td><td>src_mac</td><td><span class="pinned">02:00:00:00:00:01</span></td><td>NIC hardware addr</td><td>48 bits</td></tr>
-      <tr><td class="layer-name l2">Ethernet</td><td>ethertype</td><td><span class="pinned">0x0800</span></td><td>0x0800</td><td>0 bits</td></tr>
-      <tr><td class="layer-name l3">IPv4</td><td>DSCP/ECN</td><td><span class="pinned">0</span></td><td>varies</td><td>8 bits</td></tr>
-      <tr><td class="layer-name l3">IPv4</td><td>ID</td><td><span class="counter">counter(0,1,2...)</span></td><td>random / hash</td><td>16 bits</td></tr>
-      <tr><td class="layer-name l3">IPv4</td><td>Flags</td><td><span class="pinned">DF=1, MF=0</span></td><td>varies</td><td>3 bits</td></tr>
-      <tr><td class="layer-name l3">IPv4</td><td>TTL</td><td><span class="pinned">64</span></td><td>64 (usually, but configurable)</td><td>8 bits</td></tr>
-      <tr><td class="layer-name l3">IPv4</td><td>Options</td><td><span class="pinned">none (IHL=5)</span></td><td>may include timestamps</td><td>0-320 bits</td></tr>
-      <tr><td class="layer-name l3">IPv4</td><td>Checksum</td><td><span class="semantic">software-computed</span></td><td>NIC offload (firmware-dep.)</td><td>0 bits (deterministic)</td></tr>
-      <tr><td class="layer-name l4">TCP</td><td>ISN</td><td><span class="counter">sha256(run_id:conn_idx)</span></td><td>random (SipHash / clock)</td><td>32 bits</td></tr>
-      <tr><td class="layer-name l4">TCP</td><td>Timestamps</td><td><span class="pinned">disabled</span></td><td>RFC 7323 (clock-based)</td><td>64 bits</td></tr>
-      <tr><td class="layer-name l4">TCP</td><td>SACK</td><td><span class="pinned">disabled</span></td><td>enabled</td><td>variable</td></tr>
-      <tr><td class="layer-name l4">TCP</td><td>Window Scaling</td><td><span class="pinned">disabled</span></td><td>RFC 7323</td><td>24 bits</td></tr>
-      <tr><td class="layer-name l4">TCP</td><td>Reserved bits</td><td><span class="pinned">0</span></td><td>0 (but not enforced)</td><td>4 bits</td></tr>
-      <tr><td class="layer-name l4">TCP</td><td>Urgent pointer</td><td><span class="pinned">0</span></td><td>0 (but not zeroed when URG=0)</td><td>16 bits</td></tr>
-      <tr><td class="layer-name l4">TCP</td><td>Checksum</td><td><span class="semantic">software-computed</span></td><td>NIC offload (firmware-dep.)</td><td>0 bits (deterministic)</td></tr>
-      <tr><td class="layer-name l4">TCP</td><td>Nagle</td><td><span class="pinned">disabled</span></td><td>enabled (timing-dependent)</td><td>timing</td></tr>
-    </tbody>
+    <thead><tr><th>Layer</th><th>Field</th><th>MRF Value</th><th>Kernel Default</th><th>Entropy</th></tr></thead>
+    <tbody id="mrf-body"></tbody>
   </table>
+  <script>
+  const MRF_FIELDS = [
+    { layer: "Ethernet", lc: "l2", field: "dst_mac", mrf: '<span class="pinned">fixed from config</span>', kern: "ARP resolution (variable)", entropy: "48 bits",
+      explain: '<span class="safe">Safe.</span> MAC addresses are only meaningful on the local L2 segment. Every router already rewrites them at each hop &mdash; that\'s how routing works. The warden does what routers already do. The packet still reaches its destination because routing uses IP addresses, not MACs.' },
+    { layer: "Ethernet", lc: "l2", field: "src_mac", mrf: '<span class="pinned">fixed from config</span>', kern: "NIC hardware addr", entropy: "48 bits",
+      explain: '<span class="safe">Safe.</span> Same as dst_mac. Source MAC identifies the sender on the local segment only. Upstream devices (routers, switches) rewrite it at every hop. No end-to-end protocol depends on the original source MAC surviving.' },
+    { layer: "Ethernet", lc: "l2", field: "ethertype", mrf: '<span class="pinned">0x0800</span>', kern: "0x0800", entropy: "0 bits",
+      explain: '<span class="safe">Safe.</span> EtherType identifies the payload protocol (0x0800 = IPv4). This is functionally required and cannot carry covert data without breaking the packet. Both sides must agree on the value. No normalization needed &mdash; included for completeness.' },
+    { layer: "Ethernet", lc: "l2", field: "Padding", mrf: '<span class="pinned">zero-filled</span>', kern: "undefined (often garbage)", entropy: "0-240 bits",
+      explain: '<span class="safe">Safe.</span> Ethernet frames must be at least 64 bytes. For small payloads, padding is added. The spec does not define what the padding bytes should contain, so implementations may leave memory garbage. No receiver reads padding bytes &mdash; they are discarded after the frame length is computed. Zero-filling eliminates a covert channel with zero functional impact.' },
+    { layer: "IPv4", lc: "l3", field: "DSCP/ECN", mrf: '<span class="pinned">0</span>', kern: "varies", entropy: "8 bits",
+      explain: '<span class="safe">Safe.</span> DSCP tells routers to prioritize traffic (e.g. "low latency"). ECN signals congestion. Most networks ignore these entirely, and those that don\'t set them according to local policy. The Differentiated Services spec (RFC 2474) explicitly says edge routers may rewrite this field. Zeroing it means "default service" &mdash; the packet still delivers, just without QoS hints.' },
+    { layer: "IPv4", lc: "l3", field: "ID", mrf: '<span class="counter">counter(0,1,2...)</span>', kern: "random / hash", entropy: "16 bits",
+      explain: '<span class="safe">Safe.</span> The IP ID is used only for reassembling fragments. If a packet is fragmented in transit, the receiver uses the ID to match fragments of the same original packet. The warden rewrites this with a consistent mapping &mdash; all fragments of the same packet get the same new ID. Since TCP nearly always sets DF=1 (Don\'t Fragment), fragmentation almost never occurs. The paper recommends encrypting the ID with a per-connection key to destroy any embedded data while preserving fragment reassembly.' },
+    { layer: "IPv4", lc: "l3", field: "Flags (DF/MF)", mrf: '<span class="pinned">DF=1, MF=0</span>', kern: "varies", entropy: "3 bits",
+      explain: '<span class="safe">Safe.</span> DF (Don\'t Fragment) is the normal TCP behavior &mdash; TCP uses Path MTU Discovery which relies on DF=1. MF (More Fragments) is only set during fragmentation. The warden can reassemble fragments (removing MF) and re-emit with DF=1. This is what PMTUD expects anyway. The reserved flag bit must be zero per spec.' },
+    { layer: "IPv4", lc: "l3", field: "TTL", mrf: '<span class="pinned">64</span>', kern: "64 (configurable)", entropy: "8 bits",
+      explain: '<span class="safe">Safe.</span> TTL is decremented by 1 at every hop. When it reaches 0, the packet is dropped &mdash; this prevents routing loops. The warden is a hop, so decrementing (or resetting to a fixed value) is standard behavior. The packet still reaches its destination as long as TTL doesn\'t hit 0. <span class="warn">Caveat:</span> resetting TTL breaks <code>traceroute</code>, which deliberately uses low TTLs to map the path. Acceptable tradeoff in a high-security environment.' },
+    { layer: "IPv4", lc: "l3", field: "Options", mrf: '<span class="pinned">stripped (IHL=5)</span>', kern: "may include timestamps", entropy: "0-320 bits",
+      explain: '<span class="safe">Safe.</span> IP options like Record Route, Timestamp, and Source Route are almost never used in normal traffic. The paper\'s traffic analysis found options in only 0.0006% of packets. Many firewalls already strip them. Removing options changes IHL from &gt;5 back to 5, which the warden compensates by recomputing header length and checksum. No production application depends on IP options surviving transit.' },
+    { layer: "IPv4", lc: "l3", field: "Checksum", mrf: '<span class="semantic">recomputed</span>', kern: "NIC offload (firmware-dep.)", entropy: "0 bits",
+      explain: '<span class="safe">Safe.</span> The IP checksum is a mathematical function of the other header fields. It is not normalized &mdash; it is <em>recomputed</em> after the warden changes any field. Every router already does this. If the checksum were wrong, the next hop would drop the packet. Computing it in software (rather than NIC offload) ensures it is deterministic and not subject to firmware-specific behavior.' },
+    { layer: "IPv4", lc: "l3", field: "Source Address", mrf: '<span class="pinned">egress filtering</span>', kern: "set by sender", entropy: "32 bits",
+      explain: '<span class="safe">Safe.</span> The source IP should match the sender\'s actual address. A malicious insider could set a false source address to bounce messages off intermediate hosts (the paper\'s "bounce message" attack). Egress filtering (BCP38/uRPF) verifies that the source address belongs to the sending network. NAT already rewrites source addresses on every outbound packet &mdash; this is the same operation. Reply packets use the destination address, which the warden leaves intact.' },
+    { layer: "TCP", lc: "l4", field: "ISN", mrf: '<span class="counter">sha256(run_id:conn_idx)</span>', kern: "random (SipHash / clock)", entropy: "32 bits",
+      explain: '<span class="safe">Safe.</span> The ISN (Initial Sequence Number) is chosen arbitrarily by the sender at connection start. The receiver doesn\'t care what value it is &mdash; it just uses it as a starting reference and tracks byte offsets from there. The warden picks a new ISN and remembers the offset (new &minus; original). For every subsequent packet, it adds that offset to the sequence number. The receiver\'s ACKs come back with the new numbering; the warden subtracts the offset before forwarding to the sender. Both endpoints see a consistent sequence space. <span class="note">This is exactly what NAT boxes and load balancers already do when they splice TCP connections.</span>' },
+    { layer: "TCP", lc: "l4", field: "Timestamps", mrf: '<span class="pinned">stripped</span>', kern: "RFC 7323 (clock-based)", entropy: "64 bits",
+      explain: '<span class="safe">Safe.</span> TCP timestamps (RFC 7323) include TSval (sender\'s clock tick) and TSecr (echo of peer\'s clock). They serve two purposes: round-trip time measurement (RTTM) and protection against wrapped sequence numbers (PAWS). Stripping them means the connection falls back to basic TCP without these optimizations. RTT measurement still works via the retransmission timer. PAWS only matters on very high-bandwidth, long-lived connections where sequence numbers wrap past 4GB. For typical traffic, removing timestamps has no functional impact. <span class="note">This is the single largest source of nondeterminism: 64 bits per packet directly coupled to wall-clock time.</span>' },
+    { layer: "TCP", lc: "l4", field: "SACK", mrf: '<span class="pinned">stripped</span>', kern: "enabled", entropy: "variable",
+      explain: '<span class="safe">Safe.</span> SACK (Selective Acknowledgment) lets the receiver say "I got bytes 1000-2000 and 3000-4000 but not 2000-3000." Stripping it means the sender falls back to cumulative ACKs &mdash; retransmitting everything from the first lost byte. Less efficient but functionally identical. The connection still works, just with potentially more retransmissions after packet loss. In a controlled low-loss environment, SACK provides minimal benefit.' },
+    { layer: "TCP", lc: "l4", field: "Window Scaling", mrf: '<span class="pinned">stripped</span>', kern: "RFC 7323", entropy: "24 bits",
+      explain: '<span class="safe">Safe.</span> Window scaling is negotiated in the SYN and multiplies the 16-bit window field to support windows larger than 64KB. Stripping it caps the receive window at 65535 bytes. This limits throughput on high-bandwidth&times;high-latency links (bandwidth-delay product), but the connection still works. For a controlled environment where the warden is close to the servers, latency is low enough that 64KB windows are sufficient.' },
+    { layer: "TCP", lc: "l4", field: "Reserved bits", mrf: '<span class="pinned">0</span>', kern: "0 (not enforced)", entropy: "4 bits",
+      explain: '<span class="safe">Safe.</span> The TCP spec says these 4 bits MUST be zero. Anything in them is by definition non-standard. The paper found 429,164 packets with reserved bits set in a month of traffic &mdash; all were either bugs or covert channels. Zeroing them enforces what the RFC already requires. <span class="warn">Caveat:</span> 2 of these bits were later allocated for ECN (Explicit Congestion Notification). The warden can be configured to preserve ECN if the network uses it, while still zeroing the remaining 2 bits.' },
+    { layer: "TCP", lc: "l4", field: "Urgent pointer", mrf: '<span class="pinned">0 when URG=0</span>', kern: "not zeroed when URG=0", entropy: "16 bits",
+      explain: '<span class="safe">Safe.</span> The urgent pointer is only meaningful when the URG flag is set. When URG=0, the receiver is supposed to ignore this field, but implementations don\'t always zero it. The paper found 1,479,773 packets with a non-zero urgent pointer but no URG flag &mdash; pure covert channel opportunity. Zeroing it when URG=0 changes nothing because the receiver already ignores it. When URG=1, the warden validates that the pointer doesn\'t exceed the payload length; if it does, it resets to 0 and clears URG (no legitimate application sends out-of-bounds urgent pointers).' },
+    { layer: "TCP", lc: "l4", field: "RST payload", mrf: '<span class="pinned">stripped</span>', kern: "may contain data", entropy: "variable",
+      explain: '<span class="safe">Safe.</span> When a TCP RST (reset) is sent, the connection is immediately torn down. The spec says there should be no data payload, but nothing prevents a sender from including one. The receiver discards the connection on RST regardless, so any data in the payload is ignored by legitimate implementations. The warden removes the payload and adjusts the IP total length. Zero functional impact.' },
+    { layer: "TCP", lc: "l4", field: "Padding", mrf: '<span class="pinned">zero-filled (NOP/EOL)</span>', kern: "may contain data", entropy: "0-24 bits",
+      explain: '<span class="safe">Safe.</span> TCP options must be padded to a 4-byte boundary. The padding bytes are supposed to be NOP (0x01) or EOL (0x00) options, but implementations can put anything there. No application reads TCP padding bytes &mdash; the data offset field tells the receiver exactly where the payload starts. Zero-filling enforces what the spec intends.' },
+    { layer: "TCP", lc: "l4", field: "Checksum", mrf: '<span class="semantic">recomputed</span>', kern: "NIC offload (firmware-dep.)", entropy: "0 bits",
+      explain: '<span class="safe">Safe.</span> Same as IP checksum: a mathematical function of the pseudo-header, TCP header, and payload. Recomputed after any changes. Every middlebox that modifies TCP headers (NAT, load balancers, firewalls) already does this. Computing in software ensures determinism.' },
+    { layer: "TCP", lc: "l4", field: "Nagle algorithm", mrf: '<span class="pinned">disabled</span>', kern: "enabled (timing-dep.)", entropy: "timing",
+      explain: '<span class="safe">Safe.</span> Nagle\'s algorithm batches small writes into larger segments to reduce overhead. The batching decision depends on timing &mdash; how quickly the application produces data relative to network RTT. Disabling it (TCP_NODELAY) means each write becomes its own segment immediately. This makes packetization a deterministic function of application writes rather than a timing-dependent heuristic. Most latency-sensitive applications (including inference servers) already disable Nagle.' },
+    { layer: "TCP", lc: "l4", field: "Src/Dst Ports", mrf: '<span class="counter">fixed from config</span>', kern: "ephemeral port randomized", entropy: "16 bits",
+      explain: '<span class="safe">Safe for server port.</span> The server port (e.g. 8000) is fixed by configuration. The client ephemeral port is normally randomized by the kernel. The warden can rewrite ephemeral ports using a consistent mapping per connection, similar to how NAT rewrites ports. The paper notes that port-based covert channels require anomaly detection rather than simple normalization, since any port value is technically valid.' },
+    { layer: "&mdash;", lc: "l4", field: "Packet timing", mrf: '<span class="warn">traffic shaping</span>', kern: "kernel scheduling", entropy: "timing",
+      explain: '<span class="warn">Partially mitigable.</span> The spacing between packets can encode data (e.g. short gap = 0, long gap = 1). The warden can mitigate this with traffic shaping &mdash; constant-rate queuing, jitter injection, or buffering packets into fixed intervals. However, it cannot be fully eliminated without introducing unacceptable latency or reducing the link to constant-rate. The paper acknowledges timing channels as an open problem. <span class="note">The bandwidth is low compared to header channels: ~1 bit per packet from timing vs 8+ bytes per packet from headers.</span>' },
+  ];
+
+  const tbody = document.getElementById('mrf-body');
+  MRF_FIELDS.forEach((f, i) => {
+    const row = document.createElement('tr');
+    row.className = 'mrf-row';
+    row.innerHTML = `<td class="layer-name ${f.lc}">${f.layer}</td><td>${f.field}</td><td>${f.mrf}</td><td>${f.kern}</td><td>${f.entropy}</td>`;
+    row.onclick = () => {
+      row.classList.toggle('open');
+      const exp = document.getElementById('mrf-exp-' + i);
+      exp.classList.toggle('open');
+    };
+    tbody.appendChild(row);
+
+    const expRow = document.createElement('tr');
+    expRow.className = 'mrf-explainer';
+    expRow.id = 'mrf-exp-' + i;
+    expRow.innerHTML = `<td colspan="5">${f.explain}</td>`;
+    tbody.appendChild(expRow);
+  });
+  </script>
   <div style="display: flex; gap: 24px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 11px;">
     <div><span style="color: var(--green);">&#9632;</span> <span style="color: var(--dim);">Pinned &mdash; hardcoded constant, identical in every packet</span></div>
     <div><span style="color: var(--orange);">&#9632;</span> <span style="color: var(--dim);">Derived &mdash; deterministic but varies per connection/packet, computed from inputs</span></div>
@@ -181,8 +251,8 @@ const s1 = DATA.server1, s2 = DATA.server2;
 document.getElementById('digest-hash').textContent = s1.digest;
 document.getElementById('stat-frames').textContent = s1.frame_count;
 document.getElementById('stat-match').textContent = s1.frames.filter((f,i) => f.hex === s2.frames[i].hex).length + '/' + s1.frame_count;
-document.getElementById('stat-mrf').textContent = '17';
-document.getElementById('stat-zero').textContent = '8';
+document.getElementById('stat-mrf').textContent = '22';
+document.getElementById('stat-zero').textContent = '11';
 
 function colorHex(hex, ipIhl) {
   const ethEnd = 28;
