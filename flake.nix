@@ -168,6 +168,15 @@
             pythonPackages.pillow
             pythonPackages.openai
             pythonPackages.cbor2
+            pythonPackages.gguf
+            pythonPackages.pyzmq
+            pythonPackages.httptools
+            pythonPackages.python-dotenv
+            pythonPackages.compressed-tensors
+            pythonPackages.blake3
+            pythonPackages.partial-json-parser
+            pythonPackages.scipy
+            pythonPackages.jinja2
             pythonPackages.lm-format-enforcer or null
             pythonPackages.outlines or null
           ];
@@ -282,6 +291,8 @@
               "NVIDIA_DRIVER_CAPABILITIES=compute,utility"
               "LD_LIBRARY_PATH=/usr/lib64:/usr/lib/aarch64-linux-gnu:/usr/lib/x86_64-linux-gnu"
               "HOME=/tmp"
+              "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
+              "NIX_SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
             ];
           };
         };
