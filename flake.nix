@@ -216,7 +216,25 @@
             # Distributed
             pythonPackages.ray
 
-            # Optional (may be null if not in nixpkgs)
+            # Serving extras (required at runtime)
+            pythonPackages.openai-harmony
+            pythonPackages.mcp
+            pythonPackages.sse-starlette
+            pythonPackages.python-multipart
+            pythonPackages.prometheus-fastapi-instrumentator
+            pythonPackages.mistral-common
+            pythonPackages.model-hosting-container-standards
+            pythonPackages.opencv-python-headless
+            pythonPackages.cupy
+
+            # Structured output
+            pythonPackages.llguidance
+            pythonPackages.outlines-core
+          ] ++ pkgs.lib.optionals (system == "x86_64-linux") [
+            # These are not available on aarch64
+            pythonPackages.xgrammar
+          ] ++ [
+            # Optional
             pythonPackages.lm-format-enforcer or null
             pythonPackages.outlines or null
           ];
