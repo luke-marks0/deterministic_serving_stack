@@ -167,6 +167,7 @@
             pythonPackages.msgpack
             pythonPackages.pillow
             pythonPackages.openai
+            pythonPackages.cbor2
             pythonPackages.lm-format-enforcer or null
             pythonPackages.outlines or null
           ];
