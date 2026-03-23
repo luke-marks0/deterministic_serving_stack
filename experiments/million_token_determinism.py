@@ -131,11 +131,30 @@ def run_repeated(model: str, server_id: str, out_dir: Path, n_runs: int = 20) ->
     print(f"  Runs: {n_runs} × {TOKENS_PER_REQUEST:,} tokens")
     print()
 
+    # Resume from existing progress
     rolling_hash = hashlib.sha256()
     total_tokens = 0
     chunks = []
+    start_idx = 0
 
-    for i in range(n_runs):
+    chunks_file = run_dir / "chunks.json"
+    if chunks_file.exists():
+        chunks = json.loads(chunks_file.read_text())
+        start_idx = len(chunks)
+        total_tokens = sum(c["tokens"] for c in chunks)
+        # Rebuild rolling hash from saved chunks
+        for c in chunks:
+            content = (run_dir / f"chunk_{c['chunk_idx']:04d}.txt").read_text(encoding="utf-8")
+            rolling_hash.update(content.encode())
+        if start_idx > 0:
+            print(f"  Resuming from chunk {start_idx}/{n_runs} ({total_tokens:,} tokens already done)")
+            print()
+
+    if start_idx >= n_runs:
+        print(f"  Already complete ({n_runs}/{n_runs} runs)")
+        return
+
+    for i in range(start_idx, n_runs):
         result = generate_chunk(model, REPEATED_PROMPT, i)
 
         rolling_hash.update(result["content"].encode())
@@ -161,6 +180,9 @@ def run_repeated(model: str, server_id: str, out_dir: Path, n_runs: int = 20) ->
             "hash": result["hash"],
             "rolling_hash": rolling_hash.hexdigest(),
         })
+
+        # Save progress after each chunk
+        (run_dir / "chunks.json").write_text(json.dumps(chunks, indent=2), encoding="utf-8")
 
     meta = {
         "mode": "repeated",
@@ -195,11 +217,31 @@ def run_diverse(model: str, server_id: str, out_dir: Path) -> None:
     print(f"  Tokens per prompt: {TOKENS_PER_REQUEST:,}")
     print()
 
+    # Resume from existing progress
     rolling_hash = hashlib.sha256()
     total_tokens = 0
     chunks = []
+    start_idx = 0
+
+    chunks_file = run_dir / "chunks.json"
+    if chunks_file.exists():
+        chunks = json.loads(chunks_file.read_text())
+        start_idx = len(chunks)
+        total_tokens = sum(c["tokens"] for c in chunks)
+        for c in chunks:
+            content = (run_dir / f"chunk_{c['chunk_idx']:04d}.txt").read_text(encoding="utf-8")
+            rolling_hash.update(content.encode())
+        if start_idx > 0:
+            print(f"  Resuming from prompt {start_idx}/{len(DIVERSE_PROMPTS)} ({total_tokens:,} tokens already done)")
+            print()
+
+    if start_idx >= len(DIVERSE_PROMPTS):
+        print(f"  Already complete ({len(DIVERSE_PROMPTS)}/{len(DIVERSE_PROMPTS)} prompts)")
+        return
 
     for i, prompt in enumerate(DIVERSE_PROMPTS):
+        if i < start_idx:
+            continue
         result = generate_chunk(model, prompt, i)
 
         rolling_hash.update(result["content"].encode())
@@ -225,6 +267,9 @@ def run_diverse(model: str, server_id: str, out_dir: Path) -> None:
             "hash": result["hash"],
             "rolling_hash": rolling_hash.hexdigest(),
         })
+
+        # Save progress after each chunk
+        (run_dir / "chunks.json").write_text(json.dumps(chunks, indent=2), encoding="utf-8")
 
     meta = {
         "mode": "diverse",
