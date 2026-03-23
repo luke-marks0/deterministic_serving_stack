@@ -143,13 +143,59 @@
 
           propagatedBuildInputs = [
             torch
+
+            # Core ML / tensor
             pythonPackages.numpy
+            pythonPackages.scipy
+            pythonPackages.einops
+            pythonPackages.numba
+            pythonPackages.safetensors
+            pythonPackages.compressed-tensors
+            pythonPackages.gguf
+            pythonPackages.tiktoken
+            pythonPackages.pillow
+            pythonPackages.regex
+
+            # HuggingFace ecosystem
             pythonPackages.transformers
             pythonPackages.tokenizers
             pythonPackages.sentencepiece
             pythonPackages.huggingface-hub
-            pythonPackages.safetensors
+            pythonPackages.jinja2
+
+            # Serving / API
+            pythonPackages.fastapi
+            pythonPackages.starlette
+            pythonPackages.uvicorn
+            pythonPackages.uvloop
+            pythonPackages.httptools
+            pythonPackages.watchfiles
+            pythonPackages.python-dotenv
+            pythonPackages.openai
+            pythonPackages.anthropic
+            pythonPackages.pydantic
+
+            # Networking / async
+            pythonPackages.aiohttp
             pythonPackages.requests
+            pythonPackages.pyzmq
+
+            # Serialization / hashing
+            pythonPackages.cbor2
+            pythonPackages.blake3
+            pythonPackages.msgpack
+            pythonPackages.msgspec
+            pythonPackages.protobuf
+            pythonPackages.cloudpickle
+            pythonPackages.ijson
+
+            # Monitoring / telemetry
+            pythonPackages.prometheus-client
+            pythonPackages.opentelemetry-api
+            pythonPackages.opentelemetry-sdk
+            pythonPackages.opentelemetry-exporter-otlp
+
+            # Utilities
             pythonPackages.pyyaml
             pythonPackages.tqdm
             pythonPackages.filelock
@@ -157,26 +203,20 @@
             pythonPackages.packaging
             pythonPackages.psutil
             pythonPackages.py-cpuinfo
-            pythonPackages.pydantic
-            pythonPackages.fastapi
-            pythonPackages.uvicorn
-            pythonPackages.uvloop
-            pythonPackages.prometheus-client
-            pythonPackages.aiohttp
-            pythonPackages.ray
-            pythonPackages.msgpack
-            pythonPackages.pillow
-            pythonPackages.openai
-            pythonPackages.cbor2
-            pythonPackages.gguf
-            pythonPackages.pyzmq
-            pythonPackages.httptools
-            pythonPackages.python-dotenv
-            pythonPackages.compressed-tensors
-            pythonPackages.blake3
+            pythonPackages.setproctitle
+            pythonPackages.diskcache
+            pythonPackages.cachetools
+            pythonPackages.depyf
+            pythonPackages.lark
+            pythonPackages.pybase64
+            pythonPackages.python-json-logger
+            pythonPackages.ninja
             pythonPackages.partial-json-parser
-            pythonPackages.scipy
-            pythonPackages.jinja2
+
+            # Distributed
+            pythonPackages.ray
+
+            # Optional (may be null if not in nixpkgs)
             pythonPackages.lm-format-enforcer or null
             pythonPackages.outlines or null
           ];
