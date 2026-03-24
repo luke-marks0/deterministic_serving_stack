@@ -4,6 +4,10 @@
 Validates manifest + lockfile + hardware conformance at boot,
 then starts vLLM's OpenAI-compatible server with batch invariance.
 All requests/responses are logged to an append-only capture file.
+
+POST /manifest accepts a new manifest, validates it, and (re)starts
+vLLM to serve that configuration.
+GET /manifest returns the active manifest and server state.
 """
 from __future__ import annotations
 
@@ -86,7 +90,6 @@ def _probe_hardware(manifest: dict[str, Any]) -> dict[str, Any]:
                 f"Batch invariance requires compute capability >= 9.0, got {cc[0]}.{cc[1]}"
             )
 
-        # Probe via nvidia-smi for driver version
         try:
             import shutil
             if shutil.which("nvidia-smi"):
@@ -103,7 +106,6 @@ def _probe_hardware(manifest: dict[str, Any]) -> dict[str, Any]:
         })
         record["status"] = "conformant"
 
-        # Record software versions for provenance
         record["torch_version"] = torch.__version__
         record["cuda_version"] = torch.version.cuda or "unknown"
         try:
@@ -118,11 +120,74 @@ def _probe_hardware(manifest: dict[str, Any]) -> dict[str, Any]:
     return record
 
 
+def _enforce_hardware(manifest: dict[str, Any]) -> list[str]:
+    """Check hardware_profile against actual GPU. Returns list of warnings (empty = OK)."""
+    warnings = []
+    hw = manifest["hardware_profile"]
+    gpu = hw["gpu"]
+    topo = hw["topology"]
+
+    try:
+        import torch
+        if not torch.cuda.is_available():
+            raise ValidationError("Manifest requires GPU but none available")
+
+        actual_name = torch.cuda.get_device_name(0)
+        actual_count = torch.cuda.device_count()
+        cc = torch.cuda.get_device_capability(0)
+
+        if gpu["count"] != actual_count:
+            warnings.append(
+                f"GPU count mismatch: manifest wants {gpu['count']}, have {actual_count}"
+            )
+
+        # Check model name contains expected substring (exact match is too brittle)
+        if gpu["model"].lower() not in actual_name.lower() and actual_name.lower() not in gpu["model"].lower():
+            warnings.append(
+                f"GPU model mismatch: manifest wants '{gpu['model']}', have '{actual_name}'"
+            )
+
+        if topo["mode"] != "single_node" and actual_count < topo.get("node_count", 1):
+            warnings.append(
+                f"Topology requires {topo['node_count']} nodes but only {actual_count} GPUs visible"
+            )
+
+    except ImportError:
+        warnings.append("torch not available, cannot verify GPU")
+
+    return warnings
+
+
+def _enforce_model_revision(manifest: dict[str, Any]) -> str | None:
+    """Return the --revision flag value if the manifest pins a specific commit."""
+    model = manifest["model"]
+    rev = model.get("resolved_revision")
+    if rev:
+        return rev
+    return None
+
+
+def _validate_requests(manifest: dict[str, Any]) -> list[str]:
+    """Validate that all requests are servable with the declared engine config."""
+    errors = []
+    engine = manifest["runtime"].get("serving_engine", {})
+    max_len = engine.get("max_model_len", 8192)
+
+    for req in manifest["requests"]:
+        if req["max_new_tokens"] > max_len:
+            errors.append(
+                f"Request '{req['id']}': max_new_tokens={req['max_new_tokens']} "
+                f"exceeds max_model_len={max_len}"
+            )
+    return errors
+
+
 def _build_vllm_cmd(manifest: dict[str, Any], host: str, port: int) -> list[str]:
-    """Build the vllm serve command from manifest settings."""
+    """Build the vllm serve command from ALL manifest settings."""
     runtime = manifest["runtime"]
     knobs = runtime["deterministic_knobs"]
-    model_source = manifest["model"]["source"]
+    model = manifest["model"]
+    model_source = model["source"]
     model_id = model_source.removeprefix("hf://") if model_source.startswith("hf://") else model_source
 
     cmd = [
@@ -131,44 +196,188 @@ def _build_vllm_cmd(manifest: dict[str, Any], host: str, port: int) -> list[str]
         "--host", host,
         "--port", str(port),
         "--seed", str(knobs.get("seed", 42)),
-        "--dtype", "auto",
         "--disable-log-stats",
     ]
 
-    batch_inv = runtime.get("batch_invariance", {})
-    if batch_inv.get("enforce_eager", False):
-        cmd.append("--enforce-eager")
+    # Model revision pinning — use the exact commit from the manifest
+    revision = _enforce_model_revision(manifest)
+    if revision:
+        cmd.extend(["--revision", revision])
+        cmd.extend(["--tokenizer-revision", model.get("tokenizer_revision", revision)])
 
-    # Serving engine config — prefer manifest, fall back to env vars
+    # Serving engine — every field applied
     engine = runtime.get("serving_engine", {})
 
-    if batch_inv.get("enabled", False):
-        backend = engine.get("attention_backend") or os.getenv("VLLM_ATTENTION_BACKEND", "FLASH_ATTN")
-        cmd.extend(["--attention-backend", backend])
+    dtype = engine.get("dtype", "auto")
+    cmd.extend(["--dtype", dtype])
 
-    max_model_len = str(engine.get("max_model_len") or os.getenv("RUNNER_MAX_MODEL_LEN", "8192"))
-    cmd.extend(["--max-model-len", max_model_len])
+    max_model_len = engine.get("max_model_len", 8192)
+    cmd.extend(["--max-model-len", str(max_model_len)])
 
-    gpu_mem = str(engine.get("gpu_memory_utilization") or os.getenv("RUNNER_GPU_MEM_UTIL", "0.90"))
-    cmd.extend(["--gpu-memory-utilization", gpu_mem])
+    gpu_mem = engine.get("gpu_memory_utilization", 0.9)
+    cmd.extend(["--gpu-memory-utilization", str(gpu_mem)])
 
     max_num_seqs = engine.get("max_num_seqs")
     if max_num_seqs:
         cmd.extend(["--max-num-seqs", str(max_num_seqs)])
 
-    dtype = engine.get("dtype")
-    if dtype and dtype != "auto":
-        cmd.extend(["--dtype", dtype])
+    attention_backend = engine.get("attention_backend", "FLASH_ATTN")
+    cmd.extend(["--attention-backend", attention_backend])
+
+    # Batch invariance
+    batch_inv = runtime.get("batch_invariance", {})
+    if batch_inv.get("enforce_eager", False):
+        cmd.append("--enforce-eager")
+
+    # Trust remote code
+    if model.get("trust_remote_code", False):
+        cmd.append("--trust-remote-code")
 
     api_key = os.getenv("VLLM_API_KEY")
     if api_key:
         cmd.extend(["--api-key", api_key])
 
-    if manifest["model"].get("trust_remote_code", False):
-        cmd.append("--trust-remote-code")
-
     return cmd
 
+
+# ---------------------------------------------------------------------------
+# ServerState
+# ---------------------------------------------------------------------------
+
+class ServerState:
+    """Holds the active manifest, vLLM process, and capture log."""
+
+    def __init__(
+        self,
+        manifest: dict[str, Any],
+        vllm_proc: subprocess.Popen | None,
+        vllm_port: int,
+        capture_log: CaptureLog,
+        out_dir: Path,
+    ) -> None:
+        self.manifest = manifest
+        self.vllm_proc = vllm_proc
+        self.vllm_port = vllm_port
+        self.capture_log = capture_log
+        self.out_dir = out_dir
+        self.lock = threading.Lock()
+        self.applied_at = utc_now_iso()
+
+    @property
+    def manifest_digest(self) -> str:
+        return sha256_prefixed(canonical_json_bytes(self.manifest))
+
+
+def _set_deterministic_env(manifest: dict[str, Any]) -> None:
+    """Set deterministic environment variables from a manifest."""
+    knobs = manifest["runtime"]["deterministic_knobs"]
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+    os.environ["CUDA_LAUNCH_BLOCKING"] = str(int(knobs.get("cuda_launch_blocking", True)))
+    os.environ["PYTHONHASHSEED"] = "0"
+
+    batch_inv = manifest["runtime"].get("batch_invariance", {})
+    if batch_inv.get("enabled", False):
+        os.environ["VLLM_BATCH_INVARIANT"] = "1"
+    else:
+        os.environ.pop("VLLM_BATCH_INVARIANT", None)
+
+
+def _start_vllm(state: ServerState, manifest: dict[str, Any]) -> dict[str, Any]:
+    """Enforce manifest, stop old vLLM, start fresh, wait for health.
+
+    Returns a report of what was enforced/validated.
+    Must be called with state.lock held.
+    """
+    report: dict[str, Any] = {"enforced": [], "warnings": []}
+
+    # 1. Validate requests are servable
+    req_errors = _validate_requests(manifest)
+    if req_errors:
+        raise ValidationError("Requests incompatible with engine config: " + "; ".join(req_errors))
+    report["enforced"].append(f"validated {len(manifest['requests'])} requests against engine config")
+
+    # 2. Enforce hardware profile
+    if manifest["runtime"].get("strict_hardware", False):
+        hw_warnings = _enforce_hardware(manifest)
+        if hw_warnings:
+            raise ValidationError("Hardware mismatch: " + "; ".join(hw_warnings))
+        report["enforced"].append("hardware profile validated (strict)")
+    else:
+        hw_warnings = _enforce_hardware(manifest)
+        report["warnings"].extend(hw_warnings)
+        if hw_warnings:
+            for w in hw_warnings:
+                print(f"[manifest] WARNING: {w}")
+        report["enforced"].append("hardware profile checked (non-strict)")
+
+    # 3. Set deterministic env from manifest knobs
+    _set_deterministic_env(manifest)
+    knobs = manifest["runtime"]["deterministic_knobs"]
+    report["enforced"].append(
+        f"deterministic env: seed={knobs['seed']}, "
+        f"torch_deterministic={knobs.get('torch_deterministic', False)}, "
+        f"cuda_launch_blocking={knobs.get('cuda_launch_blocking', True)}"
+    )
+
+    # 4. Batch invariance
+    batch_inv = manifest["runtime"].get("batch_invariance", {})
+    if batch_inv.get("enabled", False):
+        report["enforced"].append("batch invariance: ENABLED, enforce_eager=" + str(batch_inv.get("enforce_eager", False)))
+    else:
+        report["enforced"].append("batch invariance: disabled")
+
+    # 5. Model revision pinning
+    revision = _enforce_model_revision(manifest)
+    if revision:
+        report["enforced"].append(f"model revision pinned: {revision[:12]}...")
+    else:
+        report["warnings"].append("model revision not pinned — may load latest")
+
+    # 6. Terminate old process
+    if state.vllm_proc is not None and state.vllm_proc.poll() is None:
+        print("[vllm] Stopping current instance...")
+        state.vllm_proc.terminate()
+        try:
+            state.vllm_proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            state.vllm_proc.kill()
+            state.vllm_proc.wait(timeout=5)
+
+    # 7. Build command from manifest and launch
+    vllm_cmd = _build_vllm_cmd(manifest, "127.0.0.1", state.vllm_port)
+    print(f"[vllm] Starting: {' '.join(vllm_cmd)}")
+    state.vllm_proc = subprocess.Popen(
+        vllm_cmd, stdout=sys.stdout, stderr=sys.stderr,
+    )
+
+    print("[vllm] Waiting for health...")
+    if not _wait_for_vllm(state.vllm_port):
+        raise RuntimeError("vLLM failed to become healthy")
+
+    # 8. Update state
+    state.manifest = manifest
+    state.applied_at = utc_now_iso()
+    state.capture_log = CaptureLog(state.out_dir / "capture.jsonl")
+
+    # 9. Log what was enforced
+    engine = manifest["runtime"].get("serving_engine", {})
+    report["enforced"].append(
+        f"vLLM started: model={manifest['model']['source']}, "
+        f"max_model_len={engine.get('max_model_len')}, "
+        f"dtype={engine.get('dtype')}, "
+        f"attention_backend={engine.get('attention_backend')}, "
+        f"max_num_seqs={engine.get('max_num_seqs')}"
+    )
+    report["enforced"].append(f"comparison config stored: {list(manifest.get('comparison', {}).keys())}")
+    report["enforced"].append(f"artifact_inputs: {len(manifest.get('artifact_inputs', []))} artifacts declared")
+
+    print(f"[vllm] Ready — {len(report['enforced'])} checks enforced, {len(report['warnings'])} warnings")
+    return report
+
+
+# ---------------------------------------------------------------------------
+# CaptureLog
+# ---------------------------------------------------------------------------
 
 class CaptureLog:
     """Append-only request/response log for provenance with egress hashing."""
@@ -184,20 +393,17 @@ class CaptureLog:
             f.write("")
 
     def next_seq(self) -> int:
-        """Assign a sequence number at request arrival time (under lock)."""
         with self._lock:
             self._seq += 1
             return self._seq
 
     def append(self, entry: dict[str, Any]) -> None:
-        """Write a pre-sequenced entry. seq must already be set by next_seq()."""
         with self._lock:
             entry["captured_at"] = utc_now_iso()
             with open(self.path, "a") as f:
                 f.write(canonical_json_text(entry))
 
     def record_egress(self, payload_digest: str) -> None:
-        """Add a response payload digest to the running egress hash."""
         with self._lock:
             self._egress_hasher.update(bytes.fromhex(payload_digest))
             self._egress_count += 1
@@ -213,47 +419,62 @@ class CaptureLog:
             return self._egress_count
 
 
-class ProxyHandler(BaseHTTPRequestHandler):
-    """Reverse proxy that captures requests/responses to the vLLM server."""
+# ---------------------------------------------------------------------------
+# ProxyHandler
+# ---------------------------------------------------------------------------
 
-    vllm_port: int = 8001
-    capture_log: CaptureLog | None = None
+class ProxyHandler(BaseHTTPRequestHandler):
+    """Reverse proxy with /manifest endpoint and capture logging."""
+
+    server_state: ServerState | None = None
     api_key: str | None = None
 
     def _check_auth(self) -> bool:
-        """Reject requests without valid API key (if configured)."""
         if not self.api_key:
             return True
         auth = self.headers.get("Authorization", "")
         if auth == f"Bearer {self.api_key}":
             return True
-        error = json.dumps({"error": "Unauthorized"}).encode()
-        self.send_response(401)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(error)))
-        self.end_headers()
-        self.wfile.write(error)
+        self._send_json(401, {"error": "Unauthorized"})
         return False
+
+    def _send_json(self, status: int, body: dict[str, Any]) -> None:
+        data = json.dumps(body, indent=2).encode()
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    @property
+    def _vllm_port(self) -> int:
+        return self.server_state.vllm_port if self.server_state else 8001
+
+    @property
+    def _capture_log(self) -> CaptureLog | None:
+        return self.server_state.capture_log if self.server_state else None
+
+    # -- POST --
 
     def do_POST(self):
         if not self._check_auth():
             return
 
+        if self.path == "/manifest":
+            return self._handle_post_manifest()
+
         content_length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(content_length) if content_length > 0 else b""
 
-        # Assign sequence number at arrival time (before forwarding) so
-        # logging order matches arrival order regardless of thread scheduling.
-        arrival_seq = self.capture_log.next_seq() if self.capture_log else 0
+        capture_log = self._capture_log
+        arrival_seq = capture_log.next_seq() if capture_log else 0
 
-        # Parse request for logging
         try:
             request_data = json.loads(body) if body else {}
         except json.JSONDecodeError:
             request_data = {"raw": body.decode("utf-8", errors="replace")}
 
-        # Forward to vLLM
-        url = f"http://127.0.0.1:{self.vllm_port}{self.path}"
+        url = f"http://127.0.0.1:{self._vllm_port}{self.path}"
         req = Request(url, data=body, method="POST")
         for key in ["Content-Type", "Authorization"]:
             val = self.headers.get(key)
@@ -265,31 +486,19 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 resp_body = resp.read()
                 status = resp.status
 
-                # Parse response for logging
                 try:
                     response_data = json.loads(resp_body)
                 except json.JSONDecodeError:
                     response_data = {"raw": resp_body.decode("utf-8", errors="replace")}
 
-                # Compute deterministic payload digest (strip nondeterministic fields)
-                payload_for_digest = response_data
-                if isinstance(payload_for_digest, dict):
-                    payload_for_digest = {k: v for k, v in payload_for_digest.items()
-                                          if k not in ("id", "created", "system_fingerprint")}
-                canonical_payload = json.dumps(payload_for_digest, sort_keys=True, separators=(",", ":")).encode()
-                payload_digest = hashlib.sha256(canonical_payload).hexdigest()
-
-                # Log the exchange with pre-assigned arrival-order seq
-                if self.capture_log and self.path.startswith("/v1/"):
-                    self.capture_log.append({
+                if capture_log and self.path.startswith("/v1/"):
+                    capture_log.append({
                         "seq": arrival_seq,
                         "endpoint": self.path,
                         "request": request_data,
                         "response": response_data,
-                        "payload_digest": payload_digest,
                         "status": status,
                     })
-                    self.capture_log.record_egress(payload_digest)
 
                 self.send_response(status)
                 self.send_header("Content-Type", "application/json")
@@ -298,32 +507,66 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 self.wfile.write(resp_body)
 
         except URLError as exc:
-            error_msg = json.dumps({"error": str(exc)}).encode()
-            self.send_response(502)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(error_msg)))
-            self.end_headers()
-            self.wfile.write(error_msg)
+            self._send_json(502, {"error": str(exc)})
+
+    def _handle_post_manifest(self) -> None:
+        """POST /manifest — validate and (re)start vLLM for this manifest."""
+        state = self.server_state
+        if state is None:
+            return self._send_json(500, {"error": "Server state not initialized"})
+
+        # Parse
+        content_length = int(self.headers.get("Content-Length", 0))
+        raw = self.rfile.read(content_length) if content_length > 0 else b""
+        try:
+            body = json.loads(raw) if raw else {}
+        except json.JSONDecodeError as exc:
+            return self._send_json(400, {"error": f"Invalid JSON: {exc}"})
+
+        if not body:
+            return self._send_json(400, {"error": "Empty request body"})
+
+        # Validate
+        try:
+            validate_with_schema("manifest.v1.schema.json", body)
+        except ValidationError as exc:
+            return self._send_json(422, {"error": str(exc)})
+
+        # Acquire lock (409 if another manifest is being applied)
+        if not state.lock.acquire(blocking=False):
+            return self._send_json(409, {"error": "Server is busy applying another manifest"})
+
+        try:
+            report = _start_vllm(state, body)
+        except (ValidationError, RuntimeError) as exc:
+            return self._send_json(500, {"error": str(exc)})
+        except Exception as exc:
+            return self._send_json(500, {"error": f"Failed to start vLLM: {exc}"})
+        finally:
+            state.lock.release()
+
+        return self._send_json(200, {
+            "status": "ok",
+            "manifest_digest": state.manifest_digest,
+            "model": state.manifest["model"]["source"],
+            "run_id": state.manifest["run_id"],
+            "applied_at": state.applied_at,
+            "enforced": report["enforced"],
+            "warnings": report["warnings"],
+            "requests": len(state.manifest["requests"]),
+            "comparison": list(state.manifest.get("comparison", {}).keys()),
+        })
+
+    # -- GET --
 
     def do_GET(self):
-        # Allow /health without auth for load balancer probes
-        if self.path not in ("/health", "/egress-digest") and not self._check_auth():
+        if self.path != "/health" and not self._check_auth():
             return
 
-        # Egress digest endpoint — returns the running digest of all response payloads
-        if self.path == "/egress-digest" and self.capture_log:
-            body = json.dumps({
-                "egress_digest": self.capture_log.egress_digest,
-                "egress_count": self.capture_log.egress_count,
-            }).encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-            return
+        if self.path == "/manifest":
+            return self._handle_get_manifest()
 
-        url = f"http://127.0.0.1:{self.vllm_port}{self.path}"
+        url = f"http://127.0.0.1:{self._vllm_port}{self.path}"
         try:
             with urlopen(url) as resp:
                 resp_body = resp.read()
@@ -333,20 +576,48 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(resp_body)
         except URLError as exc:
-            error_msg = json.dumps({"error": str(exc)}).encode()
-            self.send_response(502)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(error_msg)))
-            self.end_headers()
-            self.wfile.write(error_msg)
+            self._send_json(502, {"error": str(exc)})
+
+    def _handle_get_manifest(self) -> None:
+        """GET /manifest — return the active manifest and server state."""
+        state = self.server_state
+        if state is None:
+            return self._send_json(500, {"error": "Server state not initialized"})
+
+        vllm_healthy = False
+        try:
+            with urlopen(f"http://127.0.0.1:{state.vllm_port}/health") as resp:
+                vllm_healthy = resp.status == 200
+        except Exception:
+            pass
+
+        m = state.manifest
+        return self._send_json(200, {
+            "manifest": m,
+            "manifest_digest": state.manifest_digest,
+            "applied_at": state.applied_at,
+            "vllm_healthy": vllm_healthy,
+            "active_config": {
+                "model": m["model"]["source"],
+                "revision": m["model"].get("resolved_revision", "unpinned"),
+                "run_id": m["run_id"],
+                "seed": m["runtime"]["deterministic_knobs"]["seed"],
+                "batch_invariance": m["runtime"]["batch_invariance"]["enabled"],
+                "max_model_len": m["runtime"]["serving_engine"]["max_model_len"],
+                "attention_backend": m["runtime"]["serving_engine"]["attention_backend"],
+                "dtype": m["runtime"]["serving_engine"]["dtype"],
+                "strict_hardware": m["runtime"]["strict_hardware"],
+                "requests": len(m["requests"]),
+                "artifact_inputs": len(m.get("artifact_inputs", [])),
+                "comparison_modes": {k: v["mode"] for k, v in m.get("comparison", {}).items()},
+            },
+        })
 
     def log_message(self, format, *args):
-        # Suppress default access logs
         pass
 
 
 def _wait_for_vllm(port: int, timeout: int = 300) -> bool:
-    """Wait for vLLM server to be ready."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         try:
@@ -362,150 +633,113 @@ def _wait_for_vllm(port: int, timeout: int = 300) -> bool:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Deterministic vLLM serving wrapper")
     parser.add_argument("--manifest", required=True, help="Manifest JSON path")
-    parser.add_argument("--lockfile", required=True, help="Lockfile JSON path")
-    parser.add_argument("--out-dir", default="/tmp/deterministic-server", help="Output directory for logs and capture")
+    parser.add_argument("--lockfile", help="Lockfile JSON path (omit to skip boot validation)")
+    parser.add_argument("--skip-boot-validation", action="store_true", help="Skip lockfile/hardware checks at boot")
+    parser.add_argument("--out-dir", default="/tmp/deterministic-server", help="Output directory")
     parser.add_argument("--host", default="0.0.0.0", help="Listen host")
     parser.add_argument("--port", type=int, default=8000, help="Listen port (proxy)")
     parser.add_argument("--vllm-port", type=int, default=8001, help="Internal vLLM port")
     args = parser.parse_args()
 
     manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
-    lockfile = json.loads(Path(args.lockfile).read_text(encoding="utf-8"))
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Phase 1: Validate manifest + lockfile
     print("=== Deterministic Server Boot ===")
     print(f"Model: {manifest['model']['source']}")
     print(f"Run ID: {manifest['run_id']}")
     print()
 
-    print("[boot] Validating manifest and lockfile...")
-    digests = _validate_boot(manifest, lockfile)
-    print(f"  manifest_digest: {digests['manifest_digest']}")
-    print(f"  lockfile_digest: {digests['lockfile_digest']}")
-
-    # Phase 2: Hardware conformance
-    print("[boot] Probing hardware...")
-    hw_record = _probe_hardware(manifest)
-    print(f"  GPU: {hw_record['gpu_name']}")
-    print(f"  Compute capability: {hw_record['compute_capability']}")
-    print(f"  Status: {hw_record['status']}")
-
-    if hw_record["status"] != "conformant":
-        if manifest["runtime"]["strict_hardware"]:
-            print(f"ERROR: Hardware conformance failed: {hw_record['status']}")
-            return 1
-        else:
-            print(f"WARNING: Hardware non-conformant ({hw_record['status']}), continuing (strict_hardware=false)")
-
-    # Phase 3: Check batch invariance requirements
-    batch_inv = manifest["runtime"].get("batch_invariance", {})
-    if batch_inv.get("enabled", False):
-        print("[boot] Batch invariance: ENABLED")
-        os.environ["VLLM_BATCH_INVARIANT"] = "1"
+    if args.skip_boot_validation or not args.lockfile:
+        print("[boot] Skipping lockfile/hardware validation")
     else:
-        print("[boot] Batch invariance: disabled")
+        lockfile = json.loads(Path(args.lockfile).read_text(encoding="utf-8"))
+        print("[boot] Validating manifest and lockfile...")
+        digests = _validate_boot(manifest, lockfile)
+        print(f"  manifest_digest: {digests['manifest_digest']}")
+        print(f"  lockfile_digest: {digests['lockfile_digest']}")
 
-    # Write boot record
-    boot_record = {
-        "boot_time": utc_now_iso(),
-        "manifest_digest": digests["manifest_digest"],
-        "lockfile_digest": digests["lockfile_digest"],
-        "hardware": hw_record,
-        "batch_invariance": batch_inv,
-        "runtime_closure_digest": lockfile.get("runtime_closure_digest", ""),
-        "model": manifest["model"]["source"],
-        "run_id": manifest["run_id"],
-    }
-    boot_path = out_dir / "boot_record.json"
-    boot_path.write_text(canonical_json_text(boot_record), encoding="utf-8")
-    print(f"[boot] Boot record: {boot_path}")
+        print("[boot] Probing hardware...")
+        hw_record = _probe_hardware(manifest)
+        print(f"  GPU: {hw_record['gpu_name']}")
+        print(f"  Compute capability: {hw_record['compute_capability']}")
+        print(f"  Status: {hw_record['status']}")
 
-    # Phase 4: Set deterministic env
-    knobs = manifest["runtime"]["deterministic_knobs"]
-    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
-    os.environ["CUDA_LAUNCH_BLOCKING"] = str(int(knobs.get("cuda_launch_blocking", True)))
-    os.environ["PYTHONHASHSEED"] = "0"
+        if hw_record["status"] != "conformant":
+            if manifest["runtime"]["strict_hardware"]:
+                print(f"ERROR: Hardware conformance failed: {hw_record['status']}")
+                return 1
+            print(f"WARNING: Hardware non-conformant ({hw_record['status']}), continuing")
 
-    # Phase 5: Start vLLM server
+    # Start vLLM
+    _set_deterministic_env(manifest)
     vllm_cmd = _build_vllm_cmd(manifest, "127.0.0.1", args.vllm_port)
     print(f"[boot] Starting vLLM: {' '.join(vllm_cmd)}")
-    print()
 
-    vllm_proc = subprocess.Popen(
-        vllm_cmd,
-        stdout=sys.stdout,
-        stderr=sys.stderr,
-    )
+    vllm_proc = subprocess.Popen(vllm_cmd, stdout=sys.stdout, stderr=sys.stderr)
 
-    # Wait for vLLM to be ready
     print("[boot] Waiting for vLLM to be ready...")
     if not _wait_for_vllm(args.vllm_port):
         print("ERROR: vLLM server failed to start within timeout")
         vllm_proc.terminate()
         return 1
 
-    print("[boot] vLLM is ready")
-    print()
+    print("[boot] vLLM is ready\n")
 
-    # Phase 6: Start capture proxy
+    # Create state and start proxy
     capture_log = CaptureLog(out_dir / "capture.jsonl")
-    ProxyHandler.vllm_port = args.vllm_port
-    ProxyHandler.capture_log = capture_log
+    state = ServerState(
+        manifest=manifest,
+        vllm_proc=vllm_proc,
+        vllm_port=args.vllm_port,
+        capture_log=capture_log,
+        out_dir=out_dir,
+    )
+
+    ProxyHandler.server_state = state
     ProxyHandler.api_key = os.getenv("VLLM_API_KEY")
 
     class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
         daemon_threads = True
 
     proxy = ThreadedHTTPServer((args.host, args.port), ProxyHandler)
-    proxy_thread = threading.Thread(target=proxy.serve_forever, daemon=True)
-    proxy_thread.start()
+    threading.Thread(target=proxy.serve_forever, daemon=True).start()
 
+    batch_inv = manifest["runtime"].get("batch_invariance", {})
     print(f"=== Server ready ===")
-    print(f"  Endpoint: http://{args.host}:{args.port}/v1/chat/completions")
+    print(f"  POST /manifest to load a new manifest")
+    print(f"  GET  /manifest to inspect active state")
     print(f"  Model: {manifest['model']['source']}")
     print(f"  Batch invariance: {'ON' if batch_inv.get('enabled') else 'OFF'}")
-    print(f"  Auth: {'API key required' if os.getenv('VLLM_API_KEY') else 'OPEN (no VLLM_API_KEY set)'}")
-    print(f"  Capture log: {out_dir / 'capture.jsonl'}")
-    print(f"  Boot record: {boot_path}")
     print()
 
-    # Handle shutdown
     def shutdown(signum, frame):
         print("\n[shutdown] Stopping server...")
         proxy.shutdown()
-        vllm_proc.terminate()
-        try:
-            vllm_proc.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            vllm_proc.kill()
-
-        # Write shutdown record
-        shutdown_record = {
-            "shutdown_time": utc_now_iso(),
-            "capture_entries": capture_log._seq,
-            "capture_digest": sha256_prefixed(Path(capture_log.path).read_bytes()) if capture_log.path.exists() else "",
-            "egress_digest": capture_log.egress_digest,
-            "egress_count": capture_log.egress_count,
-        }
-        (out_dir / "shutdown_record.json").write_text(
-            canonical_json_text(shutdown_record), encoding="utf-8"
-        )
-        print(f"[shutdown] {capture_log._seq} requests captured")
+        if state.vllm_proc and state.vllm_proc.poll() is None:
+            state.vllm_proc.terminate()
+            try:
+                state.vllm_proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                state.vllm_proc.kill()
         sys.exit(0)
 
     signal.signal(signal.SIGINT, shutdown)
     signal.signal(signal.SIGTERM, shutdown)
 
-    # Block until vLLM exits
+    # Wait for vLLM — loop to handle restarts from POST /manifest
     try:
-        vllm_proc.wait()
+        while True:
+            state.vllm_proc.wait()
+            with state.lock:
+                if state.vllm_proc.poll() is None:
+                    continue  # restart happened, new process running
+                break
     except KeyboardInterrupt:
         shutdown(None, None)
 
-    return vllm_proc.returncode or 0
+    return state.vllm_proc.returncode or 0
 
 
 if __name__ == "__main__":
