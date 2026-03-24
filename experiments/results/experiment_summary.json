@@ -1,0 +1,109 @@
+{
+  "experiment": "million-token-determinism",
+  "date": "2026-03-24",
+  "servers": {
+    "s1": {
+      "ip": "192.222.50.183",
+      "torch": "2.10.0+cu129",
+      "vllm": "0.17.1"
+    },
+    "s2": {
+      "ip": "192.222.56.186",
+      "torch": "2.10.0+cu128",
+      "vllm": "0.17.1"
+    }
+  },
+  "total_tokens": 5520000,
+  "models": {
+    "Mistral-7B-Instruct-v0.3": {
+      "s1_repeated": {
+        "chunks": 20,
+        "tokens": 600000,
+        "unique_hashes": 1,
+        "all_identical": true,
+        "rolling_hash": "de1a29cc474b665ab625761a80f972f9655e393d0b868f3b55b0405d3c4b0b3a"
+      },
+      "s1_diverse": {
+        "chunks": 34,
+        "tokens": 1020000,
+        "unique_hashes": 34,
+        "all_identical": null,
+        "rolling_hash": "05e9e14ad0127cbd0bbd503958125125a56bd07fac2e7d996aac1c70668aac75"
+      },
+      "s2_repeated": {
+        "chunks": 20,
+        "tokens": 600000,
+        "unique_hashes": 1,
+        "all_identical": true,
+        "rolling_hash": "db7715b4c7b1208a24a454e064ec6afe8cd311453d2367230e5dc2930778eacd"
+      },
+      "s2_diverse": {
+        "chunks": 34,
+        "tokens": 1020000,
+        "unique_hashes": 34,
+        "all_identical": null,
+        "rolling_hash": "c55cd1d70a7c437c9a02e61aa69929a9d4314279028030bf3c93601f4b21b80d"
+      },
+      "cross_repeated": {
+        "compared": 20,
+        "matches": 0,
+        "mismatches": 20,
+        "identical": false
+      },
+      "cross_diverse": {
+        "compared": 34,
+        "matches": 0,
+        "mismatches": 34,
+        "identical": false
+      }
+    },
+    "Qwen3-8B": {
+      "s1_repeated": {
+        "chunks": 20,
+        "tokens": 600000,
+        "unique_hashes": 1,
+        "all_identical": true,
+        "rolling_hash": "488409cfa21ddba887d54c7e67c652fc99ccd8a744d65126ef0ac152525a5e16"
+      },
+      "s1_diverse": {
+        "chunks": 18,
+        "tokens": 540000,
+        "unique_hashes": 18,
+        "all_identical": null,
+        "rolling_hash": "e1311be469e06d785b60ff0dd1eeb687fb973f831b93c66ae7abdbfd285104de"
+      },
+      "s2_repeated": {
+        "chunks": 20,
+        "tokens": 600000,
+        "unique_hashes": 1,
+        "all_identical": true,
+        "rolling_hash": "e2f4e18304d89e7ec6c40bbcc4c7eb38d34655a4425f8d3d34a461ca140eb109"
+      },
+      "s2_diverse": {
+        "chunks": 18,
+        "tokens": 540000,
+        "unique_hashes": 18,
+        "all_identical": null,
+        "rolling_hash": "f920dc902046ff6cc8051b30cb72ff9bc8bad2c0f22722a9c39ec5331ccfd84f"
+      },
+      "cross_repeated": {
+        "compared": 20,
+        "matches": 0,
+        "mismatches": 20,
+        "identical": false
+      },
+      "cross_diverse": {
+        "compared": 18,
+        "matches": 0,
+        "mismatches": 18,
+        "identical": false
+      }
+    }
+  },
+  "conclusions": {
+    "same_server_determinism": "PASS \u2014 all models, all runs identical within each server",
+    "cross_server_determinism": "FAIL \u2014 CUDA 12.9 vs 12.8 causes divergence from token 1",
+    "root_cause": "Different CUDA toolkit versions produce different cuBLAS GEMM results",
+    "fix": "Deploy identical Nix container (pinned CUDA) on both servers"
+  }
+}
