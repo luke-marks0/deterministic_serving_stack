@@ -96,6 +96,134 @@ See `docs/conformance/SPEC_REVIEW.md` for the full audit.
 
 The userspace networking stack (DPDK/L2 determinism) and on-disk artifact verification are scaffolding — the schemas and provenance fields exist but there's no real networking stack. Activations are a deterministic proxy (token hash), not actual intermediate values from the model.
 
+## Running the Container
+
+### Prerequisites
+- NVIDIA GPU with compute capability >= 9.0 (H100, GH200, etc.)
+- Docker with [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
+- The NVIDIA runtime must be the **default Docker runtime** (see setup below)
+
+### One-time Docker + NVIDIA setup
+
+The container is a hermetic Nix image — it doesn't use the host's glibc or CUDA toolkit. It only needs the host's NVIDIA kernel driver injected at runtime. This requires the NVIDIA Container Toolkit to be configured correctly.
+
+```bash
+# 1. Install NVIDIA Container Toolkit (if not already installed)
+# See https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
+
+# 2. Configure Docker to use nvidia as the DEFAULT runtime
+#    This is critical — just having --gpus all is not enough for Nix containers
+sudo nvidia-ctk runtime configure --runtime=docker
+
+# 3. Set nvidia as the default runtime (edit /etc/docker/daemon.json):
+sudo tee /etc/docker/daemon.json <<'EOF'
+{
+    "runtimes": {
+        "nvidia": {
+            "args": [],
+            "path": "nvidia-container-runtime"
+        }
+    },
+    "default-runtime": "nvidia"
+}
+EOF
+
+# 4. Restart Docker
+sudo systemctl restart docker
+
+# 5. Verify GPU access works
+docker run --rm --gpus all --privileged \
+  -e NVIDIA_DRIVER_CAPABILITIES=all \
+  ghcr.io/derpyplops/deterministic-serving-runtime:latest \
+  python3 -c "import torch; print(torch.cuda.get_device_name(0))"
+# Should print: NVIDIA GH200 480GB (or your GPU name)
+```
+
+**Important gotchas we hit during setup:**
+
+1. **`--privileged` is required** on some hosts (notably Lambda Cloud GH200 instances). Without it, `/dev/nvidia0` is visible but `cuInit()` returns `CUDA_ERROR_NO_DEVICE` due to cgroup restrictions.
+
+2. **`NVIDIA_DRIVER_CAPABILITIES=all`** must be set. The nvidia-container-runtime injects driver libs into `/usr/lib64/` but the Nix Python environment doesn't search that path by default. The container's `LD_LIBRARY_PATH` includes `/usr/lib64` but `NVIDIA_DRIVER_CAPABILITIES=all` is needed to trigger the lib injection.
+
+3. **Podman doesn't work** (v3.4.x on Lambda). It lacks CDI support and the `--gpus` flag doesn't inject driver libs. Use Docker.
+
+4. **Don't set `LD_LIBRARY_PATH` to host paths** (e.g. `/usr/lib/aarch64-linux-gnu`). The Nix image uses a newer glibc than the host — mixing them causes symbol version errors like `GLIBC_2.38 not found`.
+
+### Pull the image
+
+```bash
+docker pull ghcr.io/derpyplops/deterministic-serving-runtime:latest
+
+# Or load from a nix-built tarball:
+# nix build .#oci && docker load < result
+```
+
+### Start the server
+
+```bash
+docker run -d --name vllm-server \
+  --gpus all --privileged \
+  -e NVIDIA_DRIVER_CAPABILITIES=all \
+  -e VLLM_BATCH_INVARIANT=1 \
+  -e CUBLAS_WORKSPACE_CONFIG=:4096:8 \
+  -e HOME=/tmp \
+  -p 8000:8000 \
+  ghcr.io/derpyplops/deterministic-serving-runtime:latest \
+  python3 -m vllm.entrypoints.openai.api_server \
+    --model Qwen/Qwen3-1.7B \
+    --host 0.0.0.0 \
+    --port 8000 \
+    --seed 42 \
+    --enforce-eager \
+    --attention-backend TRITON_ATTN \
+    --max-model-len 4096
+```
+
+### Wait for startup (~30-90s depending on model download)
+
+```bash
+until curl -s http://localhost:8000/health > /dev/null 2>&1; do sleep 3; done
+echo "ready"
+```
+
+### Send a request
+
+```bash
+curl http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "Qwen/Qwen3-1.7B",
+    "messages": [{"role": "user", "content": "What is deterministic computation?"}],
+    "max_tokens": 100,
+    "temperature": 0,
+    "seed": 42
+  }'
+```
+
+### Stop
+
+```bash
+docker rm -f vllm-server
+```
+
+### Notes
+- Replace `Qwen/Qwen3-1.7B` with any supported model (e.g. `Qwen/Qwen3-8B`)
+- Set `-e HF_TOKEN=<token>` for gated models
+- `VLLM_BATCH_INVARIANT=1` enables deterministic batch-invariant inference
+- `--enforce-eager` disables CUDA graphs (required for batch invariance)
+- `--attention-backend TRITON_ATTN` or `FLASH_ATTN` (both supported)
+- The container includes `gcc` for Triton JIT compilation at runtime
+
+### Troubleshooting
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `Failed to infer device type` | GPU not visible to container | Add `--privileged -e NVIDIA_DRIVER_CAPABILITIES=all` |
+| `No CUDA GPUs are available` | `cuInit()` blocked by cgroups | Add `--privileged` |
+| `Can't initialize NVML` | Driver libs not injected | Ensure `"default-runtime": "nvidia"` in daemon.json |
+| `Failed to find C compiler` | Triton can't JIT kernels | Container must include gcc (current image does) |
+| `GLIBC_2.38 not found` | Host libs leaking into Nix env | Don't set `LD_LIBRARY_PATH` to host system paths |
+
 ## Building the Nix Closure
 
 ```bash

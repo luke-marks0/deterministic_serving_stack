@@ -39,6 +39,20 @@
         python = pkgs.python312;
         pythonPackages = pkgs.python312Packages;
 
+        # ── xgrammar with aarch64 fix ────────────────────────────────────
+        # Nixpkgs marks xgrammar badPlatforms on aarch64-linux because GCC
+        # emits a false-positive -Wfree-nonheap-object with -Werror.
+        # Suppress that single warning to unblock the build.
+        xgrammar = pythonPackages.xgrammar.overridePythonAttrs (old: {
+          meta = old.meta // { badPlatforms = []; };
+          env = (old.env or {}) // pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isAarch64 {
+            NIX_CFLAGS_COMPILE = toString [
+              (old.env.NIX_CFLAGS_COMPILE or "")
+              "-Wno-free-nonheap-object"
+            ];
+          };
+        });
+
         # ── PyTorch from source (via nixpkgs) ─────────────────────────────
         torch = pythonPackages.torch;
 
@@ -230,10 +244,8 @@
             # Structured output
             pythonPackages.llguidance
             pythonPackages.outlines-core
-          ] ++ pkgs.lib.optionals (system == "x86_64-linux") [
-            # These are not available on aarch64
-            pythonPackages.xgrammar
-          ] ++ [
+            xgrammar
+
             # Optional
             pythonPackages.lm-format-enforcer or null
             pythonPackages.outlines or null
@@ -329,6 +341,7 @@
             pkgs.bash
             pkgs.coreutils
             pkgs.cacert
+            pkgs.gcc                # Triton JIT-compiles kernels at runtime
           ];
         };
 
