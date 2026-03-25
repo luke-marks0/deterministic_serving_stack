@@ -6,6 +6,7 @@ import json
 import os
 import pathlib
 import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -26,6 +27,7 @@ _validate_requests = _mod._validate_requests
 _build_vllm_cmd = _mod._build_vllm_cmd
 _set_deterministic_env = _mod._set_deterministic_env
 _verify_container_image = _mod._verify_container_image
+_verify_model_artifacts = _mod._verify_model_artifacts
 _enforce_hardware = _mod._enforce_hardware
 
 
@@ -429,6 +431,117 @@ class TestDriverVersionVerification(unittest.TestCase):
             with mock.patch("subprocess.run", return_value=mock.MagicMock(stdout="550.54.15\n")):
                 warnings = _enforce_hardware(m)
         self.assertTrue(any("CUDA version mismatch" in w for w in warnings))
+
+
+class TestVerifyModelArtifacts(unittest.TestCase):
+    """Test _verify_model_artifacts with temp directory and fake files."""
+
+    def _make_manifest_with_artifact(self, cache_dir, filename, content, digest=None, size=None):
+        """Create a manifest with a single model_weights artifact pointing at a temp file."""
+        from pkg.common.deterministic import sha256_file as _sha256_file
+        fpath = cache_dir / filename
+        fpath.write_bytes(content)
+        actual_digest = _sha256_file(fpath)
+        m = _load_manifest()
+        m["model"]["weights_revision"] = "abcd" * 10  # 40 hex chars
+        m["artifact_inputs"] = [{
+            "artifact_id": "test-weights",
+            "artifact_type": "model_weights",
+            "source_kind": "hf",
+            "source_uri": "hf://test/model/weights.bin",
+            "immutable_ref": "abcd" * 10,
+            "expected_digest": digest if digest else actual_digest,
+            "path": filename,
+            "size_bytes": size if size else len(content),
+        }]
+        return m
+
+    def test_correct_digest_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            cache_dir = pathlib.Path(td)
+            content = b"test model weights data"
+            m = self._make_manifest_with_artifact(cache_dir, "weights.bin", content)
+            report = {"enforced": [], "warnings": []}
+            old = os.environ.get("RUNNER_MODEL_PATH")
+            try:
+                os.environ["RUNNER_MODEL_PATH"] = str(cache_dir)
+                _verify_model_artifacts(m, report)
+            finally:
+                if old is None:
+                    os.environ.pop("RUNNER_MODEL_PATH", None)
+                else:
+                    os.environ["RUNNER_MODEL_PATH"] = old
+            self.assertTrue(any("verified weights.bin" in e for e in report["enforced"]))
+
+    def test_wrong_digest_raises(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            cache_dir = pathlib.Path(td)
+            content = b"test model weights data"
+            wrong_digest = "sha256:" + "0" * 64
+            m = self._make_manifest_with_artifact(cache_dir, "weights.bin", content, digest=wrong_digest)
+            report = {"enforced": [], "warnings": []}
+            old = os.environ.get("RUNNER_MODEL_PATH")
+            try:
+                os.environ["RUNNER_MODEL_PATH"] = str(cache_dir)
+                with self.assertRaises(ValidationError) as ctx:
+                    _verify_model_artifacts(m, report)
+                self.assertIn("File digest mismatch", str(ctx.exception))
+            finally:
+                if old is None:
+                    os.environ.pop("RUNNER_MODEL_PATH", None)
+                else:
+                    os.environ["RUNNER_MODEL_PATH"] = old
+
+    def test_size_mismatch_raises(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            cache_dir = pathlib.Path(td)
+            content = b"test model weights data"
+            m = self._make_manifest_with_artifact(cache_dir, "weights.bin", content, size=999999)
+            report = {"enforced": [], "warnings": []}
+            old = os.environ.get("RUNNER_MODEL_PATH")
+            try:
+                os.environ["RUNNER_MODEL_PATH"] = str(cache_dir)
+                with self.assertRaises(ValidationError) as ctx:
+                    _verify_model_artifacts(m, report)
+                self.assertIn("File size mismatch", str(ctx.exception))
+            finally:
+                if old is None:
+                    os.environ.pop("RUNNER_MODEL_PATH", None)
+                else:
+                    os.environ["RUNNER_MODEL_PATH"] = old
+
+    def test_missing_file_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            cache_dir = pathlib.Path(td)
+            m = _load_manifest()
+            m["model"]["weights_revision"] = "abcd" * 10
+            m["artifact_inputs"] = [{
+                "artifact_id": "test-weights",
+                "artifact_type": "model_weights",
+                "source_kind": "hf",
+                "source_uri": "hf://test/model/weights.bin",
+                "immutable_ref": "abcd" * 10,
+                "expected_digest": "sha256:" + "a" * 64,
+                "path": "nonexistent.bin",
+            }]
+            report = {"enforced": [], "warnings": []}
+            old = os.environ.get("RUNNER_MODEL_PATH")
+            try:
+                os.environ["RUNNER_MODEL_PATH"] = str(cache_dir)
+                _verify_model_artifacts(m, report)
+            finally:
+                if old is None:
+                    os.environ.pop("RUNNER_MODEL_PATH", None)
+                else:
+                    os.environ["RUNNER_MODEL_PATH"] = old
+            self.assertTrue(any("File not found" in w for w in report["warnings"]))
+
+    def test_missing_revision_skips(self) -> None:
+        m = _load_manifest()
+        m["model"].pop("weights_revision", None)
+        report = {"enforced": [], "warnings": []}
+        _verify_model_artifacts(m, report)
+        self.assertTrue(any("No weights_revision" in w for w in report["warnings"]))
 
 
 if __name__ == "__main__":

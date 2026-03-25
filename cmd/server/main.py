@@ -36,6 +36,7 @@ from pkg.common.deterministic import (
     canonical_json_bytes,
     canonical_json_text,
     compute_lockfile_digest,
+    sha256_file,
     sha256_prefixed,
     utc_now_iso,
 )
@@ -356,6 +357,58 @@ def _verify_container_image(manifest: dict[str, Any], report: dict[str, Any]) ->
             report["warnings"].append("CONTAINER_IMAGE_DIGEST env var not set, cannot verify container image")
 
 
+def _verify_model_artifacts(manifest: dict[str, Any], report: dict[str, Any]) -> None:
+    """Verify model file digests from artifact_inputs against local cache."""
+    model = manifest["model"]
+    revision = model.get("weights_revision")
+    if not revision:
+        report["warnings"].append("No weights_revision -- skipping file verification")
+        return
+
+    # Check RUNNER_MODEL_PATH first, then HF cache
+    model_path = os.environ.get("RUNNER_MODEL_PATH")
+    if model_path and Path(model_path).is_dir():
+        cache_path = Path(model_path)
+    else:
+        repo_id = model["source"].removeprefix("hf://")
+        cache_dir = Path.home() / ".cache" / "huggingface" / "hub"
+        cache_path = cache_dir / f"models--{repo_id.replace('/', '--')}" / "snapshots" / revision
+        if not cache_path.is_dir():
+            report["warnings"].append(f"HF cache not found for {repo_id}@{revision[:12]}")
+            return
+
+    model_types = {"model_weights", "model_config", "tokenizer", "generation_config", "chat_template"}
+    for artifact in manifest.get("artifact_inputs", []):
+        if artifact.get("artifact_type") not in model_types:
+            continue
+        expected = artifact.get("expected_digest")
+        art_path = artifact.get("path")
+        if not expected or not art_path:
+            continue
+
+        file_path = cache_path / art_path
+        if not file_path.is_file():
+            report["warnings"].append(f"File not found in cache: {art_path}")
+            continue
+
+        # Quick size check
+        expected_size = artifact.get("size_bytes")
+        actual_size = file_path.stat().st_size
+        if expected_size and actual_size != expected_size:
+            raise ValidationError(
+                f"File size mismatch for {art_path}: expected {expected_size}, got {actual_size} "
+                f"(possible incomplete download)"
+            )
+
+        # Full hash check
+        actual = sha256_file(file_path)
+        if actual != expected:
+            raise ValidationError(
+                f"File digest mismatch for {art_path}: expected {expected[:24]}..., got {actual[:24]}..."
+            )
+        report["enforced"].append(f"verified {art_path}")
+
+
 def _start_vllm(state: ServerState, manifest: dict[str, Any]) -> dict[str, Any]:
     """Enforce manifest, stop old vLLM, start fresh, wait for health.
 
@@ -409,6 +462,9 @@ def _start_vllm(state: ServerState, manifest: dict[str, Any]) -> dict[str, Any]:
         report["enforced"].append(f"model revision pinned: {revision[:12]}...")
     else:
         report["warnings"].append("model revision not pinned — may load latest")
+
+    # 5b. Verify model file digests from artifact_inputs
+    _verify_model_artifacts(manifest, report)
 
     # 6. Terminate old process
     if state.vllm_proc is not None and state.vllm_proc.poll() is None:
