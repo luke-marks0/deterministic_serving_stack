@@ -8,7 +8,8 @@
       "name": "tokenizer_config.json",
       "size_bytes": 9732,
       "source_kind": "hf",
-      "source_uri": "hf://Qwen/Qwen3-1.7B/tokenizer_config.json"
+      "source_uri": "hf://Qwen/Qwen3-1.7B/tokenizer_config.json",
+      "path": "tokenizer_config.json"
     },
     {
       "artifact_id": "compiled-ext",
@@ -32,7 +33,8 @@
       "name": "generation_config.json",
       "size_bytes": 239,
       "source_kind": "hf",
-      "source_uri": "hf://Qwen/Qwen3-1.7B/generation_config.json"
+      "source_uri": "hf://Qwen/Qwen3-1.7B/generation_config.json",
+      "path": "generation_config.json"
     },
     {
       "artifact_id": "flash-attn",
@@ -49,7 +51,8 @@
       "name": "config.json",
       "size_bytes": 726,
       "source_kind": "hf",
-      "source_uri": "hf://Qwen/Qwen3-1.7B/config.json"
+      "source_uri": "hf://Qwen/Qwen3-1.7B/config.json",
+      "path": "config.json"
     },
     {
       "artifact_id": "hf-weights_shard-model-00001-of-00002.safetensors",
@@ -59,7 +62,8 @@
       "name": "model-00001-of-00002.safetensors",
       "size_bytes": 3441185608,
       "source_kind": "hf",
-      "source_uri": "hf://Qwen/Qwen3-1.7B/model-00001-of-00002.safetensors"
+      "source_uri": "hf://Qwen/Qwen3-1.7B/model-00001-of-00002.safetensors",
+      "path": "model-00001-of-00002.safetensors"
     },
     {
       "artifact_id": "hf-weights_shard-model-00002-of-00002.safetensors",
@@ -69,7 +73,8 @@
       "name": "model-00002-of-00002.safetensors",
       "size_bytes": 622329984,
       "source_kind": "hf",
-      "source_uri": "hf://Qwen/Qwen3-1.7B/model-00002-of-00002.safetensors"
+      "source_uri": "hf://Qwen/Qwen3-1.7B/model-00002-of-00002.safetensors",
+      "path": "model-00002-of-00002.safetensors"
     },
     {
       "artifact_id": "hf-prompt_formatter-tokenizer_config.json",
@@ -79,7 +84,8 @@
       "name": "tokenizer_config.json",
       "size_bytes": 9732,
       "source_kind": "hf",
-      "source_uri": "hf://Qwen/Qwen3-1.7B/tokenizer_config.json"
+      "source_uri": "hf://Qwen/Qwen3-1.7B/tokenizer_config.json",
+      "path": "tokenizer_config.json"
     },
     {
       "artifact_id": "request-set",
@@ -110,7 +116,8 @@
       "name": "tokenizer.json",
       "size_bytes": 11422654,
       "source_kind": "hf",
-      "source_uri": "hf://Qwen/Qwen3-1.7B/tokenizer.json"
+      "source_uri": "hf://Qwen/Qwen3-1.7B/tokenizer.json",
+      "path": "tokenizer.json"
     }
   ],
   "comparison": {
@@ -174,7 +181,9 @@
     "deterministic_knobs": {
       "cuda_launch_blocking": true,
       "seed": 42,
-      "torch_deterministic": true
+      "torch_deterministic": true,
+      "cublas_workspace_config": ":4096:8",
+      "pythonhashseed": "0"
     },
     "strict_hardware": false,
     "serving_engine": {
