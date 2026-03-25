@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Tiered Determinism Experiment
-==============================
+------------------------------
 
 Three stages that build on each other (results are cumulative and resumable):
 

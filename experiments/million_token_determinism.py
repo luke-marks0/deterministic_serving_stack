@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Million-Token Determinism Experiment
-=====================================
+-------------------------------------
 
 Two test modes per model:
   repeated: same prompt × 20 runs (tests KV cache / memory determinism)

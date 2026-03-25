@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Deterministic Serving Stack — Live Demo
-========================================
+Deterministic Serving Stack -- Live Demo
+----------------------------------------
 
 Run on two pre-provisioned servers to demonstrate:
   Part 1: Deterministic frame construction (matching digests across nodes)
