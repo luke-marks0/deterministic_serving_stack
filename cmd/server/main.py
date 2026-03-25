@@ -125,7 +125,6 @@ def _enforce_hardware(manifest: dict[str, Any]) -> list[str]:
     warnings = []
     hw = manifest["hardware_profile"]
     gpu = hw["gpu"]
-    topo = hw["topology"]
 
     try:
         import torch
@@ -134,7 +133,6 @@ def _enforce_hardware(manifest: dict[str, Any]) -> list[str]:
 
         actual_name = torch.cuda.get_device_name(0)
         actual_count = torch.cuda.device_count()
-        cc = torch.cuda.get_device_capability(0)
 
         if gpu["count"] != actual_count:
             warnings.append(
@@ -145,11 +143,6 @@ def _enforce_hardware(manifest: dict[str, Any]) -> list[str]:
         if gpu["model"].lower() not in actual_name.lower() and actual_name.lower() not in gpu["model"].lower():
             warnings.append(
                 f"GPU model mismatch: manifest wants '{gpu['model']}', have '{actual_name}'"
-            )
-
-        if topo["mode"] != "single_node" and actual_count < topo.get("node_count", 1):
-            warnings.append(
-                f"Topology requires {topo['node_count']} nodes but only {actual_count} GPUs visible"
             )
 
     except ImportError:
@@ -229,6 +222,51 @@ def _build_vllm_cmd(manifest: dict[str, Any], host: str, port: int) -> list[str]
     if batch_inv.get("enforce_eager", False):
         cmd.append("--enforce-eager")
 
+    # New serving_engine flags (all optional)
+    quantization = engine.get("quantization")
+    if quantization:
+        cmd.extend(["--quantization", quantization])
+
+    load_format = engine.get("load_format")
+    if load_format:
+        cmd.extend(["--load-format", load_format])
+
+    kv_cache_dtype = engine.get("kv_cache_dtype")
+    if kv_cache_dtype:
+        cmd.extend(["--kv-cache-dtype", kv_cache_dtype])
+
+    max_num_batched_tokens = engine.get("max_num_batched_tokens")
+    if max_num_batched_tokens:
+        cmd.extend(["--max-num-batched-tokens", str(max_num_batched_tokens)])
+
+    block_size = engine.get("block_size")
+    if block_size:
+        cmd.extend(["--block-size", str(block_size)])
+
+    if engine.get("enable_prefix_caching"):
+        cmd.append("--enable-prefix-caching")
+
+    if engine.get("enable_chunked_prefill"):
+        cmd.append("--enable-chunked-prefill")
+
+    scheduling_policy = engine.get("scheduling_policy")
+    if scheduling_policy:
+        cmd.extend(["--scheduling-policy", scheduling_policy])
+
+    if engine.get("disable_sliding_window"):
+        cmd.append("--disable-sliding-window")
+
+    tp = engine.get("tensor_parallel_size")
+    if tp and tp > 1:
+        cmd.extend(["--tensor-parallel-size", str(tp)])
+
+    pp = engine.get("pipeline_parallel_size")
+    if pp and pp > 1:
+        cmd.extend(["--pipeline-parallel-size", str(pp)])
+
+    if engine.get("disable_custom_all_reduce"):
+        cmd.append("--disable-custom-all-reduce")
+
     # Trust remote code
     if model.get("trust_remote_code", False):
         cmd.append("--trust-remote-code")
@@ -271,9 +309,9 @@ class ServerState:
 def _set_deterministic_env(manifest: dict[str, Any]) -> None:
     """Set deterministic environment variables from a manifest."""
     knobs = manifest["runtime"]["deterministic_knobs"]
-    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = knobs.get("cublas_workspace_config", ":4096:8")
     os.environ["CUDA_LAUNCH_BLOCKING"] = str(int(knobs.get("cuda_launch_blocking", True)))
-    os.environ["PYTHONHASHSEED"] = "0"
+    os.environ["PYTHONHASHSEED"] = str(knobs.get("pythonhashseed", "0"))
 
     batch_inv = manifest["runtime"].get("batch_invariance", {})
     if batch_inv.get("enabled", False):
