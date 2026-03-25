@@ -1,13 +1,6 @@
 {
   "artifact_inputs": [
     {
-      "artifact_id": "batching-policy",
-      "artifact_type": "batching_policy",
-      "immutable_ref": "v1",
-      "source_kind": "inline",
-      "source_uri": "inline://batching-policy"
-    },
-    {
       "artifact_id": "hf-chat_template-tokenizer_config.json",
       "artifact_type": "chat_template",
       "expected_digest": "sha256:d5d09f07b48c3086c508b30d1c9114bd1189145b74e982a265350c923acd8101",
@@ -79,27 +72,6 @@
       "source_uri": "hf://Qwen/Qwen3-1.7B/model-00002-of-00002.safetensors"
     },
     {
-      "artifact_id": "network-stack",
-      "artifact_type": "network_stack_binary",
-      "immutable_ref": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-      "source_kind": "s3",
-      "source_uri": "s3://mirror/netstack.tar.zst"
-    },
-    {
-      "artifact_id": "nic-link-config",
-      "artifact_type": "nic_link_config",
-      "immutable_ref": "v1",
-      "source_kind": "inline",
-      "source_uri": "inline://nic-link-config"
-    },
-    {
-      "artifact_id": "pmd-driver",
-      "artifact_type": "pmd_driver",
-      "immutable_ref": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-      "source_kind": "s3",
-      "source_uri": "s3://mirror/mlx5-pmd.so"
-    },
-    {
       "artifact_id": "hf-prompt_formatter-tokenizer_config.json",
       "artifact_type": "prompt_formatter",
       "expected_digest": "sha256:d5d09f07b48c3086c508b30d1c9114bd1189145b74e982a265350c923acd8101",
@@ -142,145 +114,30 @@
     }
   ],
   "comparison": {
-    "activations": {
-      "mode": "ulp",
-      "ulp": 2
-    },
     "logits": {
       "atol": 1e-06,
       "mode": "absrel",
       "rtol": 0.0001
-    },
-    "network_egress": {
-      "algorithm": "sha256",
-      "mode": "hash"
     },
     "tokens": {
       "mode": "exact"
     }
   },
   "created_at": "2026-03-14T00:00:00Z",
-  "deterministic_dispatcher": {
-    "algorithm": "round_robin_hash",
-    "enabled": false,
-    "replay_log_required": false,
-    "request_order_source": "ingress_sequence"
-  },
   "hardware_profile": {
     "gpu": {
       "count": 1,
       "cuda_driver_version": "12.4",
       "driver_version": "550.54.15",
-      "model": "H100-PCIe-80GB",
-      "pci_ids": [
-        "0000:41:00.0"
-      ],
-      "vendor": "nvidia"
-    },
-    "nic": {
-      "firmware": "28.40.1000",
-      "link_speed_gbps": 200,
-      "model": "ConnectX-7",
-      "offloads": {
-        "checksum": false,
-        "gso": false,
-        "tso": false,
-        "vlan_strip": false
-      },
-      "pci_id": "0000:17:00.0"
-    },
-    "topology": {
-      "collective_fabric": "none",
-      "mode": "single_node",
-      "node_count": 1,
-      "rack_count": 1
+      "model": "H100-PCIe-80GB"
     }
   },
   "manifest_version": "v1",
   "model": {
-    "requested_revision": "main",
-    "required_files": [
-      {
-        "digest": "sha256:d5d09f07b48c3086c508b30d1c9114bd1189145b74e982a265350c923acd8101",
-        "path": "tokenizer_config.json",
-        "role": "chat_template",
-        "size_bytes": 9732,
-        "uri": "hf://Qwen/Qwen3-1.7B/tokenizer_config.json"
-      },
-      {
-        "digest": "sha256:1ddb5b89ebc90dcb417a45c213d818577e65976454d29385c8f6140771d95197",
-        "path": "config.json",
-        "role": "config",
-        "size_bytes": 726,
-        "uri": "hf://Qwen/Qwen3-1.7B/config.json"
-      },
-      {
-        "digest": "sha256:2325da0f15bb848e018c5ae071b7943332e9f871d6b60e2ed22ca97d4cb993d2",
-        "path": "generation_config.json",
-        "role": "generation_config",
-        "size_bytes": 239,
-        "uri": "hf://Qwen/Qwen3-1.7B/generation_config.json"
-      },
-      {
-        "digest": "sha256:d5d09f07b48c3086c508b30d1c9114bd1189145b74e982a265350c923acd8101",
-        "path": "tokenizer_config.json",
-        "role": "prompt_formatter",
-        "size_bytes": 9732,
-        "uri": "hf://Qwen/Qwen3-1.7B/tokenizer_config.json"
-      },
-      {
-        "digest": "sha256:aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
-        "path": "tokenizer.json",
-        "role": "tokenizer",
-        "size_bytes": 11422654,
-        "uri": "hf://Qwen/Qwen3-1.7B/tokenizer.json"
-      },
-      {
-        "digest": "sha256:169ad53ec313c3a34b06c0809216e4fc072cce444a5d4ff2b59690d064130ed5",
-        "path": "model-00001-of-00002.safetensors",
-        "role": "weights_shard",
-        "size_bytes": 3441185608,
-        "uri": "hf://Qwen/Qwen3-1.7B/model-00001-of-00002.safetensors"
-      },
-      {
-        "digest": "sha256:912becff8d60672aa8628ef08c05898d9adf17c2ad4ae3caf99b065622fdeff9",
-        "path": "model-00002-of-00002.safetensors",
-        "role": "weights_shard",
-        "size_bytes": 622329984,
-        "uri": "hf://Qwen/Qwen3-1.7B/model-00002-of-00002.safetensors"
-      }
-    ],
-    "resolved_revision": "70d244cc86ccca08cf5af4e1e306ecf908b1ad5e",
     "source": "hf://Qwen/Qwen3-1.7B",
     "tokenizer_revision": "70d244cc86ccca08cf5af4e1e306ecf908b1ad5e",
     "trust_remote_code": false,
     "weights_revision": "70d244cc86ccca08cf5af4e1e306ecf908b1ad5e"
-  },
-  "network": {
-    "checksum_offload": false,
-    "egress_reproducibility": true,
-    "gso": false,
-    "internal_batching": {
-      "enabled": false,
-      "max_burst": 1
-    },
-    "mss": 1460,
-    "mtu": 1500,
-    "queue_mapping": {
-      "mapping_policy": "fixed_core_queue",
-      "rx_queues": 1,
-      "tx_queues": 1
-    },
-    "ring_sizes": {
-      "rx": 512,
-      "tx": 512
-    },
-    "security_mode": "plaintext",
-    "thread_affinity": [
-      2,
-      3
-    ],
-    "tso": false
   },
   "requests": [
     {
@@ -310,29 +167,14 @@
   ],
   "run_id": "qwen3-1.7b-batch-invariance-001",
   "runtime": {
-    "allow_non_reproducible_egress": false,
-    "batch_cardinality": {
-      "max_requests": 4,
-      "min_requests": 1,
-      "target_batch_size": 4
-    },
     "batch_invariance": {
       "enabled": true,
       "enforce_eager": true
     },
-    "batch_policy": "fixed",
     "deterministic_knobs": {
       "cuda_launch_blocking": true,
       "seed": 42,
       "torch_deterministic": true
-    },
-    "engine_trace": {
-      "enabled": true,
-      "events": [
-        "batch_composition",
-        "request_reorder",
-        "attention_backend_selection"
-      ]
     },
     "strict_hardware": false,
     "serving_engine": {
@@ -341,10 +183,6 @@
       "gpu_memory_utilization": 0.9,
       "dtype": "auto",
       "attention_backend": "FLASH_ATTN"
-    },
-    "nix_pin": {
-      "flake_ref": "github:derpyplops/deterministic_serving_stack/14e3014",
-      "flake_hash": "sha256:48beacd2a2b5c6dc8ebfb7c8cf57fc935b83799b4a520c5c95303cce1884fff4"
     }
   }
 }

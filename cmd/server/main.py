@@ -161,7 +161,7 @@ def _enforce_hardware(manifest: dict[str, Any]) -> list[str]:
 def _enforce_model_revision(manifest: dict[str, Any]) -> str | None:
     """Return the --revision flag value if the manifest pins a specific commit."""
     model = manifest["model"]
-    rev = model.get("resolved_revision")
+    rev = model.get("weights_revision")
     if rev:
         return rev
     return None
@@ -599,7 +599,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
             "vllm_healthy": vllm_healthy,
             "active_config": {
                 "model": m["model"]["source"],
-                "revision": m["model"].get("resolved_revision", "unpinned"),
+                "revision": m["model"].get("weights_revision", "unpinned"),
                 "run_id": m["run_id"],
                 "seed": m["runtime"]["deterministic_knobs"]["seed"],
                 "batch_invariance": m["runtime"]["batch_invariance"]["enabled"],

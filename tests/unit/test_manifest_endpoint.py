@@ -80,7 +80,7 @@ class TestModelRevisionEnforcement(unittest.TestCase):
 
     def test_missing_revision_returns_none(self) -> None:
         m = _load_manifest()
-        del m["model"]["resolved_revision"]
+        del m["model"]["weights_revision"]
         rev = _enforce_model_revision(m)
         self.assertIsNone(rev)
 

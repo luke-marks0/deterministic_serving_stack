@@ -60,19 +60,6 @@ def _compare_numbers(left: Any, right: Any) -> tuple[float, float, int, int]:
     return (max_abs, max_rel, mismatched, max(len(lvals), len(rvals)))
 
 
-def _first_network_byte_diff(a_hex: str, b_hex: str) -> tuple[int, int] | None:
-    a_bytes = bytes.fromhex(a_hex)
-    b_bytes = bytes.fromhex(b_hex)
-    max_len = min(len(a_bytes), len(b_bytes))
-    for idx in range(max_len):
-        if a_bytes[idx] != b_bytes[idx]:
-            return (idx, idx)
-    if len(a_bytes) != len(b_bytes):
-        last = max(len(a_bytes), len(b_bytes)) - 1
-        return (max_len, last)
-    return None
-
-
 def _compare_observable(mode: str, baseline: Any, candidate: Any, comp: dict[str, Any]) -> bool:
     if mode == "exact":
         return baseline == candidate
@@ -143,29 +130,17 @@ def verify(baseline_bundle_path: Path, candidate_bundle_path: Path, report_out: 
     candidate_tokens = _read_observable(candidate_dir, candidate, "tokens")
     baseline_logits = _read_observable(baseline_dir, baseline, "logits")
     candidate_logits = _read_observable(candidate_dir, candidate, "logits")
-    baseline_activations = _read_observable(baseline_dir, baseline, "activations")
-    candidate_activations = _read_observable(candidate_dir, candidate, "activations")
-    baseline_trace = _read_observable(baseline_dir, baseline, "engine_trace")
-    candidate_trace = _read_observable(candidate_dir, candidate, "engine_trace")
-    baseline_network = _read_observable(baseline_dir, baseline, "network_egress")
-    candidate_network = _read_observable(candidate_dir, candidate, "network_egress")
 
     token_ok = _compare_observable(comparison["tokens"]["mode"], baseline_tokens, candidate_tokens, comparison["tokens"])
     logits_ok = _compare_observable(comparison["logits"]["mode"], baseline_logits, candidate_logits, comparison["logits"])
-    activations_ok = _compare_observable(comparison["activations"]["mode"], baseline_activations, candidate_activations, comparison["activations"])
-    network_ok = _compare_observable(comparison["network_egress"]["mode"], baseline_network, candidate_network, comparison["network_egress"])
-    trace_ok = baseline_trace == candidate_trace
 
     runtime_equal = baseline["runtime_closure_digest"] == candidate["runtime_closure_digest"]
     hardware_equal = baseline["environment_info"]["hardware_fingerprint"] == candidate["environment_info"]["hardware_fingerprint"]
-    network_equal = baseline["network_provenance"]["nic_fingerprint"] == candidate["network_provenance"]["nic_fingerprint"]
 
-    outputs_equal = token_ok and logits_ok and activations_ok and network_ok and trace_ok
+    outputs_equal = token_ok and logits_ok
 
     if not outputs_equal:
         status = "mismatch_outputs"
-    elif not network_equal:
-        status = "non_conformant_network"
     elif not hardware_equal:
         status = "non_conformant_hardware"
     elif not runtime_equal:
@@ -191,80 +166,13 @@ def verify(baseline_bundle_path: Path, candidate_bundle_path: Path, report_out: 
             "location": first_mismatch_path(baseline_logits, candidate_logits) or "$.logits",
             "detail": "Logits diverged",
         }
-    elif not activations_ok:
-        first_divergence = {
-            "observable": "activations",
-            "location": first_mismatch_path(baseline_activations, candidate_activations) or "$.activations",
-            "detail": "Activations diverged",
-        }
-    elif not trace_ok:
-        first_divergence = {
-            "observable": "engine_trace",
-            "location": first_mismatch_path(baseline_trace, candidate_trace) or "$.engine_trace",
-            "detail": "Engine trace diverged",
-        }
-    elif not network_ok:
-        first_divergence = {
-            "observable": "network_egress",
-            "location": first_mismatch_path(baseline_network, candidate_network) or "$.network_egress",
-            "detail": "Network egress diverged",
-        }
 
     max_abs_l, max_rel_l, mism_l, total_l = _compare_numbers(baseline_logits, candidate_logits)
-    max_abs_a, max_rel_a, mism_a, total_a = _compare_numbers(baseline_activations, candidate_activations)
     numeric_diff_stats = {
-        "max_abs_diff": max(max_abs_l, max_abs_a),
-        "max_rel_diff": max(max_rel_l, max_rel_a),
-        "mismatched_count": mism_l + mism_a,
-        "total_compared": total_l + total_a,
-    }
-
-    trace_step = -1
-    if not trace_ok:
-        mismatch_path = first_mismatch_path(baseline_trace, candidate_trace)
-        if mismatch_path and "[" in mismatch_path:
-            try:
-                trace_step = int(mismatch_path.split("[")[1].split("]")[0])
-            except Exception:
-                trace_step = -1
-
-    batch_trace_diffs = {
-        "first_diverging_step": trace_step,
-        "summary": "No trace divergence" if trace_ok else "Engine trace divergence detected",
-    }
-
-    first_diverging_frame = -1
-    byte_offset_summaries: list[dict[str, int]] = []
-    max_frames = min(len(baseline_network), len(candidate_network))
-    for idx in range(max_frames):
-        left = baseline_network[idx]["frame_hex"]
-        right = candidate_network[idx]["frame_hex"]
-        diff = _first_network_byte_diff(left, right)
-        if diff is not None:
-            if first_diverging_frame < 0:
-                first_diverging_frame = idx
-            byte_offset_summaries.append(
-                {
-                    "frame_index": idx,
-                    "first_byte_offset": diff[0],
-                    "last_byte_offset": diff[1],
-                }
-            )
-            break
-
-    if len(baseline_network) != len(candidate_network) and first_diverging_frame < 0:
-        first_diverging_frame = max_frames
-        byte_offset_summaries.append(
-            {
-                "frame_index": max_frames,
-                "first_byte_offset": 0,
-                "last_byte_offset": 0,
-            }
-        )
-
-    network_trace_diffs = {
-        "first_diverging_frame": first_diverging_frame,
-        "byte_offset_summaries": byte_offset_summaries,
+        "max_abs_diff": max_abs_l,
+        "max_rel_diff": max_rel_l,
+        "mismatched_count": mism_l,
+        "total_compared": total_l,
     }
 
     version_diffs: list[str] = []
@@ -289,23 +197,13 @@ def verify(baseline_bundle_path: Path, candidate_bundle_path: Path, report_out: 
             "detail": "runtime_closure_digest equality check",
         },
         {
-            "conformance_id": "SPEC-8.2-ENGINE-TRACE",
-            "outcome": "pass" if trace_ok else "fail",
-            "detail": "engine trace equivalence",
-        },
-        {
-            "conformance_id": "SPEC-9.1-NETWORK-DETERMINISM",
-            "outcome": "pass" if network_ok else "fail",
-            "detail": "network egress equivalence",
-        },
-        {
             "conformance_id": "SPEC-13-VERIFY-REPORT",
             "outcome": "pass",
             "detail": "verify report emitted",
         },
     ]
 
-    summary = f"status={status}; outputs_equal={outputs_equal}; runtime_equal={runtime_equal}; hardware_equal={hardware_equal}; network_equal={network_equal}"
+    summary = f"status={status}; outputs_equal={outputs_equal}; runtime_equal={runtime_equal}; hardware_equal={hardware_equal}"
 
     report: dict[str, Any] = {
         "verify_report_version": "v1",
@@ -322,8 +220,6 @@ def verify(baseline_bundle_path: Path, candidate_bundle_path: Path, report_out: 
     if status == "mismatch_outputs":
         report["first_divergence"] = first_divergence
         report["numeric_diff_stats"] = numeric_diff_stats
-        report["batch_trace_diffs"] = batch_trace_diffs
-        report["network_trace_diffs"] = network_trace_diffs
 
     validate_with_schema("verify_report.v1.schema.json", report)
 

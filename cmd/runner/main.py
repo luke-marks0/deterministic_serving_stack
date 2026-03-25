@@ -26,7 +26,6 @@ from pkg.common.deterministic import (
     utc_now_iso,
 )
 from pkg.networkdet import create_net_stack
-from pkg.networkdet.conformance import validate_nic_config
 
 
 PCI_ID_RE = re.compile(r"^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-7]$")
@@ -48,10 +47,6 @@ def _tokens(seed: int, count: int = 8) -> list[int]:
 
 def _logits(tokens: list[int]) -> list[float]:
     return [round((tok % 997) / 997.0, 8) for tok in tokens]
-
-
-def _activations(tokens: list[int]) -> list[float]:
-    return [round(((tok * 3) % 991) / 991.0, 8) for tok in tokens]
 
 
 def _network_frame_hex_legacy(seed: int, req_id: str) -> str:
@@ -125,24 +120,16 @@ def _env_hardware_profile(expected_hardware: dict[str, Any]) -> tuple[dict[str, 
         ("gpu", "model"): "RUNNER_GPU_MODEL",
         ("gpu", "driver_version"): "RUNNER_GPU_DRIVER_VERSION",
         ("gpu", "cuda_driver_version"): "RUNNER_GPU_CUDA_DRIVER_VERSION",
-        ("nic", "model"): "RUNNER_NIC_MODEL",
-        ("nic", "pci_id"): "RUNNER_NIC_PCI_ID",
-        ("nic", "firmware"): "RUNNER_NIC_FIRMWARE",
-        ("topology", "mode"): "RUNNER_TOPOLOGY_MODE",
-        ("topology", "collective_fabric"): "RUNNER_TOPOLOGY_COLLECTIVE_FABRIC",
     }
     for (section, key), env_key in overrides.items():
         value = os.getenv(env_key)
         if value is None or value.strip() == "":
             continue
-        observed[section][key] = _normalize_pci_id(value) if key == "pci_id" else value.strip()
+        observed[section][key] = value.strip()
         evidence.append(env_key)
 
     int_overrides = {
         ("gpu", "count"): "RUNNER_GPU_COUNT",
-        ("nic", "link_speed_gbps"): "RUNNER_NIC_LINK_SPEED_GBPS",
-        ("topology", "node_count"): "RUNNER_TOPOLOGY_NODE_COUNT",
-        ("topology", "rack_count"): "RUNNER_TOPOLOGY_RACK_COUNT",
     }
     for (section, key), env_key in int_overrides.items():
         value = os.getenv(env_key)
@@ -153,16 +140,6 @@ def _env_hardware_profile(expected_hardware: dict[str, Any]) -> tuple[dict[str, 
         except ValueError as exc:
             raise ValidationError(f"{env_key} must be an integer") from exc
         evidence.append(env_key)
-
-    gpu_pci_ids = os.getenv("RUNNER_GPU_PCI_IDS")
-    if gpu_pci_ids:
-        observed["gpu"]["pci_ids"] = [_normalize_pci_id(item) for item in gpu_pci_ids.split(",") if item.strip()]
-        evidence.append("RUNNER_GPU_PCI_IDS")
-
-    nic_offloads = os.getenv("RUNNER_NIC_OFFLOADS_JSON")
-    if nic_offloads:
-        observed["nic"]["offloads"] = _parse_json_object(nic_offloads, name="RUNNER_NIC_OFFLOADS_JSON")
-        evidence.append("RUNNER_NIC_OFFLOADS_JSON")
 
     if len(evidence) == 0:
         return (None, [])
@@ -296,84 +273,32 @@ def _synthetic_observables(
     manifest: dict[str, Any],
     lockfile: dict[str, Any],
     replica_id: str,
-    *,
-    network_backend: str = "sim",
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+) -> list[dict[str, Any]]:
     """Generate synthetic observables for testing/CI (no GPU required)."""
     request_outputs: list[dict[str, Any]] = []
-    engine_events: list[dict[str, Any]] = []
-
-    target_batch = manifest["runtime"]["batch_cardinality"]["target_batch_size"]
-
-    # Build deterministic network frames via the real net stack.
-    use_legacy = network_backend == "legacy"
-    net = None if use_legacy else create_net_stack(manifest, lockfile, backend="sim")
 
     for idx, req in enumerate(manifest["requests"]):
         seed = _seed_for_request(manifest["run_id"], req["id"], req["prompt"])
         toks = _tokens(seed)
         lgt = _logits(toks)
-        act = _activations(toks)
 
-        request_outputs.append({"id": req["id"], "tokens": toks, "logits": lgt, "activations": act})
+        request_outputs.append({"id": req["id"], "tokens": toks, "logits": lgt})
 
-        engine_events.append({
-            "step": idx, "event": "batch_composition",
-            "batch_size": target_batch, "request_id": req["id"], "replica_id": replica_id,
-        })
-        if "request_reorder" in manifest["runtime"]["engine_trace"]["events"]:
-            engine_events.append({"step": idx, "event": "request_reorder", "before": idx, "after": idx})
-        if "attention_backend_selection" in manifest["runtime"]["engine_trace"]["events"]:
-            engine_events.append({"step": idx, "event": "attention_backend_selection", "backend": "flash_attention_2"})
-        if "collective_algorithm_selection" in manifest["runtime"]["engine_trace"]["events"]:
-            topo = manifest["hardware_profile"]["topology"]["mode"]
-            algorithm = "none" if topo == "single_node" else "ring_all_reduce"
-            engine_events.append({"step": idx, "event": "collective_algorithm_selection", "algorithm": algorithm})
-
-        if not use_legacy:
-            # Build real L2 frames for this request's synthetic response.
-            response_bytes = canonical_json_bytes({"id": req["id"], "tokens": toks, "logits": lgt})
-            net.process_response(conn_index=idx, response_bytes=response_bytes)
-
-    if use_legacy:
-        frames: list[dict[str, Any]] = []
-        for req in manifest["requests"]:
-            seed = _seed_for_request(manifest["run_id"], req["id"], req["prompt"])
-            frames.append({"request_id": req["id"], "frame_hex": _network_frame_hex_legacy(seed, req["id"])})
-    else:
-        frames = net.capture_frames_hex()
-
-    return request_outputs, engine_events, frames
+    return request_outputs
 
 
 def _vllm_observables(
     manifest: dict[str, Any],
     lockfile: dict[str, Any],
     replica_id: str,
-    *,
-    network_backend: str = "sim",
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Run real vLLM inference and return observables + env_info."""
     from cmd.runner.vllm_runner import run_vllm
 
     result = run_vllm(manifest, lockfile)
 
     request_outputs = result["request_outputs"]
-    engine_events = result["engine_events"]
-
-    if network_backend == "legacy":
-        frames: list[dict[str, Any]] = []
-        for req in manifest["requests"]:
-            seed = _seed_for_request(manifest["run_id"], req["id"], req["prompt"])
-            frames.append({"request_id": req["id"], "frame_hex": _network_frame_hex_legacy(seed, req["id"])})
-    else:
-        net = create_net_stack(manifest, lockfile, backend="sim")
-        for idx, output in enumerate(request_outputs):
-            response_bytes = canonical_json_bytes(output)
-            net.process_response(conn_index=idx, response_bytes=response_bytes)
-        frames = net.capture_frames_hex()
-
-    return request_outputs, engine_events, frames, result["env_info"]
+    return request_outputs, result["env_info"]
 
 
 def run(
@@ -425,17 +350,6 @@ def run(
         strict_hardware=bool(manifest["runtime"]["strict_hardware"]),
     )
     observed_gpu = observed_hardware.get("gpu", expected_hardware["gpu"])
-    observed_nic = observed_hardware.get("nic", expected_hardware["nic"])
-
-    # NIC conformance validation (SPEC-9.2).
-    nic_violations = validate_nic_config(manifest, observed_nic)
-    if nic_violations and bool(manifest["runtime"]["strict_hardware"]):
-        raise ValidationError(
-            "NIC conformance failed (strict_hardware=true): " + nic_violations[0]
-        )
-
-    network_stack = _artifact_by_type(lockfile, "network_stack_binary")
-    pmd_driver = _artifact_by_type(lockfile, "pmd_driver")
 
     out_dir.mkdir(parents=True, exist_ok=True)
     manifest_copy = out_dir / "manifest.json"
@@ -443,30 +357,23 @@ def run(
     manifest_copy.write_text(canonical_json_text(manifest), encoding="utf-8")
     lockfile_copy.write_text(canonical_json_text(lockfile), encoding="utf-8")
 
-    target_batch = manifest["runtime"]["batch_cardinality"]["target_batch_size"]
     vllm_env_info: dict[str, Any] | None = None
 
     if mode == "vllm":
-        request_outputs, engine_events, frames, vllm_env_info = _vllm_observables(
-            manifest, lockfile, replica_id, network_backend=network_backend,
+        request_outputs, vllm_env_info = _vllm_observables(
+            manifest, lockfile, replica_id,
         )
     else:
-        request_outputs, engine_events, frames = _synthetic_observables(
-            manifest, lockfile, replica_id, network_backend=network_backend,
+        request_outputs = _synthetic_observables(
+            manifest, lockfile, replica_id,
         )
 
     observables_dir = out_dir / "observables"
     tokens_path = observables_dir / "tokens.json"
     logits_path = observables_dir / "logits.json"
-    activations_path = observables_dir / "activations.json"
-    trace_path = observables_dir / "engine_trace.json"
-    network_path = observables_dir / "network_egress.json"
 
     tokens_digest = _write_json(tokens_path, [{"id": r["id"], "tokens": r["tokens"]} for r in request_outputs])
     logits_digest = _write_json(logits_path, [{"id": r["id"], "logits": r["logits"]} for r in request_outputs])
-    activations_digest = _write_json(activations_path, [{"id": r["id"], "activations": r["activations"]} for r in request_outputs])
-    trace_digest = _write_json(trace_path, engine_events)
-    network_digest = _write_json(network_path, frames)
 
     rerun_metadata = {
         "entrypoint": str(Path(__file__).resolve()),
@@ -527,32 +434,16 @@ def run(
             },
         },
         "execution_trace_metadata": {
-            "actual_batch_sizes": [target_batch for _ in manifest["requests"]],
             "resolved_args": {
-                "batch_policy": manifest["runtime"]["batch_policy"],
                 "strict_hardware": str(manifest["runtime"]["strict_hardware"]).lower(),
                 "replica_id": replica_id,
             },
             "resolved_env": vllm_env_info.get("resolved_env", {}) if vllm_env_info else {
                 "CUBLAS_WORKSPACE_CONFIG": ":4096:8",
                 "CUDA_LAUNCH_BLOCKING": str(int(manifest["runtime"]["deterministic_knobs"]["cuda_launch_blocking"])),
-                "RUNNER_NETWORK_ROUTE_MODE": "deterministic_userspace_stack",
             },
         },
         "rerun_metadata": rerun_metadata,
-        "network_provenance": {
-            "capture_path": str(network_path.relative_to(out_dir)),
-            "capture_digest": network_digest,
-            "frame_count": len(frames),
-            "capture_mode": "userspace_pre_enqueue",
-            "capture_isolation": "pre_enqueue_mirror",
-            "capture_non_perturbing": True,
-            "route_mode": "deterministic_userspace_stack",
-            "network_stack_artifact_digest": network_stack["digest"],
-            "pmd_driver_artifact_digest": pmd_driver["digest"],
-            "nic_fingerprint": sha256_prefixed(canonical_json_bytes(observed_nic)),
-            "security_mode": manifest["network"]["security_mode"],
-        },
         "observables": {
             "tokens": {
                 "path": str(tokens_path.relative_to(out_dir)),
@@ -561,18 +452,6 @@ def run(
             "logits": {
                 "path": str(logits_path.relative_to(out_dir)),
                 "digest": logits_digest,
-            },
-            "activations": {
-                "path": str(activations_path.relative_to(out_dir)),
-                "digest": activations_digest,
-            },
-            "engine_trace": {
-                "path": str(trace_path.relative_to(out_dir)),
-                "digest": trace_digest,
-            },
-            "network_egress": {
-                "path": str(network_path.relative_to(out_dir)),
-                "digest": network_digest,
             },
         },
         "attestations": [

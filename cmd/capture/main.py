@@ -33,7 +33,6 @@ from pkg.common.deterministic import (
     sha256_prefixed,
     utc_now_iso,
 )
-from pkg.networkdet import create_net_stack
 
 
 def _load_json(path: Path) -> Any:
@@ -133,11 +132,6 @@ def capture_to_bundle(
     # Build observables from captured request/response pairs
     token_observables = []
     logit_observables = []
-    activation_observables = []
-    engine_events = []
-    network_frames = []
-
-    target_batch = manifest["runtime"]["batch_cardinality"]["target_batch_size"]
 
     for idx, entry in enumerate(entries):
         req = entry.get("request", {})
@@ -150,9 +144,6 @@ def capture_to_bundle(
         tokens = _extract_tokens_from_response(resp)
         logprobs = _extract_logprobs_from_response(resp)
 
-        # Activations: deterministic proxy from token IDs
-        activations = [round(float((tok * 3) % 991) / 991.0, 8) for tok in tokens]
-
         # Pad logprobs to match token count if needed
         while len(logprobs) < len(tokens):
             logprobs.append(0.0)
@@ -160,22 +151,6 @@ def capture_to_bundle(
 
         token_observables.append({"id": req_id, "tokens": tokens})
         logit_observables.append({"id": req_id, "logits": logprobs})
-        activation_observables.append({"id": req_id, "activations": activations})
-
-        engine_events.append({
-            "step": idx,
-            "event": "batch_composition",
-            "batch_size": target_batch,
-            "request_id": req_id,
-        })
-
-    # Build deterministic L2 frames via the real net stack.
-    net = create_net_stack(manifest, lockfile, backend="sim")
-    for idx, entry in enumerate(entries):
-        resp = entry.get("response", {})
-        response_bytes = canonical_json_bytes(resp)
-        net.process_response(conn_index=idx, response_bytes=response_bytes)
-    network_frames = net.capture_frames_hex()
 
     # Write observable files
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -183,9 +158,6 @@ def capture_to_bundle(
 
     tokens_digest = _write_json(obs_dir / "tokens.json", token_observables)
     logits_digest = _write_json(obs_dir / "logits.json", logit_observables)
-    activations_digest = _write_json(obs_dir / "activations.json", activation_observables)
-    trace_digest = _write_json(obs_dir / "engine_trace.json", engine_events)
-    network_digest = _write_json(obs_dir / "network_egress.json", network_frames)
 
     # Write manifest and lockfile copies
     manifest_copy_path = out_dir / "manifest.json"
@@ -199,19 +171,6 @@ def capture_to_bundle(
     # Hardware info from boot record
     hw = boot_record.get("hardware", {})
     run_id = session_id or manifest.get("run_id", "capture-session")
-
-    # Network provenance
-    network_stack_digest = "sha256:" + ("0" * 64)
-    pmd_driver_digest = "sha256:" + ("0" * 64)
-    for art in lockfile.get("artifacts", []):
-        if art["artifact_type"] == "network_stack_binary":
-            network_stack_digest = art["digest"]
-        elif art["artifact_type"] == "pmd_driver":
-            pmd_driver_digest = art["digest"]
-
-    nic_fingerprint = sha256_prefixed(canonical_json_bytes(
-        manifest.get("hardware_profile", {}).get("nic", {})
-    ))
 
     run_bundle: dict[str, Any] = {
         "run_bundle_version": "v1",
@@ -266,9 +225,7 @@ def capture_to_bundle(
             },
         },
         "execution_trace_metadata": {
-            "actual_batch_sizes": [target_batch] * len(entries),
             "resolved_args": {
-                "batch_policy": manifest["runtime"]["batch_policy"],
                 "mode": "server_capture",
                 "capture_entries": str(len(entries)),
             },
@@ -287,25 +244,9 @@ def capture_to_bundle(
             "artifact_count": len(lockfile.get("artifacts", [])),
             "attestation_digests": [a["statement_digest"] for a in lockfile.get("attestations", [])],
         },
-        "network_provenance": {
-            "capture_path": "observables/network_egress.json",
-            "capture_digest": network_digest,
-            "frame_count": len(network_frames),
-            "capture_mode": "userspace_pre_enqueue",
-            "capture_isolation": "pre_enqueue_mirror",
-            "capture_non_perturbing": True,
-            "route_mode": "deterministic_userspace_stack",
-            "network_stack_artifact_digest": network_stack_digest,
-            "pmd_driver_artifact_digest": pmd_driver_digest,
-            "nic_fingerprint": nic_fingerprint,
-            "security_mode": manifest.get("network", {}).get("security_mode", "plaintext"),
-        },
         "observables": {
             "tokens": {"path": "observables/tokens.json", "digest": tokens_digest},
             "logits": {"path": "observables/logits.json", "digest": logits_digest},
-            "activations": {"path": "observables/activations.json", "digest": activations_digest},
-            "engine_trace": {"path": "observables/engine_trace.json", "digest": trace_digest},
-            "network_egress": {"path": "observables/network_egress.json", "digest": network_digest},
         },
         "attestations": [
             {

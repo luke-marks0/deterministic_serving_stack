@@ -36,21 +36,6 @@ MODEL_ARTIFACT_TYPES = {
 }
 
 
-def _topology_requires_collective_stack(manifest: dict[str, Any]) -> bool:
-    mode = manifest["hardware_profile"]["topology"]["mode"]
-    return mode in {"tensor_parallel", "pipeline_parallel"}
-
-
-def _require_topology_artifacts(manifest: dict[str, Any]) -> None:
-    if not _topology_requires_collective_stack(manifest):
-        return
-
-    if not any(item.get("artifact_type") == "collective_stack" for item in manifest["artifact_inputs"]):
-        raise ValidationError(
-            "Topology mode requires artifact_inputs to pin a collective_stack artifact"
-        )
-
-
 def _artifact_from_input(item: dict[str, Any], model_source: str) -> dict[str, Any]:
     source_bytes = canonical_json_bytes(item)
     digest = item.get("expected_digest") or sha256_prefixed(source_bytes)
@@ -111,14 +96,8 @@ def _resolve_manifest_hf_model(
         mirror_token=hf_mirror_token,
     )
 
-    manifest["model"]["resolved_revision"] = resolved.resolved_revision
     manifest["model"]["weights_revision"] = resolved.resolved_revision
     manifest["model"]["tokenizer_revision"] = resolved.resolved_revision
-    manifest["model"]["required_files"] = resolved.required_files
-    if resolved.remote_code is not None:
-        manifest["model"]["remote_code"] = resolved.remote_code
-    elif "remote_code" in manifest["model"]:
-        del manifest["model"]["remote_code"]
 
     manifest["artifact_inputs"] = _merge_model_artifacts(manifest["artifact_inputs"], resolved.model_artifacts)
     return manifest
@@ -135,7 +114,6 @@ def resolve_manifest_to_lockfile(
     hf_mirror_token: str | None = None,
 ) -> dict[str, Any]:
     validate_with_schema("manifest.v1.schema.json", manifest)
-    _require_topology_artifacts(manifest)
     if resolve_hf:
         manifest = _resolve_manifest_hf_model(
             manifest,
@@ -146,7 +124,6 @@ def resolve_manifest_to_lockfile(
             hf_mirror_token=hf_mirror_token,
         )
         validate_with_schema("manifest.v1.schema.json", manifest)
-        _require_topology_artifacts(manifest)
     deterministic_timestamp = manifest["created_at"]
 
     artifacts = [_artifact_from_input(item, manifest["model"]["source"]) for item in manifest["artifact_inputs"]]
@@ -155,7 +132,6 @@ def resolve_manifest_to_lockfile(
     runtime_seed = {
         "runtime": manifest["runtime"],
         "hardware": manifest["hardware_profile"],
-        "network": manifest["network"],
     }
 
     lockfile = {
