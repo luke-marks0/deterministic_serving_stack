@@ -320,6 +320,21 @@ def _set_deterministic_env(manifest: dict[str, Any]) -> None:
         os.environ.pop("VLLM_BATCH_INVARIANT", None)
 
 
+def _verify_container_image(manifest: dict[str, Any], report: dict[str, Any]) -> None:
+    """Check container image digest if declared in the manifest."""
+    expected_digest = manifest.get("runtime", {}).get("container_image_digest")
+    if expected_digest:
+        actual_digest = os.environ.get("CONTAINER_IMAGE_DIGEST", "")
+        if actual_digest and actual_digest != expected_digest:
+            raise ValidationError(
+                f"Container image digest mismatch: expected {expected_digest}, got {actual_digest}"
+            )
+        if actual_digest:
+            report["enforced"].append(f"container image digest verified: {actual_digest[:24]}...")
+        else:
+            report["warnings"].append("CONTAINER_IMAGE_DIGEST env var not set, cannot verify container image")
+
+
 def _start_vllm(state: ServerState, manifest: dict[str, Any]) -> dict[str, Any]:
     """Enforce manifest, stop old vLLM, start fresh, wait for health.
 
@@ -327,6 +342,9 @@ def _start_vllm(state: ServerState, manifest: dict[str, Any]) -> dict[str, Any]:
     Must be called with state.lock held.
     """
     report: dict[str, Any] = {"enforced": [], "warnings": []}
+
+    # 0. Container image digest verification
+    _verify_container_image(manifest, report)
 
     # 1. Validate requests are servable
     req_errors = _validate_requests(manifest)

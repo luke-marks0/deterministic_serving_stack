@@ -24,6 +24,7 @@ _enforce_model_revision = _mod._enforce_model_revision
 _validate_requests = _mod._validate_requests
 _build_vllm_cmd = _mod._build_vllm_cmd
 _set_deterministic_env = _mod._set_deterministic_env
+_verify_container_image = _mod._verify_container_image
 
 
 def _load_manifest() -> dict:
@@ -307,6 +308,63 @@ class TestSetDeterministicEnv(unittest.TestCase):
         m["runtime"]["deterministic_knobs"].pop("pythonhashseed", None)
         _set_deterministic_env(m)
         self.assertEqual(os.environ["PYTHONHASHSEED"], "0")
+
+
+class TestContainerImageDigest(unittest.TestCase):
+    """Container image digest verification via _verify_container_image."""
+
+    def test_digest_mismatch_raises(self) -> None:
+        m = _load_manifest()
+        m["runtime"]["container_image_digest"] = "sha256:" + "a" * 64
+        report = {"enforced": [], "warnings": []}
+        old_val = os.environ.get("CONTAINER_IMAGE_DIGEST")
+        try:
+            os.environ["CONTAINER_IMAGE_DIGEST"] = "sha256:" + "b" * 64
+            with self.assertRaises(ValidationError) as ctx:
+                _verify_container_image(m, report)
+            self.assertIn("Container image digest mismatch", str(ctx.exception))
+        finally:
+            if old_val is None:
+                os.environ.pop("CONTAINER_IMAGE_DIGEST", None)
+            else:
+                os.environ["CONTAINER_IMAGE_DIGEST"] = old_val
+
+    def test_digest_match_passes(self) -> None:
+        m = _load_manifest()
+        digest = "sha256:" + "a" * 64
+        m["runtime"]["container_image_digest"] = digest
+        report = {"enforced": [], "warnings": []}
+        old_val = os.environ.get("CONTAINER_IMAGE_DIGEST")
+        try:
+            os.environ["CONTAINER_IMAGE_DIGEST"] = digest
+            _verify_container_image(m, report)
+            self.assertTrue(any("container image digest verified" in e for e in report["enforced"]))
+        finally:
+            if old_val is None:
+                os.environ.pop("CONTAINER_IMAGE_DIGEST", None)
+            else:
+                os.environ["CONTAINER_IMAGE_DIGEST"] = old_val
+
+    def test_no_digest_in_manifest_skips(self) -> None:
+        m = _load_manifest()
+        m["runtime"].pop("container_image_digest", None)
+        report = {"enforced": [], "warnings": []}
+        _verify_container_image(m, report)
+        self.assertEqual(report["enforced"], [])
+        self.assertEqual(report["warnings"], [])
+
+    def test_env_var_missing_warns(self) -> None:
+        m = _load_manifest()
+        m["runtime"]["container_image_digest"] = "sha256:" + "a" * 64
+        report = {"enforced": [], "warnings": []}
+        old_val = os.environ.get("CONTAINER_IMAGE_DIGEST")
+        try:
+            os.environ.pop("CONTAINER_IMAGE_DIGEST", None)
+            _verify_container_image(m, report)
+            self.assertTrue(any("not set" in w for w in report["warnings"]))
+        finally:
+            if old_val is not None:
+                os.environ["CONTAINER_IMAGE_DIGEST"] = old_val
 
 
 if __name__ == "__main__":
