@@ -7,6 +7,7 @@ import os
 import pathlib
 import sys
 import unittest
+from unittest import mock
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
@@ -25,6 +26,7 @@ _validate_requests = _mod._validate_requests
 _build_vllm_cmd = _mod._build_vllm_cmd
 _set_deterministic_env = _mod._set_deterministic_env
 _verify_container_image = _mod._verify_container_image
+_enforce_hardware = _mod._enforce_hardware
 
 
 def _load_manifest() -> dict:
@@ -365,6 +367,68 @@ class TestContainerImageDigest(unittest.TestCase):
         finally:
             if old_val is not None:
                 os.environ["CONTAINER_IMAGE_DIGEST"] = old_val
+
+
+class TestDriverVersionVerification(unittest.TestCase):
+    """GPU driver and CUDA version verification via _enforce_hardware."""
+
+    def _mock_torch(self, cuda_version="12.4"):
+        """Create a mock torch module with CUDA support."""
+        mock_torch = mock.MagicMock()
+        mock_torch.cuda.is_available.return_value = True
+        mock_torch.cuda.get_device_name.return_value = "NVIDIA H100 80GB HBM3"
+        mock_torch.cuda.device_count.return_value = 1
+        mock_torch.version.cuda = cuda_version
+        return mock_torch
+
+    def test_driver_version_match(self) -> None:
+        m = _load_manifest()
+        m["hardware_profile"]["gpu"]["driver_version"] = "550.54.15"
+        mock_torch = self._mock_torch()
+        mock_result = mock.MagicMock()
+        mock_result.stdout = "550.54.15\n"
+        with mock.patch.dict("sys.modules", {"torch": mock_torch}):
+            with mock.patch("subprocess.run", return_value=mock_result):
+                warnings = _enforce_hardware(m)
+        self.assertFalse(any("GPU driver mismatch" in w for w in warnings))
+
+    def test_driver_version_mismatch(self) -> None:
+        m = _load_manifest()
+        m["hardware_profile"]["gpu"]["driver_version"] = "550.54.15"
+        mock_torch = self._mock_torch()
+        mock_result = mock.MagicMock()
+        mock_result.stdout = "535.86.01\n"
+        with mock.patch.dict("sys.modules", {"torch": mock_torch}):
+            with mock.patch("subprocess.run", return_value=mock_result):
+                warnings = _enforce_hardware(m)
+        self.assertTrue(any("GPU driver mismatch" in w for w in warnings))
+
+    def test_nvidia_smi_failure_warns(self) -> None:
+        m = _load_manifest()
+        m["hardware_profile"]["gpu"]["driver_version"] = "550.54.15"
+        mock_torch = self._mock_torch()
+        with mock.patch.dict("sys.modules", {"torch": mock_torch}):
+            with mock.patch("subprocess.run", side_effect=OSError("not found")):
+                warnings = _enforce_hardware(m)
+        self.assertTrue(any("Could not query" in w for w in warnings))
+
+    def test_cuda_version_match(self) -> None:
+        m = _load_manifest()
+        m["hardware_profile"]["gpu"]["cuda_driver_version"] = "12.4"
+        mock_torch = self._mock_torch(cuda_version="12.4")
+        with mock.patch.dict("sys.modules", {"torch": mock_torch}):
+            with mock.patch("subprocess.run", return_value=mock.MagicMock(stdout="550.54.15\n")):
+                warnings = _enforce_hardware(m)
+        self.assertFalse(any("CUDA version mismatch" in w for w in warnings))
+
+    def test_cuda_version_mismatch(self) -> None:
+        m = _load_manifest()
+        m["hardware_profile"]["gpu"]["cuda_driver_version"] = "12.4"
+        mock_torch = self._mock_torch(cuda_version="11.8")
+        with mock.patch.dict("sys.modules", {"torch": mock_torch}):
+            with mock.patch("subprocess.run", return_value=mock.MagicMock(stdout="550.54.15\n")):
+                warnings = _enforce_hardware(m)
+        self.assertTrue(any("CUDA version mismatch" in w for w in warnings))
 
 
 if __name__ == "__main__":

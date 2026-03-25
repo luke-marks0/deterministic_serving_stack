@@ -145,6 +145,27 @@ def _enforce_hardware(manifest: dict[str, Any]) -> list[str]:
                 f"GPU model mismatch: manifest wants '{gpu['model']}', have '{actual_name}'"
             )
 
+        # Check GPU driver version via nvidia-smi
+        expected_driver = gpu.get("driver_version")
+        if expected_driver:
+            try:
+                result = subprocess.run(
+                    ["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader"],
+                    capture_output=True, text=True, timeout=10,
+                )
+                actual_driver = result.stdout.strip().splitlines()[0].strip()
+                if actual_driver != expected_driver:
+                    warnings.append(f"GPU driver mismatch: manifest={expected_driver}, actual={actual_driver}")
+            except Exception:
+                warnings.append("Could not query GPU driver version")
+
+        # Check CUDA driver version via torch
+        expected_cuda = gpu.get("cuda_driver_version")
+        if expected_cuda:
+            actual_cuda = torch.version.cuda or "unknown"
+            if actual_cuda != expected_cuda:
+                warnings.append(f"CUDA version mismatch: manifest={expected_cuda}, actual={actual_cuda}")
+
     except ImportError:
         warnings.append("torch not available, cannot verify GPU")
 
