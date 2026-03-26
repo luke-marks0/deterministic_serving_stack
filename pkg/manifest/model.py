@@ -186,7 +186,7 @@ class RequestItem(BaseModel):
 
     id: str = Field(pattern=r"^[A-Za-z0-9._:-]+$")
     prompt: str = Field(min_length=1)
-    max_new_tokens: int = Field(ge=1, le=4096)
+    max_new_tokens: int = Field(ge=1)
     temperature: float = Field(ge=0, le=2)
 
 
