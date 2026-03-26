@@ -416,9 +416,9 @@ class TestCheckHardware(unittest.TestCase):
     def _probe(self, **overrides) -> "GpuProbe":
         from pkg.manifest.model import GpuProbe
         defaults = dict(
-            available=True, name="H100-PCIe-80GB", count=1,
-            compute_capability="9.0", driver_version="550.54.15",
-            cuda_version="12.4", torch_version="2.10.0", vllm_version="0.17.1",
+            available=True, name="NVIDIA GH200 480GB", count=1,
+            compute_capability="9.0", driver_version="570.148.08",
+            cuda_version="12.8", torch_version="2.10.0", vllm_version="0.17.1",
         )
         defaults.update(overrides)
         return GpuProbe(**defaults)
