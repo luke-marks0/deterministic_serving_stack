@@ -123,11 +123,11 @@ class TestManifestRejectsInvalid(unittest.TestCase):
         with self.assertRaises(PydanticValidationError):
             Manifest.model_validate(d)
 
-    def test_rejects_too_few_artifacts(self) -> None:
+    def test_accepts_empty_artifacts(self) -> None:
         d = copy.deepcopy(REAL_MANIFEST)
-        d["artifact_inputs"] = d["artifact_inputs"][:3]
-        with self.assertRaises(PydanticValidationError):
-            Manifest.model_validate(d)
+        d["artifact_inputs"] = []
+        m = Manifest.model_validate(d)
+        self.assertEqual(len(m.artifact_inputs), 0)
 
 
 class TestSubModels(unittest.TestCase):

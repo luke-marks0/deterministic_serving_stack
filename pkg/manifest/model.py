@@ -261,4 +261,4 @@ class Manifest(BaseModel):
     hardware_profile: HardwareProfile
     requests: list[RequestItem] = Field(min_length=1)
     comparison: ComparisonConfig
-    artifact_inputs: list[ArtifactInput] = Field(min_length=4)
+    artifact_inputs: list[ArtifactInput] = Field(default_factory=list)

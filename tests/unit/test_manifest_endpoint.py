@@ -500,40 +500,16 @@ class TestVerifyModelArtifacts(unittest.TestCase):
         actual_digest = _sha256_file(fpath)
         d = _load_manifest_dict()
         d["model"]["weights_revision"] = "abcd" * 10  # 40 hex chars
-        d["artifact_inputs"] = [
-            {
-                "artifact_id": "test-weights",
-                "artifact_type": "model_weights",
-                "source_kind": "hf",
-                "source_uri": "hf://test/model/weights.bin",
-                "immutable_ref": "abcd" * 10,
-                "expected_digest": digest if digest else actual_digest,
-                "path": filename,
-                "size_bytes": size if size else len(content),
-            },
-            # Need at least 4 artifacts for Pydantic validation
-            {
-                "artifact_id": "model-config",
-                "artifact_type": "model_config",
-                "source_kind": "hf",
-                "source_uri": "hf://test/model/config.json",
-                "immutable_ref": "abcd" * 10,
-            },
-            {
-                "artifact_id": "tokenizer",
-                "artifact_type": "tokenizer",
-                "source_kind": "hf",
-                "source_uri": "hf://test/model/tokenizer.json",
-                "immutable_ref": "abcd" * 10,
-            },
-            {
-                "artifact_id": "serving-stack",
-                "artifact_type": "serving_stack",
-                "source_kind": "oci",
-                "source_uri": "oci://vllm/vllm-openai@sha256:" + "0" * 64,
-                "immutable_ref": "sha256:" + "0" * 64,
-            },
-        ]
+        d["artifact_inputs"] = [{
+            "artifact_id": "test-weights",
+            "artifact_type": "model_weights",
+            "source_kind": "hf",
+            "source_uri": "hf://test/model/weights.bin",
+            "immutable_ref": "abcd" * 10,
+            "expected_digest": digest if digest else actual_digest,
+            "path": filename,
+            "size_bytes": size if size else len(content),
+        }]
         return _manifest_from_dict(d)
 
     def test_correct_digest_passes(self) -> None:
@@ -595,8 +571,7 @@ class TestVerifyModelArtifacts(unittest.TestCase):
             cache_dir = pathlib.Path(td)
             d = _load_manifest_dict()
             d["model"]["weights_revision"] = "abcd" * 10
-            d["artifact_inputs"] = [
-                {
+            d["artifact_inputs"] = [{
                     "artifact_id": "test-weights",
                     "artifact_type": "model_weights",
                     "source_kind": "hf",
@@ -604,29 +579,7 @@ class TestVerifyModelArtifacts(unittest.TestCase):
                     "immutable_ref": "abcd" * 10,
                     "expected_digest": "sha256:" + "a" * 64,
                     "path": "nonexistent.bin",
-                },
-                {
-                    "artifact_id": "model-config",
-                    "artifact_type": "model_config",
-                    "source_kind": "hf",
-                    "source_uri": "hf://test/model/config.json",
-                    "immutable_ref": "abcd" * 10,
-                },
-                {
-                    "artifact_id": "tokenizer",
-                    "artifact_type": "tokenizer",
-                    "source_kind": "hf",
-                    "source_uri": "hf://test/model/tokenizer.json",
-                    "immutable_ref": "abcd" * 10,
-                },
-                {
-                    "artifact_id": "serving-stack",
-                    "artifact_type": "serving_stack",
-                    "source_kind": "oci",
-                    "source_uri": "oci://vllm/vllm-openai@sha256:" + "0" * 64,
-                    "immutable_ref": "sha256:" + "0" * 64,
-                },
-            ]
+            }]
             m = _manifest_from_dict(d)
             report = {"enforced": [], "warnings": []}
             old = os.environ.get("RUNNER_MODEL_PATH")

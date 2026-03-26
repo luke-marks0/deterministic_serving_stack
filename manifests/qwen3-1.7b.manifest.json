@@ -157,48 +157,6 @@
       "name": "tokenizer_config.json",
       "path": "tokenizer_config.json",
       "role": "prompt_formatter"
-    },
-    {
-      "artifact_id": "serving-stack-vllm",
-      "artifact_type": "serving_stack",
-      "source_kind": "oci",
-      "source_uri": "oci://ghcr.io/derpyplops/deterministic-serving-runtime@sha256:a3cfd682bbd19d53cea020c0ba358a23b6618078e20004aa278be6d09e1c76ee",
-      "immutable_ref": "sha256:a3cfd682bbd19d53cea020c0ba358a23b6618078e20004aa278be6d09e1c76ee"
-    },
-    {
-      "artifact_id": "cuda-12.8",
-      "artifact_type": "cuda_lib",
-      "source_kind": "nix",
-      "source_uri": "nix://cudaPackages.cuda_cudart-12.8.90",
-      "immutable_ref": "nix:12.8.90"
-    },
-    {
-      "artifact_id": "flash-attn",
-      "artifact_type": "kernel_library",
-      "source_kind": "nix",
-      "source_uri": "nix://vllm-flash-attn-140c00c",
-      "immutable_ref": "140c00c0241bb60cc6e44e7c1be9998d4b20d8d2"
-    },
-    {
-      "artifact_id": "compiled-ext-xgrammar",
-      "artifact_type": "compiled_extension",
-      "source_kind": "nix",
-      "source_uri": "nix://python312Packages.xgrammar-0.1.31",
-      "immutable_ref": "nix:0.1.31"
-    },
-    {
-      "artifact_id": "runtime-knobs",
-      "artifact_type": "runtime_knob_set",
-      "source_kind": "inline",
-      "source_uri": "inline://runtime-knobs",
-      "immutable_ref": "v1"
-    },
-    {
-      "artifact_id": "request-set",
-      "artifact_type": "request_set",
-      "source_kind": "inline",
-      "source_uri": "inline://requests",
-      "immutable_ref": "v1"
     }
   ]
 }
