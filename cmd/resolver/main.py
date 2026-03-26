@@ -24,6 +24,7 @@ from pkg.common.hf_resolution import (
     HuggingFaceHubClient,
     resolve_hf_model,
 )
+from pkg.manifest.model import Manifest
 
 MODEL_ARTIFACT_TYPES = {
     "model_weights",
@@ -124,6 +125,9 @@ def resolve_manifest_to_lockfile(
             hf_mirror_token=hf_mirror_token,
         )
         validate_with_schema("manifest.v1.schema.json", manifest)
+    # Validate the (possibly mutated) manifest with Pydantic before lockfile generation.
+    Manifest.model_validate(manifest)
+
     deterministic_timestamp = manifest["created_at"]
 
     artifacts = [_artifact_from_input(item, manifest["model"]["source"]) for item in manifest["artifact_inputs"]]
