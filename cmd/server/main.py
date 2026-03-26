@@ -80,11 +80,13 @@ def _probe_gpu() -> GpuProbe:
 
     driver = ""
     try:
-        result = subprocess.run(
-            ["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader"],
-            capture_output=True, text=True, timeout=10,
-        )
-        driver = result.stdout.strip().splitlines()[0].strip()
+        import ctypes
+        nvml = ctypes.CDLL("libnvidia-ml.so.1")
+        nvml.nvmlInit()
+        buf = ctypes.create_string_buffer(80)
+        nvml.nvmlSystemGetDriverVersion(buf, 80)
+        driver = buf.value.decode()
+        nvml.nvmlShutdown()
     except Exception:
         pass
 
