@@ -43,6 +43,11 @@ from pkg.common.deterministic import (
     utc_now_iso,
 )
 from pkg.manifest.model import GpuProbe, HardwareConformance, Manifest
+from pkg.networkdet import DeterministicNetStack
+from pkg.networkdet.config import NetStackConfig
+from pkg.networkdet.backend_sim import SimulatedBackend
+from pkg.networkdet.warden import ActiveWarden
+from pkg.networkdet.capture import CaptureRing
 
 
 def _hardware_fingerprint(hw: dict[str, Any]) -> str:
@@ -534,6 +539,9 @@ class ProxyHandler(BaseHTTPRequestHandler):
         if self.path == "/manifest":
             return self._handle_post_manifest()
 
+        if self.path == "/run":
+            return self._handle_post_run()
+
         content_length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(content_length) if content_length > 0 else b""
 
@@ -627,6 +635,111 @@ class ProxyHandler(BaseHTTPRequestHandler):
             "requests": len(state.manifest.requests),
             "comparison": list(state.manifest.comparison.model_dump(exclude_none=True).keys()),
         })
+
+    def _handle_post_run(self) -> None:
+        """POST /run -- execute the active manifest's requests, return a run bundle.
+
+        Sends each request in manifest.requests to vLLM, feeds the responses
+        through the deterministic net stack and warden, and returns:
+        - inference results (tokens, content hash per request)
+        - packet output (warden-normalized frames, digest)
+        - manifest and closure metadata
+        """
+        state = self.server_state
+        if state is None:
+            return self._send_json(500, {"error": "Server state not initialized"})
+
+        manifest = state.manifest
+        model_id = manifest.model.source.removeprefix("hf://")
+        seed = manifest.runtime.deterministic_knobs.seed
+
+        # Set up packet pipeline
+        config = NetStackConfig(
+            mtu=1500, mss=1460, tso=False, gso=False,
+            checksum_offload=False, thread_affinity=(0,),
+            tx_queues=1, rx_queues=1, queue_mapping_policy="fixed_core_queue",
+            ring_tx=512, ring_rx=512,
+            internal_batching_enabled=False, internal_batching_max_burst=1,
+            security_mode="plaintext", egress_reproducibility=True,
+            src_ip="10.0.0.1", dst_ip="10.0.0.2",
+            src_mac="02:00:00:00:00:01", dst_mac="02:00:00:00:00:02",
+            src_port=8000, dst_port=80,
+        )
+        net = DeterministicNetStack(config, run_id=manifest.run_id, backend=SimulatedBackend())
+        warden = ActiveWarden(secret=b"deterministic-warden-key")
+        warden_capture = CaptureRing()
+
+        inference_results = []
+        errors = []
+
+        for i, req in enumerate(manifest.requests):
+            body = json.dumps({
+                "model": model_id,
+                "messages": [{"role": "user", "content": req.prompt}],
+                "max_tokens": req.max_new_tokens,
+                "temperature": req.temperature,
+                "seed": seed,
+            }).encode()
+            vllm_req = Request(
+                f"http://127.0.0.1:{state.vllm_port}/v1/chat/completions",
+                data=body,
+                headers={"Content-Type": "application/json"},
+            )
+
+            try:
+                with urlopen(vllm_req, timeout=300) as resp:
+                    resp_data = json.loads(resp.read())
+            except Exception as exc:
+                errors.append({"request_id": req.id, "error": str(exc)})
+                continue
+
+            content = resp_data["choices"][0]["message"]["content"]
+            tokens = resp_data["usage"]["completion_tokens"]
+            content_hash = hashlib.sha256(content.encode()).hexdigest()
+
+            inference_results.append({
+                "id": req.id,
+                "tokens": tokens,
+                "content_hash": content_hash,
+            })
+
+            # Feed through packet pipeline — strip nondeterministic API fields
+            import copy
+            det_resp = copy.deepcopy(resp_data)
+            for key in ("id", "created", "system_fingerprint"):
+                det_resp.pop(key, None)
+            response_bytes = canonical_json_bytes(det_resp)
+            frames = net.process_response(conn_index=i, response_bytes=response_bytes)
+
+            for frame in frames:
+                normalized = warden.normalize(frame)
+                if normalized is not None:
+                    warden_capture.record(normalized)
+
+        # Build the bundle
+        inference_digest = hashlib.sha256(
+            "".join(r["content_hash"] for r in inference_results).encode()
+        ).hexdigest()
+
+        bundle = {
+            "manifest_digest": state.manifest_digest,
+            "closure_hash": os.environ.get("CLOSURE_HASH", ""),
+            "run_id": manifest.run_id,
+            "inference": {
+                "digest": f"sha256:{inference_digest}",
+                "results": inference_results,
+            },
+            "packets": {
+                "digest": warden_capture.digest(),
+                "frame_count": warden_capture.frame_count,
+                "frames": warden_capture.frames_as_hex(),
+            },
+        }
+
+        if errors:
+            bundle["errors"] = errors
+
+        return self._send_json(200, bundle)
 
     # -- GET --
 
