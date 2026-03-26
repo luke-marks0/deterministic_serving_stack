@@ -27,6 +27,8 @@ from typing import Any
 from urllib.request import Request, urlopen
 from urllib.error import URLError
 
+from pydantic import ValidationError as PydanticValidationError
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
@@ -40,18 +42,19 @@ from pkg.common.deterministic import (
     sha256_prefixed,
     utc_now_iso,
 )
+from pkg.manifest.model import Manifest
 
 
 def _hardware_fingerprint(hw: dict[str, Any]) -> str:
     return sha256_prefixed(canonical_json_bytes(hw))
 
 
-def _validate_boot(manifest: dict[str, Any], lockfile: dict[str, Any]) -> dict[str, Any]:
+def _validate_boot(manifest: Manifest, lockfile: dict[str, Any]) -> dict[str, Any]:
     """Validate manifest and lockfile at server boot. Returns conformance record."""
-    validate_with_schema("manifest.v1.schema.json", manifest)
+    validate_with_schema("manifest.v1.schema.json", manifest.model_dump(exclude_none=True))
     validate_with_schema("lockfile.v1.schema.json", lockfile)
 
-    manifest_digest = sha256_prefixed(canonical_json_bytes(manifest))
+    manifest_digest = sha256_prefixed(canonical_json_bytes(manifest.model_dump(exclude_none=True)))
     if lockfile["manifest_digest"] != manifest_digest:
         raise ValidationError("Lockfile manifest_digest mismatch")
 
@@ -62,13 +65,13 @@ def _validate_boot(manifest: dict[str, Any], lockfile: dict[str, Any]) -> dict[s
     return {"manifest_digest": manifest_digest, "lockfile_digest": expected_lockfile_digest}
 
 
-def _probe_hardware(manifest: dict[str, Any]) -> dict[str, Any]:
+def _probe_hardware(manifest: Manifest) -> dict[str, Any]:
     """Probe GPU hardware and return conformance record."""
-    expected = manifest["hardware_profile"]
+    expected = manifest.hardware_profile
     record = {
         "status": "unknown",
-        "strict_hardware": manifest["runtime"]["strict_hardware"],
-        "expected_fingerprint": _hardware_fingerprint(expected),
+        "strict_hardware": manifest.runtime.strict_hardware,
+        "expected_fingerprint": _hardware_fingerprint(expected.model_dump(exclude_none=True)),
         "actual_fingerprint": "",
         "gpu_name": "",
         "compute_capability": "",
@@ -121,11 +124,10 @@ def _probe_hardware(manifest: dict[str, Any]) -> dict[str, Any]:
     return record
 
 
-def _enforce_hardware(manifest: dict[str, Any]) -> list[str]:
+def _enforce_hardware(manifest: Manifest) -> list[str]:
     """Check hardware_profile against actual GPU. Returns list of warnings (empty = OK)."""
     warnings = []
-    hw = manifest["hardware_profile"]
-    gpu = hw["gpu"]
+    gpu = manifest.hardware_profile.gpu
 
     try:
         import torch
@@ -135,19 +137,19 @@ def _enforce_hardware(manifest: dict[str, Any]) -> list[str]:
         actual_name = torch.cuda.get_device_name(0)
         actual_count = torch.cuda.device_count()
 
-        if gpu["count"] != actual_count:
+        if gpu.count != actual_count:
             warnings.append(
-                f"GPU count mismatch: manifest wants {gpu['count']}, have {actual_count}"
+                f"GPU count mismatch: manifest wants {gpu.count}, have {actual_count}"
             )
 
         # Check model name contains expected substring (exact match is too brittle)
-        if gpu["model"].lower() not in actual_name.lower() and actual_name.lower() not in gpu["model"].lower():
+        if gpu.model.lower() not in actual_name.lower() and actual_name.lower() not in gpu.model.lower():
             warnings.append(
-                f"GPU model mismatch: manifest wants '{gpu['model']}', have '{actual_name}'"
+                f"GPU model mismatch: manifest wants '{gpu.model}', have '{actual_name}'"
             )
 
         # Check GPU driver version via nvidia-smi
-        expected_driver = gpu.get("driver_version")
+        expected_driver = gpu.driver_version
         if expected_driver:
             try:
                 result = subprocess.run(
@@ -161,7 +163,7 @@ def _enforce_hardware(manifest: dict[str, Any]) -> list[str]:
                 warnings.append("Could not query GPU driver version")
 
         # Check CUDA driver version via torch
-        expected_cuda = gpu.get("cuda_driver_version")
+        expected_cuda = gpu.cuda_driver_version
         if expected_cuda:
             actual_cuda = torch.version.cuda or "unknown"
             if actual_cuda != expected_cuda:
@@ -173,36 +175,31 @@ def _enforce_hardware(manifest: dict[str, Any]) -> list[str]:
     return warnings
 
 
-def _enforce_model_revision(manifest: dict[str, Any]) -> str | None:
+def _enforce_model_revision(manifest: Manifest) -> str | None:
     """Return the --revision flag value if the manifest pins a specific commit."""
-    model = manifest["model"]
-    rev = model.get("weights_revision")
-    if rev:
-        return rev
-    return None
+    return manifest.model.weights_revision
 
 
-def _validate_requests(manifest: dict[str, Any]) -> list[str]:
+def _validate_requests(manifest: Manifest) -> list[str]:
     """Validate that all requests are servable with the declared engine config."""
     errors = []
-    engine = manifest["runtime"].get("serving_engine", {})
-    max_len = engine.get("max_model_len", 8192)
+    max_len = manifest.runtime.serving_engine.max_model_len
 
-    for req in manifest["requests"]:
-        if req["max_new_tokens"] > max_len:
+    for req in manifest.requests:
+        if req.max_new_tokens > max_len:
             errors.append(
-                f"Request '{req['id']}': max_new_tokens={req['max_new_tokens']} "
+                f"Request '{req.id}': max_new_tokens={req.max_new_tokens} "
                 f"exceeds max_model_len={max_len}"
             )
     return errors
 
 
-def _build_vllm_cmd(manifest: dict[str, Any], host: str, port: int) -> list[str]:
+def _build_vllm_cmd(manifest: Manifest, host: str, port: int) -> list[str]:
     """Build the vllm serve command from ALL manifest settings."""
-    runtime = manifest["runtime"]
-    knobs = runtime["deterministic_knobs"]
-    model = manifest["model"]
-    model_source = model["source"]
+    runtime = manifest.runtime
+    knobs = runtime.deterministic_knobs
+    model = manifest.model
+    model_source = model.source
     model_id = model_source.removeprefix("hf://") if model_source.startswith("hf://") else model_source
 
     cmd = [
@@ -210,87 +207,73 @@ def _build_vllm_cmd(manifest: dict[str, Any], host: str, port: int) -> list[str]
         "--model", os.getenv("RUNNER_MODEL_PATH", model_id),
         "--host", host,
         "--port", str(port),
-        "--seed", str(knobs.get("seed", 42)),
+        "--seed", str(knobs.seed),
         "--disable-log-stats",
     ]
 
-    # Model revision pinning — use the exact commit from the manifest
+    # Model revision pinning -- use the exact commit from the manifest
     revision = _enforce_model_revision(manifest)
     if revision:
         cmd.extend(["--revision", revision])
-        cmd.extend(["--tokenizer-revision", model.get("tokenizer_revision", revision)])
+        cmd.extend(["--tokenizer-revision", model.tokenizer_revision or revision])
 
-    # Serving engine — every field applied
-    engine = runtime.get("serving_engine", {})
+    # Serving engine -- every field applied
+    engine = runtime.serving_engine
 
-    dtype = engine.get("dtype", "auto")
-    cmd.extend(["--dtype", dtype])
+    cmd.extend(["--dtype", engine.dtype.value])
+    cmd.extend(["--max-model-len", str(engine.max_model_len)])
+    cmd.extend(["--gpu-memory-utilization", str(engine.gpu_memory_utilization)])
 
-    max_model_len = engine.get("max_model_len", 8192)
-    cmd.extend(["--max-model-len", str(max_model_len)])
+    if engine.max_num_seqs:
+        cmd.extend(["--max-num-seqs", str(engine.max_num_seqs)])
 
-    gpu_mem = engine.get("gpu_memory_utilization", 0.9)
-    cmd.extend(["--gpu-memory-utilization", str(gpu_mem)])
-
-    max_num_seqs = engine.get("max_num_seqs")
-    if max_num_seqs:
-        cmd.extend(["--max-num-seqs", str(max_num_seqs)])
-
-    attention_backend = engine.get("attention_backend", "FLASH_ATTN")
-    cmd.extend(["--attention-backend", attention_backend])
+    cmd.extend(["--attention-backend", engine.attention_backend.value])
 
     # Batch invariance
-    batch_inv = runtime.get("batch_invariance", {})
-    if batch_inv.get("enforce_eager", False):
+    if runtime.batch_invariance.enforce_eager:
         cmd.append("--enforce-eager")
 
-    # New serving_engine flags (all optional)
-    quantization = engine.get("quantization")
-    if quantization:
-        cmd.extend(["--quantization", quantization])
+    # Optional serving_engine flags
+    if engine.quantization:
+        cmd.extend(["--quantization", engine.quantization.value])
 
-    load_format = engine.get("load_format")
-    if load_format:
-        cmd.extend(["--load-format", load_format])
+    if engine.load_format:
+        cmd.extend(["--load-format", engine.load_format.value])
 
-    kv_cache_dtype = engine.get("kv_cache_dtype")
-    if kv_cache_dtype:
-        cmd.extend(["--kv-cache-dtype", kv_cache_dtype])
+    if engine.kv_cache_dtype:
+        cmd.extend(["--kv-cache-dtype", engine.kv_cache_dtype.value])
 
-    max_num_batched_tokens = engine.get("max_num_batched_tokens")
-    if max_num_batched_tokens:
-        cmd.extend(["--max-num-batched-tokens", str(max_num_batched_tokens)])
+    if engine.max_num_batched_tokens:
+        cmd.extend(["--max-num-batched-tokens", str(engine.max_num_batched_tokens)])
 
-    block_size = engine.get("block_size")
-    if block_size:
-        cmd.extend(["--block-size", str(block_size)])
+    if engine.block_size:
+        cmd.extend(["--block-size", str(engine.block_size)])
 
-    if engine.get("enable_prefix_caching"):
+    if engine.enable_prefix_caching:
         cmd.append("--enable-prefix-caching")
 
-    if engine.get("enable_chunked_prefill"):
+    if engine.enable_chunked_prefill:
         cmd.append("--enable-chunked-prefill")
 
-    scheduling_policy = engine.get("scheduling_policy")
-    if scheduling_policy:
-        cmd.extend(["--scheduling-policy", scheduling_policy])
+    if engine.scheduling_policy:
+        cmd.extend(["--scheduling-policy", engine.scheduling_policy.value])
 
-    if engine.get("disable_sliding_window"):
+    if engine.disable_sliding_window:
         cmd.append("--disable-sliding-window")
 
-    tp = engine.get("tensor_parallel_size")
+    tp = engine.tensor_parallel_size
     if tp and tp > 1:
         cmd.extend(["--tensor-parallel-size", str(tp)])
 
-    pp = engine.get("pipeline_parallel_size")
+    pp = engine.pipeline_parallel_size
     if pp and pp > 1:
         cmd.extend(["--pipeline-parallel-size", str(pp)])
 
-    if engine.get("disable_custom_all_reduce"):
+    if engine.disable_custom_all_reduce:
         cmd.append("--disable-custom-all-reduce")
 
     # Trust remote code
-    if model.get("trust_remote_code", False):
+    if model.trust_remote_code:
         cmd.append("--trust-remote-code")
 
     api_key = os.getenv("VLLM_API_KEY")
@@ -309,7 +292,7 @@ class ServerState:
 
     def __init__(
         self,
-        manifest: dict[str, Any],
+        manifest: Manifest,
         vllm_proc: subprocess.Popen | None,
         vllm_port: int,
         capture_log: CaptureLog,
@@ -325,26 +308,25 @@ class ServerState:
 
     @property
     def manifest_digest(self) -> str:
-        return sha256_prefixed(canonical_json_bytes(self.manifest))
+        return sha256_prefixed(canonical_json_bytes(self.manifest.model_dump(exclude_none=True)))
 
 
-def _set_deterministic_env(manifest: dict[str, Any]) -> None:
+def _set_deterministic_env(manifest: Manifest) -> None:
     """Set deterministic environment variables from a manifest."""
-    knobs = manifest["runtime"]["deterministic_knobs"]
-    os.environ["CUBLAS_WORKSPACE_CONFIG"] = knobs.get("cublas_workspace_config", ":4096:8")
-    os.environ["CUDA_LAUNCH_BLOCKING"] = str(int(knobs.get("cuda_launch_blocking", True)))
-    os.environ["PYTHONHASHSEED"] = str(knobs.get("pythonhashseed", "0"))
+    knobs = manifest.runtime.deterministic_knobs
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = knobs.cublas_workspace_config or ":4096:8"
+    os.environ["CUDA_LAUNCH_BLOCKING"] = str(int(knobs.cuda_launch_blocking))
+    os.environ["PYTHONHASHSEED"] = knobs.pythonhashseed or "0"
 
-    batch_inv = manifest["runtime"].get("batch_invariance", {})
-    if batch_inv.get("enabled", False):
+    if manifest.runtime.batch_invariance.enabled:
         os.environ["VLLM_BATCH_INVARIANT"] = "1"
     else:
         os.environ.pop("VLLM_BATCH_INVARIANT", None)
 
 
-def _verify_closure(manifest: dict[str, Any], report: dict[str, Any]) -> None:
+def _verify_closure(manifest: Manifest, report: dict[str, Any]) -> None:
     """Check nix closure hash if declared in the manifest."""
-    expected = manifest.get("runtime", {}).get("closure_hash")
+    expected = manifest.runtime.closure_hash
     if expected:
         actual = os.environ.get("CLOSURE_HASH", "")
         if actual and actual != expected:
@@ -357,10 +339,9 @@ def _verify_closure(manifest: dict[str, Any], report: dict[str, Any]) -> None:
             report["warnings"].append("CLOSURE_HASH env var not set, cannot verify closure")
 
 
-def _verify_model_artifacts(manifest: dict[str, Any], report: dict[str, Any]) -> None:
+def _verify_model_artifacts(manifest: Manifest, report: dict[str, Any]) -> None:
     """Verify model file digests from artifact_inputs against local cache."""
-    model = manifest["model"]
-    revision = model.get("weights_revision")
+    revision = manifest.model.weights_revision
     if not revision:
         report["warnings"].append("No weights_revision -- skipping file verification")
         return
@@ -370,7 +351,7 @@ def _verify_model_artifacts(manifest: dict[str, Any], report: dict[str, Any]) ->
     if model_path and Path(model_path).is_dir():
         cache_path = Path(model_path)
     else:
-        repo_id = model["source"].removeprefix("hf://")
+        repo_id = manifest.model.source.removeprefix("hf://")
         cache_dir = Path.home() / ".cache" / "huggingface" / "hub"
         cache_path = cache_dir / f"models--{repo_id.replace('/', '--')}" / "snapshots" / revision
         if not cache_path.is_dir():
@@ -378,11 +359,11 @@ def _verify_model_artifacts(manifest: dict[str, Any], report: dict[str, Any]) ->
             return
 
     model_types = {"model_weights", "model_config", "tokenizer", "generation_config", "chat_template"}
-    for artifact in manifest.get("artifact_inputs", []):
-        if artifact.get("artifact_type") not in model_types:
+    for artifact in manifest.artifact_inputs:
+        if artifact.artifact_type.value not in model_types:
             continue
-        expected = artifact.get("expected_digest")
-        art_path = artifact.get("path")
+        expected = artifact.expected_digest
+        art_path = artifact.path
         if not expected or not art_path:
             continue
 
@@ -392,7 +373,7 @@ def _verify_model_artifacts(manifest: dict[str, Any], report: dict[str, Any]) ->
             continue
 
         # Quick size check
-        expected_size = artifact.get("size_bytes")
+        expected_size = artifact.size_bytes
         actual_size = file_path.stat().st_size
         if expected_size and actual_size != expected_size:
             raise ValidationError(
@@ -409,7 +390,7 @@ def _verify_model_artifacts(manifest: dict[str, Any], report: dict[str, Any]) ->
         report["enforced"].append(f"verified {art_path}")
 
 
-def _start_vllm(state: ServerState, manifest: dict[str, Any]) -> dict[str, Any]:
+def _start_vllm(state: ServerState, manifest: Manifest) -> dict[str, Any]:
     """Enforce manifest, stop old vLLM, start fresh, wait for health.
 
     Returns a report of what was enforced/validated.
@@ -424,10 +405,10 @@ def _start_vllm(state: ServerState, manifest: dict[str, Any]) -> dict[str, Any]:
     req_errors = _validate_requests(manifest)
     if req_errors:
         raise ValidationError("Requests incompatible with engine config: " + "; ".join(req_errors))
-    report["enforced"].append(f"validated {len(manifest['requests'])} requests against engine config")
+    report["enforced"].append(f"validated {len(manifest.requests)} requests against engine config")
 
     # 2. Enforce hardware profile
-    if manifest["runtime"].get("strict_hardware", False):
+    if manifest.runtime.strict_hardware:
         hw_warnings = _enforce_hardware(manifest)
         if hw_warnings:
             raise ValidationError("Hardware mismatch: " + "; ".join(hw_warnings))
@@ -442,17 +423,17 @@ def _start_vllm(state: ServerState, manifest: dict[str, Any]) -> dict[str, Any]:
 
     # 3. Set deterministic env from manifest knobs
     _set_deterministic_env(manifest)
-    knobs = manifest["runtime"]["deterministic_knobs"]
+    knobs = manifest.runtime.deterministic_knobs
     report["enforced"].append(
-        f"deterministic env: seed={knobs['seed']}, "
-        f"torch_deterministic={knobs.get('torch_deterministic', False)}, "
-        f"cuda_launch_blocking={knobs.get('cuda_launch_blocking', True)}"
+        f"deterministic env: seed={knobs.seed}, "
+        f"torch_deterministic={knobs.torch_deterministic}, "
+        f"cuda_launch_blocking={knobs.cuda_launch_blocking}"
     )
 
     # 4. Batch invariance
-    batch_inv = manifest["runtime"].get("batch_invariance", {})
-    if batch_inv.get("enabled", False):
-        report["enforced"].append("batch invariance: ENABLED, enforce_eager=" + str(batch_inv.get("enforce_eager", False)))
+    batch_inv = manifest.runtime.batch_invariance
+    if batch_inv.enabled:
+        report["enforced"].append("batch invariance: ENABLED, enforce_eager=" + str(batch_inv.enforce_eager))
     else:
         report["enforced"].append("batch invariance: disabled")
 
@@ -461,7 +442,7 @@ def _start_vllm(state: ServerState, manifest: dict[str, Any]) -> dict[str, Any]:
     if revision:
         report["enforced"].append(f"model revision pinned: {revision[:12]}...")
     else:
-        report["warnings"].append("model revision not pinned — may load latest")
+        report["warnings"].append("model revision not pinned -- may load latest")
 
     # 5b. Verify model file digests from artifact_inputs
     _verify_model_artifacts(manifest, report)
@@ -493,18 +474,19 @@ def _start_vllm(state: ServerState, manifest: dict[str, Any]) -> dict[str, Any]:
     state.capture_log = CaptureLog(state.out_dir / "capture.jsonl")
 
     # 9. Log what was enforced
-    engine = manifest["runtime"].get("serving_engine", {})
+    engine = manifest.runtime.serving_engine
     report["enforced"].append(
-        f"vLLM started: model={manifest['model']['source']}, "
-        f"max_model_len={engine.get('max_model_len')}, "
-        f"dtype={engine.get('dtype')}, "
-        f"attention_backend={engine.get('attention_backend')}, "
-        f"max_num_seqs={engine.get('max_num_seqs')}"
+        f"vLLM started: model={manifest.model.source}, "
+        f"max_model_len={engine.max_model_len}, "
+        f"dtype={engine.dtype.value}, "
+        f"attention_backend={engine.attention_backend.value}, "
+        f"max_num_seqs={engine.max_num_seqs}"
     )
-    report["enforced"].append(f"comparison config stored: {list(manifest.get('comparison', {}).keys())}")
-    report["enforced"].append(f"artifact_inputs: {len(manifest.get('artifact_inputs', []))} artifacts declared")
+    comparison_keys = list(manifest.comparison.model_dump(exclude_none=True).keys())
+    report["enforced"].append(f"comparison config stored: {comparison_keys}")
+    report["enforced"].append(f"artifact_inputs: {len(manifest.artifact_inputs)} artifacts declared")
 
-    print(f"[vllm] Ready — {len(report['enforced'])} checks enforced, {len(report['warnings'])} warnings")
+    print(f"[vllm] Ready -- {len(report['enforced'])} checks enforced, {len(report['warnings'])} warnings")
     return report
 
 
@@ -643,7 +625,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
             self._send_json(502, {"error": str(exc)})
 
     def _handle_post_manifest(self) -> None:
-        """POST /manifest — validate and (re)start vLLM for this manifest."""
+        """POST /manifest -- validate and (re)start vLLM for this manifest."""
         state = self.server_state
         if state is None:
             return self._send_json(500, {"error": "Server state not initialized"})
@@ -659,10 +641,10 @@ class ProxyHandler(BaseHTTPRequestHandler):
         if not body:
             return self._send_json(400, {"error": "Empty request body"})
 
-        # Validate
+        # Validate with Pydantic
         try:
-            validate_with_schema("manifest.v1.schema.json", body)
-        except ValidationError as exc:
+            manifest = Manifest.model_validate(body)
+        except PydanticValidationError as exc:
             return self._send_json(422, {"error": str(exc)})
 
         # Acquire lock (409 if another manifest is being applied)
@@ -670,7 +652,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
             return self._send_json(409, {"error": "Server is busy applying another manifest"})
 
         try:
-            report = _start_vllm(state, body)
+            report = _start_vllm(state, manifest)
         except (ValidationError, RuntimeError) as exc:
             return self._send_json(500, {"error": str(exc)})
         except Exception as exc:
@@ -681,13 +663,13 @@ class ProxyHandler(BaseHTTPRequestHandler):
         return self._send_json(200, {
             "status": "ok",
             "manifest_digest": state.manifest_digest,
-            "model": state.manifest["model"]["source"],
-            "run_id": state.manifest["run_id"],
+            "model": state.manifest.model.source,
+            "run_id": state.manifest.run_id,
             "applied_at": state.applied_at,
             "enforced": report["enforced"],
             "warnings": report["warnings"],
-            "requests": len(state.manifest["requests"]),
-            "comparison": list(state.manifest.get("comparison", {}).keys()),
+            "requests": len(state.manifest.requests),
+            "comparison": list(state.manifest.comparison.model_dump(exclude_none=True).keys()),
         })
 
     # -- GET --
@@ -715,7 +697,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
             self._send_json(502, {"error": str(exc)})
 
     def _handle_get_manifest(self) -> None:
-        """GET /manifest — return the active manifest and server state."""
+        """GET /manifest -- return the active manifest and server state."""
         state = self.server_state
         if state is None:
             return self._send_json(500, {"error": "Server state not initialized"})
@@ -728,24 +710,25 @@ class ProxyHandler(BaseHTTPRequestHandler):
             pass
 
         m = state.manifest
+        comparison_dump = m.comparison.model_dump(exclude_none=True)
         return self._send_json(200, {
-            "manifest": m,
+            "manifest": m.model_dump(exclude_none=True),
             "manifest_digest": state.manifest_digest,
             "applied_at": state.applied_at,
             "vllm_healthy": vllm_healthy,
             "active_config": {
-                "model": m["model"]["source"],
-                "revision": m["model"].get("weights_revision", "unpinned"),
-                "run_id": m["run_id"],
-                "seed": m["runtime"]["deterministic_knobs"]["seed"],
-                "batch_invariance": m["runtime"]["batch_invariance"]["enabled"],
-                "max_model_len": m["runtime"]["serving_engine"]["max_model_len"],
-                "attention_backend": m["runtime"]["serving_engine"]["attention_backend"],
-                "dtype": m["runtime"]["serving_engine"]["dtype"],
-                "strict_hardware": m["runtime"]["strict_hardware"],
-                "requests": len(m["requests"]),
-                "artifact_inputs": len(m.get("artifact_inputs", [])),
-                "comparison_modes": {k: v["mode"] for k, v in m.get("comparison", {}).items()},
+                "model": m.model.source,
+                "revision": m.model.weights_revision or "unpinned",
+                "run_id": m.run_id,
+                "seed": m.runtime.deterministic_knobs.seed,
+                "batch_invariance": m.runtime.batch_invariance.enabled,
+                "max_model_len": m.runtime.serving_engine.max_model_len,
+                "attention_backend": m.runtime.serving_engine.attention_backend.value,
+                "dtype": m.runtime.serving_engine.dtype.value,
+                "strict_hardware": m.runtime.strict_hardware,
+                "requests": len(m.requests),
+                "artifact_inputs": len(m.artifact_inputs),
+                "comparison_modes": {k: v["mode"] for k, v in comparison_dump.items()},
             },
         })
 
@@ -795,14 +778,15 @@ def main() -> int:
     parser.add_argument("--vllm-port", type=int, default=8001, help="Internal vLLM port")
     args = parser.parse_args()
 
-    manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
+    manifest_data = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
+    manifest = Manifest.model_validate(manifest_data)
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     print("=== Deterministic Server Boot ===")
-    print(f"Model: {manifest['model']['source']}")
-    print(f"Run ID: {manifest['run_id']}")
+    print(f"Model: {manifest.model.source}")
+    print(f"Run ID: {manifest.run_id}")
     print()
 
     if args.skip_boot_validation or not args.lockfile:
@@ -821,7 +805,7 @@ def main() -> int:
         print(f"  Status: {hw_record['status']}")
 
         if hw_record["status"] != "conformant":
-            if manifest["runtime"]["strict_hardware"]:
+            if manifest.runtime.strict_hardware:
                 print(f"ERROR: Hardware conformance failed: {hw_record['status']}")
                 return 1
             print(f"WARNING: Hardware non-conformant ({hw_record['status']}), continuing")
@@ -860,12 +844,12 @@ def main() -> int:
     proxy = ThreadedHTTPServer((args.host, args.port), ProxyHandler)
     threading.Thread(target=proxy.serve_forever, daemon=True).start()
 
-    batch_inv = manifest["runtime"].get("batch_invariance", {})
-    print(f"=== Server ready ===")
-    print(f"  POST /manifest to load a new manifest")
-    print(f"  GET  /manifest to inspect active state")
-    print(f"  Model: {manifest['model']['source']}")
-    print(f"  Batch invariance: {'ON' if batch_inv.get('enabled') else 'OFF'}")
+    batch_inv = manifest.runtime.batch_invariance
+    print("=== Server ready ===")
+    print("  POST /manifest to load a new manifest")
+    print("  GET  /manifest to inspect active state")
+    print(f"  Model: {manifest.model.source}")
+    print(f"  Batch invariance: {'ON' if batch_inv.enabled else 'OFF'}")
     print()
 
     def shutdown(signum, frame):
@@ -882,7 +866,7 @@ def main() -> int:
     signal.signal(signal.SIGINT, shutdown)
     signal.signal(signal.SIGTERM, shutdown)
 
-    # Wait for vLLM — loop to handle restarts from POST /manifest
+    # Wait for vLLM -- loop to handle restarts from POST /manifest
     try:
         while True:
             state.vllm_proc.wait()
