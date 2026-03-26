@@ -342,19 +342,19 @@ def _set_deterministic_env(manifest: dict[str, Any]) -> None:
         os.environ.pop("VLLM_BATCH_INVARIANT", None)
 
 
-def _verify_container_image(manifest: dict[str, Any], report: dict[str, Any]) -> None:
-    """Check container image digest if declared in the manifest."""
-    expected_digest = manifest.get("runtime", {}).get("container_image_digest")
-    if expected_digest:
-        actual_digest = os.environ.get("CONTAINER_IMAGE_DIGEST", "")
-        if actual_digest and actual_digest != expected_digest:
+def _verify_closure(manifest: dict[str, Any], report: dict[str, Any]) -> None:
+    """Check nix closure hash if declared in the manifest."""
+    expected = manifest.get("runtime", {}).get("closure_hash")
+    if expected:
+        actual = os.environ.get("CLOSURE_HASH", "")
+        if actual and actual != expected:
             raise ValidationError(
-                f"Container image digest mismatch: expected {expected_digest}, got {actual_digest}"
+                f"Closure hash mismatch: expected {expected}, got {actual}"
             )
-        if actual_digest:
-            report["enforced"].append(f"container image digest verified: {actual_digest[:24]}...")
+        if actual:
+            report["enforced"].append(f"closure hash verified: {actual[:24]}...")
         else:
-            report["warnings"].append("CONTAINER_IMAGE_DIGEST env var not set, cannot verify container image")
+            report["warnings"].append("CLOSURE_HASH env var not set, cannot verify closure")
 
 
 def _verify_model_artifacts(manifest: dict[str, Any], report: dict[str, Any]) -> None:
@@ -418,7 +418,7 @@ def _start_vllm(state: ServerState, manifest: dict[str, Any]) -> dict[str, Any]:
     report: dict[str, Any] = {"enforced": [], "warnings": []}
 
     # 0. Container image digest verification
-    _verify_container_image(manifest, report)
+    _verify_closure(manifest, report)
 
     # 1. Validate requests are servable
     req_errors = _validate_requests(manifest)
@@ -699,6 +699,9 @@ class ProxyHandler(BaseHTTPRequestHandler):
         if self.path == "/manifest":
             return self._handle_get_manifest()
 
+        if self.path == "/flake":
+            return self._handle_get_flake()
+
         url = f"http://127.0.0.1:{self._vllm_port}{self.path}"
         try:
             with urlopen(url) as resp:
@@ -745,6 +748,24 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 "comparison_modes": {k: v["mode"] for k, v in m.get("comparison", {}).items()},
             },
         })
+
+    def _handle_get_flake(self) -> None:
+        """GET /flake -- return the flake.nix that built this container."""
+        flake_path = os.environ.get("FLAKE_NIX_PATH")
+        if not flake_path or not Path(flake_path).is_file():
+            return self._send_json(404, {
+                "error": "flake.nix not available (FLAKE_NIX_PATH not set or file missing)"
+            })
+
+        result = {"closure_hash": os.environ.get("CLOSURE_HASH", "unknown")}
+
+        result["flake.nix"] = Path(flake_path).read_text(encoding="utf-8")
+
+        lock_path = os.environ.get("FLAKE_LOCK_PATH")
+        if lock_path and Path(lock_path).is_file():
+            result["flake.lock"] = json.loads(Path(lock_path).read_text(encoding="utf-8"))
+
+        return self._send_json(200, result)
 
     def log_message(self, format, *args):
         pass
