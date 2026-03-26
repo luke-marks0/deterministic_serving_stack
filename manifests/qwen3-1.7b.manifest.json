@@ -61,6 +61,12 @@
       "prompt": "Write a Python function that computes the factorial of n:",
       "max_new_tokens": 128,
       "temperature": 0
+    },
+    {
+      "id": "req-long-output",
+      "prompt": "Write a detailed technical explanation of how transformer neural networks work.",
+      "max_new_tokens": 8000,
+      "temperature": 0
     }
   ],
   "comparison": {
