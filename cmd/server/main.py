@@ -42,7 +42,7 @@ from pkg.common.deterministic import (
     sha256_prefixed,
     utc_now_iso,
 )
-from pkg.manifest.model import Manifest
+from pkg.manifest.model import GpuProbe, HardwareConformance, Manifest
 
 
 def _hardware_fingerprint(hw: dict[str, Any]) -> str:
@@ -65,114 +65,72 @@ def _validate_boot(manifest: Manifest, lockfile: dict[str, Any]) -> dict[str, An
     return {"manifest_digest": manifest_digest, "lockfile_digest": expected_lockfile_digest}
 
 
-def _probe_hardware(manifest: Manifest) -> dict[str, Any]:
-    """Probe GPU hardware and return conformance record."""
-    expected = manifest.hardware_profile
-    record = {
-        "status": "unknown",
-        "strict_hardware": manifest.runtime.strict_hardware,
-        "expected_fingerprint": _hardware_fingerprint(expected.model_dump(exclude_none=True)),
-        "actual_fingerprint": "",
-        "gpu_name": "",
-        "compute_capability": "",
-        "driver_version": "",
-    }
-
+def _probe_gpu() -> GpuProbe:
+    """Query the GPU environment. Pure observation, no manifest comparison."""
     try:
         import torch
-        if not torch.cuda.is_available():
-            record["status"] = "no_gpu"
-            return record
-
-        gpu_name = torch.cuda.get_device_name(0)
-        cc = torch.cuda.get_device_capability(0)
-        record["gpu_name"] = gpu_name
-        record["compute_capability"] = f"{cc[0]}.{cc[1]}"
-
-        if cc[0] < 9:
-            raise ValidationError(
-                f"Batch invariance requires compute capability >= 9.0, got {cc[0]}.{cc[1]}"
-            )
-
-        try:
-            import shutil
-            if shutil.which("nvidia-smi"):
-                proc = subprocess.run(
-                    ["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader"],
-                    capture_output=True, text=True, check=True,
-                )
-                record["driver_version"] = proc.stdout.strip().splitlines()[0].strip()
-        except Exception:
-            pass
-
-        record["actual_fingerprint"] = _hardware_fingerprint({
-            "gpu": {"model": gpu_name, "compute_capability": f"{cc[0]}.{cc[1]}"},
-        })
-        record["status"] = "conformant"
-
-        record["torch_version"] = torch.__version__
-        record["cuda_version"] = torch.version.cuda or "unknown"
-        try:
-            import vllm
-            record["vllm_version"] = getattr(vllm, "__version__", "unknown")
-        except ImportError:
-            record["vllm_version"] = "not_installed"
-
     except ImportError:
-        record["status"] = "torch_not_available"
+        return GpuProbe()
 
-    return record
+    if not torch.cuda.is_available():
+        return GpuProbe()
+
+    name = torch.cuda.get_device_name(0)
+    cc = torch.cuda.get_device_capability(0)
+
+    driver = ""
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader"],
+            capture_output=True, text=True, timeout=10,
+        )
+        driver = result.stdout.strip().splitlines()[0].strip()
+    except Exception:
+        pass
+
+    vllm_ver = ""
+    try:
+        import vllm
+        vllm_ver = getattr(vllm, "__version__", "unknown")
+    except ImportError:
+        pass
+
+    return GpuProbe(
+        available=True,
+        name=name,
+        count=torch.cuda.device_count(),
+        compute_capability=f"{cc[0]}.{cc[1]}",
+        driver_version=driver,
+        cuda_version=torch.version.cuda or "unknown",
+        torch_version=torch.__version__,
+        vllm_version=vllm_ver,
+    )
 
 
-def _enforce_hardware(manifest: Manifest) -> list[str]:
-    """Check hardware_profile against actual GPU. Returns list of warnings (empty = OK)."""
-    warnings = []
+def _check_hardware(manifest: Manifest, probe: GpuProbe) -> HardwareConformance:
+    """Compare manifest hardware_profile against a GPU probe. Pure function."""
+    if not probe.available:
+        return HardwareConformance(status="no_gpu", probe=probe)
+
+    warnings: list[str] = []
     gpu = manifest.hardware_profile.gpu
 
-    try:
-        import torch
-        if not torch.cuda.is_available():
-            raise ValidationError("Manifest requires GPU but none available")
+    if gpu.count != probe.count:
+        warnings.append(f"GPU count: manifest={gpu.count}, actual={probe.count}")
 
-        actual_name = torch.cuda.get_device_name(0)
-        actual_count = torch.cuda.device_count()
+    if gpu.model.lower() not in probe.name.lower() and probe.name.lower() not in gpu.model.lower():
+        warnings.append(f"GPU model: manifest='{gpu.model}', actual='{probe.name}'")
 
-        if gpu.count != actual_count:
-            warnings.append(
-                f"GPU count mismatch: manifest wants {gpu.count}, have {actual_count}"
-            )
+    if gpu.driver_version and probe.driver_version and gpu.driver_version != probe.driver_version:
+        warnings.append(f"GPU driver: manifest={gpu.driver_version}, actual={probe.driver_version}")
+    elif gpu.driver_version and not probe.driver_version:
+        warnings.append("Could not query GPU driver version")
 
-        # Check model name contains expected substring (exact match is too brittle)
-        if gpu.model.lower() not in actual_name.lower() and actual_name.lower() not in gpu.model.lower():
-            warnings.append(
-                f"GPU model mismatch: manifest wants '{gpu.model}', have '{actual_name}'"
-            )
+    if gpu.cuda_driver_version and probe.cuda_version and gpu.cuda_driver_version != probe.cuda_version:
+        warnings.append(f"CUDA version: manifest={gpu.cuda_driver_version}, actual={probe.cuda_version}")
 
-        # Check GPU driver version via nvidia-smi
-        expected_driver = gpu.driver_version
-        if expected_driver:
-            try:
-                result = subprocess.run(
-                    ["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader"],
-                    capture_output=True, text=True, timeout=10,
-                )
-                actual_driver = result.stdout.strip().splitlines()[0].strip()
-                if actual_driver != expected_driver:
-                    warnings.append(f"GPU driver mismatch: manifest={expected_driver}, actual={actual_driver}")
-            except Exception:
-                warnings.append("Could not query GPU driver version")
-
-        # Check CUDA driver version via torch
-        expected_cuda = gpu.cuda_driver_version
-        if expected_cuda:
-            actual_cuda = torch.version.cuda or "unknown"
-            if actual_cuda != expected_cuda:
-                warnings.append(f"CUDA version mismatch: manifest={expected_cuda}, actual={actual_cuda}")
-
-    except ImportError:
-        warnings.append("torch not available, cannot verify GPU")
-
-    return warnings
+    status = "mismatch" if warnings else "conformant"
+    return HardwareConformance(status=status, probe=probe, warnings=warnings)
 
 
 def _enforce_model_revision(manifest: Manifest) -> str | None:
@@ -408,18 +366,14 @@ def _start_vllm(state: ServerState, manifest: Manifest) -> dict[str, Any]:
     report["enforced"].append(f"validated {len(manifest.requests)} requests against engine config")
 
     # 2. Enforce hardware profile
-    if manifest.runtime.strict_hardware:
-        hw_warnings = _enforce_hardware(manifest)
-        if hw_warnings:
-            raise ValidationError("Hardware mismatch: " + "; ".join(hw_warnings))
-        report["enforced"].append("hardware profile validated (strict)")
-    else:
-        hw_warnings = _enforce_hardware(manifest)
-        report["warnings"].extend(hw_warnings)
-        if hw_warnings:
-            for w in hw_warnings:
-                print(f"[manifest] WARNING: {w}")
-        report["enforced"].append("hardware profile checked (non-strict)")
+    probe = _probe_gpu()
+    conformance = _check_hardware(manifest, probe)
+    if manifest.runtime.strict_hardware and conformance.warnings:
+        raise ValidationError("Hardware mismatch: " + "; ".join(conformance.warnings))
+    report["warnings"].extend(conformance.warnings)
+    for w in conformance.warnings:
+        print(f"[manifest] WARNING: {w}")
+    report["enforced"].append(f"hardware: {conformance.status} (gpu={probe.name or 'unavailable'})")
 
     # 3. Set deterministic env from manifest knobs
     _set_deterministic_env(manifest)
@@ -799,16 +753,19 @@ def main() -> int:
         print(f"  lockfile_digest: {digests['lockfile_digest']}")
 
         print("[boot] Probing hardware...")
-        hw_record = _probe_hardware(manifest)
-        print(f"  GPU: {hw_record['gpu_name']}")
-        print(f"  Compute capability: {hw_record['compute_capability']}")
-        print(f"  Status: {hw_record['status']}")
+        probe = _probe_gpu()
+        conformance = _check_hardware(manifest, probe)
+        print(f"  GPU: {probe.name}")
+        print(f"  Compute capability: {probe.compute_capability}")
+        print(f"  Status: {conformance.status}")
+        for w in conformance.warnings:
+            print(f"  WARNING: {w}")
 
-        if hw_record["status"] != "conformant":
+        if conformance.status != "conformant":
             if manifest.runtime.strict_hardware:
-                print(f"ERROR: Hardware conformance failed: {hw_record['status']}")
+                print(f"ERROR: Hardware conformance failed: {conformance.status}")
                 return 1
-            print(f"WARNING: Hardware non-conformant ({hw_record['status']}), continuing")
+            print(f"WARNING: Hardware non-conformant ({conformance.status}), continuing")
 
     # Start vLLM
     _set_deterministic_env(manifest)

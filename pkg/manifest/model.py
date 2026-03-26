@@ -225,6 +225,28 @@ class ArtifactInput(BaseModel):
     role: FileRole | None = None
 
 
+# -- Hardware conformance --
+
+
+class GpuProbe(BaseModel):
+    """Observed GPU state from the runtime environment."""
+    available: bool = False
+    name: str = ""
+    count: int = 0
+    compute_capability: str = ""
+    driver_version: str = ""
+    cuda_version: str = ""
+    torch_version: str = ""
+    vllm_version: str = ""
+
+
+class HardwareConformance(BaseModel):
+    """Result of comparing manifest hardware_profile against actual hardware."""
+    status: str  # "conformant", "no_gpu", "torch_not_available", "mismatch"
+    probe: GpuProbe
+    warnings: list[str] = Field(default_factory=list)
+
+
 # -- Top-level manifest --
 
 

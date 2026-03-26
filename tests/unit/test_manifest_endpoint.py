@@ -29,7 +29,7 @@ _build_vllm_cmd = _mod._build_vllm_cmd
 _set_deterministic_env = _mod._set_deterministic_env
 _verify_closure = _mod._verify_closure
 _verify_model_artifacts = _mod._verify_model_artifacts
-_enforce_hardware = _mod._enforce_hardware
+_check_hardware = _mod._check_hardware
 
 
 def _load_manifest_dict() -> dict:
@@ -410,71 +410,83 @@ class TestClosureHash(unittest.TestCase):
                 os.environ["CLOSURE_HASH"] = old_val
 
 
-class TestDriverVersionVerification(unittest.TestCase):
-    """GPU driver and CUDA version verification via _enforce_hardware."""
+class TestCheckHardware(unittest.TestCase):
+    """Hardware conformance check via _check_hardware (pure function, no mocking)."""
 
-    def _mock_torch(self, cuda_version="12.4"):
-        """Create a mock torch module with CUDA support."""
-        mock_torch = mock.MagicMock()
-        mock_torch.cuda.is_available.return_value = True
-        mock_torch.cuda.get_device_name.return_value = "NVIDIA H100 80GB HBM3"
-        mock_torch.cuda.device_count.return_value = 1
-        mock_torch.version.cuda = cuda_version
-        return mock_torch
+    def _probe(self, **overrides) -> "GpuProbe":
+        from pkg.manifest.model import GpuProbe
+        defaults = dict(
+            available=True, name="H100-PCIe-80GB", count=1,
+            compute_capability="9.0", driver_version="550.54.15",
+            cuda_version="12.4", torch_version="2.10.0", vllm_version="0.17.1",
+        )
+        defaults.update(overrides)
+        return GpuProbe(**defaults)
+
+    def test_conformant(self) -> None:
+        m = _load_manifest()
+        probe = self._probe()
+        result = _check_hardware(m, probe)
+        self.assertEqual(result.status, "conformant")
+        self.assertEqual(result.warnings, [])
+
+    def test_gpu_count_mismatch(self) -> None:
+        m = _load_manifest()
+        probe = self._probe(count=4)
+        result = _check_hardware(m, probe)
+        self.assertTrue(any("GPU count" in w for w in result.warnings))
+
+    def test_gpu_model_mismatch(self) -> None:
+        m = _load_manifest()
+        probe = self._probe(name="NVIDIA A100 80GB")
+        result = _check_hardware(m, probe)
+        self.assertTrue(any("GPU model" in w for w in result.warnings))
 
     def test_driver_version_match(self) -> None:
         d = _load_manifest_dict()
         d["hardware_profile"]["gpu"]["driver_version"] = "550.54.15"
         m = _manifest_from_dict(d)
-        mock_torch = self._mock_torch()
-        mock_result = mock.MagicMock()
-        mock_result.stdout = "550.54.15\n"
-        with mock.patch.dict("sys.modules", {"torch": mock_torch}):
-            with mock.patch("subprocess.run", return_value=mock_result):
-                warnings = _enforce_hardware(m)
-        self.assertFalse(any("GPU driver mismatch" in w for w in warnings))
+        probe = self._probe(driver_version="550.54.15")
+        result = _check_hardware(m, probe)
+        self.assertFalse(any("GPU driver" in w for w in result.warnings))
 
     def test_driver_version_mismatch(self) -> None:
         d = _load_manifest_dict()
         d["hardware_profile"]["gpu"]["driver_version"] = "550.54.15"
         m = _manifest_from_dict(d)
-        mock_torch = self._mock_torch()
-        mock_result = mock.MagicMock()
-        mock_result.stdout = "535.86.01\n"
-        with mock.patch.dict("sys.modules", {"torch": mock_torch}):
-            with mock.patch("subprocess.run", return_value=mock_result):
-                warnings = _enforce_hardware(m)
-        self.assertTrue(any("GPU driver mismatch" in w for w in warnings))
+        probe = self._probe(driver_version="535.86.01")
+        result = _check_hardware(m, probe)
+        self.assertTrue(any("GPU driver" in w for w in result.warnings))
 
-    def test_nvidia_smi_failure_warns(self) -> None:
+    def test_driver_not_queryable(self) -> None:
         d = _load_manifest_dict()
         d["hardware_profile"]["gpu"]["driver_version"] = "550.54.15"
         m = _manifest_from_dict(d)
-        mock_torch = self._mock_torch()
-        with mock.patch.dict("sys.modules", {"torch": mock_torch}):
-            with mock.patch("subprocess.run", side_effect=OSError("not found")):
-                warnings = _enforce_hardware(m)
-        self.assertTrue(any("Could not query" in w for w in warnings))
+        probe = self._probe(driver_version="")
+        result = _check_hardware(m, probe)
+        self.assertTrue(any("Could not query" in w for w in result.warnings))
 
     def test_cuda_version_match(self) -> None:
         d = _load_manifest_dict()
         d["hardware_profile"]["gpu"]["cuda_driver_version"] = "12.4"
         m = _manifest_from_dict(d)
-        mock_torch = self._mock_torch(cuda_version="12.4")
-        with mock.patch.dict("sys.modules", {"torch": mock_torch}):
-            with mock.patch("subprocess.run", return_value=mock.MagicMock(stdout="550.54.15\n")):
-                warnings = _enforce_hardware(m)
-        self.assertFalse(any("CUDA version mismatch" in w for w in warnings))
+        probe = self._probe(cuda_version="12.4")
+        result = _check_hardware(m, probe)
+        self.assertFalse(any("CUDA version" in w for w in result.warnings))
 
     def test_cuda_version_mismatch(self) -> None:
         d = _load_manifest_dict()
         d["hardware_profile"]["gpu"]["cuda_driver_version"] = "12.4"
         m = _manifest_from_dict(d)
-        mock_torch = self._mock_torch(cuda_version="11.8")
-        with mock.patch.dict("sys.modules", {"torch": mock_torch}):
-            with mock.patch("subprocess.run", return_value=mock.MagicMock(stdout="550.54.15\n")):
-                warnings = _enforce_hardware(m)
-        self.assertTrue(any("CUDA version mismatch" in w for w in warnings))
+        probe = self._probe(cuda_version="11.8")
+        result = _check_hardware(m, probe)
+        self.assertTrue(any("CUDA version" in w for w in result.warnings))
+
+    def test_no_gpu(self) -> None:
+        m = _load_manifest()
+        probe = self._probe(available=False)
+        result = _check_hardware(m, probe)
+        self.assertEqual(result.status, "no_gpu")
 
 
 class TestVerifyModelArtifacts(unittest.TestCase):
