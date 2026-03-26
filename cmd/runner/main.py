@@ -25,6 +25,7 @@ from pkg.common.deterministic import (
     sha256_prefixed,
     utc_now_iso,
 )
+from pkg.manifest.model import Manifest
 from pkg.networkdet import create_net_stack
 
 
@@ -270,39 +271,39 @@ def _env_or_default(cli_value: str | None, env_key: str, default: str) -> str:
 
 
 def _synthetic_observables(
-    manifest: dict[str, Any],
+    m: Manifest,
     lockfile: dict[str, Any],
     replica_id: str,
 ) -> list[dict[str, Any]]:
     """Generate synthetic observables for testing/CI (no GPU required)."""
     request_outputs: list[dict[str, Any]] = []
 
-    for idx, req in enumerate(manifest["requests"]):
-        seed = _seed_for_request(manifest["run_id"], req["id"], req["prompt"])
+    for idx, req in enumerate(m.requests):
+        seed = _seed_for_request(m.run_id, req.id, req.prompt)
         toks = _tokens(seed)
         lgt = _logits(toks)
 
-        request_outputs.append({"id": req["id"], "tokens": toks, "logits": lgt})
+        request_outputs.append({"id": req.id, "tokens": toks, "logits": lgt})
 
     return request_outputs
 
 
 def _vllm_observables(
-    manifest: dict[str, Any],
+    manifest_dict: dict[str, Any],
     lockfile: dict[str, Any],
     replica_id: str,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Run real vLLM inference and return observables + env_info."""
     from cmd.runner.vllm_runner import run_vllm
 
-    result = run_vllm(manifest, lockfile)
+    result = run_vllm(manifest_dict, lockfile)
 
     request_outputs = result["request_outputs"]
     return request_outputs, result["env_info"]
 
 
 def run(
-    manifest: dict[str, Any],
+    manifest_dict: dict[str, Any],
     lockfile: dict[str, Any],
     out_dir: Path,
     replica_id: str,
@@ -318,10 +319,14 @@ def run(
     namespace: str,
     invocation_argv: list[str],
 ) -> dict[str, Any]:
-    validate_with_schema("manifest.v1.schema.json", manifest)
+    validate_with_schema("manifest.v1.schema.json", manifest_dict)
     validate_with_schema("lockfile.v1.schema.json", lockfile)
 
-    manifest_digest = sha256_prefixed(canonical_json_bytes(manifest))
+    # Parse into typed Manifest for dot-access reads.
+    # Keep manifest_dict for canonical JSON serialization (model_dump adds defaults).
+    m = Manifest.model_validate(manifest_dict)
+
+    manifest_digest = sha256_prefixed(canonical_json_bytes(manifest_dict))
     if lockfile["manifest_digest"] != manifest_digest:
         raise ValidationError("Lockfile manifest_digest mismatch")
 
@@ -330,11 +335,11 @@ def run(
         raise ValidationError("Lockfile canonicalization.lockfile_digest mismatch")
 
     lock_artifacts_by_id = {item["artifact_id"]: item for item in lockfile["artifacts"]}
-    for artifact_input in manifest["artifact_inputs"]:
-        artifact_id = artifact_input["artifact_id"]
+    for artifact_input in m.artifact_inputs:
+        artifact_id = artifact_input.artifact_id
         if artifact_id not in lock_artifacts_by_id:
             raise ValidationError(f"Lockfile missing artifact required by manifest: {artifact_id}")
-        expected_digest = artifact_input.get("expected_digest")
+        expected_digest = artifact_input.expected_digest
         if expected_digest is not None:
             actual_digest = lock_artifacts_by_id[artifact_id]["digest"]
             if actual_digest != expected_digest:
@@ -342,30 +347,30 @@ def run(
                     f"Artifact digest mismatch for {artifact_id}: expected={expected_digest} actual={actual_digest}"
                 )
 
-    expected_hardware = manifest["hardware_profile"]
+    expected_hardware = manifest_dict["hardware_profile"]
     observed_hardware, hardware_probe = _probe_runtime_hardware(expected_hardware, runtime_hardware)
     hardware_conformance = _hardware_conformance_record(
         expected_hardware,
         observed_hardware,
-        strict_hardware=bool(manifest["runtime"]["strict_hardware"]),
+        strict_hardware=m.runtime.strict_hardware,
     )
     observed_gpu = observed_hardware.get("gpu", expected_hardware["gpu"])
 
     out_dir.mkdir(parents=True, exist_ok=True)
     manifest_copy = out_dir / "manifest.json"
     lockfile_copy = out_dir / "lockfile.json"
-    manifest_copy.write_text(canonical_json_text(manifest), encoding="utf-8")
+    manifest_copy.write_text(canonical_json_text(manifest_dict), encoding="utf-8")
     lockfile_copy.write_text(canonical_json_text(lockfile), encoding="utf-8")
 
     vllm_env_info: dict[str, Any] | None = None
 
     if mode == "vllm":
         request_outputs, vllm_env_info = _vllm_observables(
-            manifest, lockfile, replica_id,
+            manifest_dict, lockfile, replica_id,
         )
     else:
         request_outputs = _synthetic_observables(
-            manifest, lockfile, replica_id,
+            m, lockfile, replica_id,
         )
 
     observables_dir = out_dir / "observables"
@@ -388,7 +393,7 @@ def run(
 
     run_bundle: dict[str, Any] = {
         "run_bundle_version": "v1",
-        "run_id": manifest["run_id"],
+        "run_id": m.run_id,
         "created_at": utc_now_iso(),
         "manifest_copy": {
             "path": str(manifest_copy.relative_to(out_dir)),
@@ -411,8 +416,8 @@ def run(
             "vllm_version": vllm_env_info["vllm_version"] if vllm_env_info else "0.1.0-synthetic",
             "torch_version": vllm_env_info["torch_version"] if vllm_env_info else "2.5.0-synthetic",
             "cuda_version": vllm_env_info["cuda_version"] if vllm_env_info else "12.4",
-            "driver_version": vllm_env_info["driver_version"] if vllm_env_info else observed_gpu.get("driver_version", expected_hardware["gpu"]["driver_version"]),
-            "gpu_inventory": vllm_env_info["gpu_inventory"] if vllm_env_info else [observed_gpu.get("model", expected_hardware["gpu"]["model"])],
+            "driver_version": vllm_env_info["driver_version"] if vllm_env_info else observed_gpu.get("driver_version", m.hardware_profile.gpu.driver_version),
+            "gpu_inventory": vllm_env_info["gpu_inventory"] if vllm_env_info else [observed_gpu.get("model", m.hardware_profile.gpu.model)],
             "hardware_fingerprint": hardware_conformance["actual_fingerprint"],
         },
         "hardware_probe": hardware_probe,
@@ -435,12 +440,12 @@ def run(
         },
         "execution_trace_metadata": {
             "resolved_args": {
-                "strict_hardware": str(manifest["runtime"]["strict_hardware"]).lower(),
+                "strict_hardware": str(m.runtime.strict_hardware).lower(),
                 "replica_id": replica_id,
             },
             "resolved_env": vllm_env_info.get("resolved_env", {}) if vllm_env_info else {
                 "CUBLAS_WORKSPACE_CONFIG": ":4096:8",
-                "CUDA_LAUNCH_BLOCKING": str(int(manifest["runtime"]["deterministic_knobs"]["cuda_launch_blocking"])),
+                "CUDA_LAUNCH_BLOCKING": str(int(m.runtime.deterministic_knobs.cuda_launch_blocking)),
             },
         },
         "rerun_metadata": rerun_metadata,
@@ -461,7 +466,7 @@ def run(
                 "statement_digest": sha256_prefixed(
                     canonical_json_bytes(
                         {
-                            "run_id": manifest["run_id"],
+                            "run_id": m.run_id,
                             "replica_id": replica_id,
                             "runtime_closure_digest": lockfile["runtime_closure_digest"],
                             "manifest_digest": manifest_digest,
@@ -499,14 +504,14 @@ def main() -> int:
     parser.add_argument("--namespace", help="Namespace for provenance recording")
     args = parser.parse_args()
 
-    manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
+    manifest_dict = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
     lockfile = json.loads(Path(args.lockfile).read_text(encoding="utf-8"))
     runtime_hardware = None
     if args.runtime_hardware:
         runtime_hardware = json.loads(Path(args.runtime_hardware).read_text(encoding="utf-8"))
 
     run(
-        manifest,
+        manifest_dict,
         lockfile,
         Path(args.out_dir),
         args.replica_id,

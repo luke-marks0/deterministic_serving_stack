@@ -20,6 +20,7 @@ from pkg.common.deterministic import (
     flatten_numbers,
     sha256_prefixed,
 )
+from pkg.manifest.model import Manifest
 
 
 def _load_json(path: Path) -> Any:
@@ -98,11 +99,11 @@ def _compare_observable(mode: str, baseline: Any, candidate: Any, comp: dict[str
     raise ValidationError(f"Unsupported comparison mode: {mode}")
 
 
-def _load_manifest_from_bundle(bundle_dir: Path, bundle: dict[str, Any]) -> dict[str, Any]:
+def _load_manifest_from_bundle(bundle_dir: Path, bundle: dict[str, Any]) -> Manifest:
     manifest_path = bundle_dir / bundle["manifest_copy"]["path"]
-    manifest = _load_json(manifest_path)
-    validate_with_schema("manifest.v1.schema.json", manifest)
-    return manifest
+    manifest_dict = _load_json(manifest_path)
+    validate_with_schema("manifest.v1.schema.json", manifest_dict)
+    return Manifest.model_validate(manifest_dict)
 
 
 def verify(baseline_bundle_path: Path, candidate_bundle_path: Path, report_out: Path, summary_out: Path) -> dict[str, Any]:
@@ -124,15 +125,17 @@ def verify(baseline_bundle_path: Path, candidate_bundle_path: Path, report_out: 
         _assert_digest(candidate_dir / obs["path"], obs["digest"])
 
     manifest = _load_manifest_from_bundle(baseline_dir, baseline)
-    comparison = manifest["comparison"]
+    comparison = manifest.comparison
 
     baseline_tokens = _read_observable(baseline_dir, baseline, "tokens")
     candidate_tokens = _read_observable(candidate_dir, candidate, "tokens")
     baseline_logits = _read_observable(baseline_dir, baseline, "logits")
     candidate_logits = _read_observable(candidate_dir, candidate, "logits")
 
-    token_ok = _compare_observable(comparison["tokens"]["mode"], baseline_tokens, candidate_tokens, comparison["tokens"])
-    logits_ok = _compare_observable(comparison["logits"]["mode"], baseline_logits, candidate_logits, comparison["logits"])
+    tokens_comp = comparison.tokens.model_dump(exclude_none=True)
+    logits_comp = comparison.logits.model_dump(exclude_none=True)
+    token_ok = _compare_observable(comparison.tokens.mode.value, baseline_tokens, candidate_tokens, tokens_comp)
+    logits_ok = _compare_observable(comparison.logits.mode.value, baseline_logits, candidate_logits, logits_comp)
 
     runtime_equal = baseline["runtime_closure_digest"] == candidate["runtime_closure_digest"]
     hardware_equal = baseline["environment_info"]["hardware_fingerprint"] == candidate["environment_info"]["hardware_fingerprint"]

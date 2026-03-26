@@ -33,6 +33,7 @@ from pkg.common.deterministic import (
     sha256_prefixed,
     utc_now_iso,
 )
+from pkg.manifest.model import Manifest
 
 
 def _load_json(path: Path) -> Any:
@@ -117,6 +118,10 @@ def capture_to_bundle(
     validate_with_schema("manifest.v1.schema.json", manifest)
     validate_with_schema("lockfile.v1.schema.json", lockfile)
 
+    # Parse into typed Manifest for dot-access reads.
+    # Keep manifest dict for canonical JSON serialization.
+    m = Manifest.model_validate(manifest)
+
     boot_record_path = server_dir / "boot_record.json"
     capture_path = server_dir / "capture.jsonl"
 
@@ -170,7 +175,7 @@ def capture_to_bundle(
 
     # Hardware info from boot record
     hw = boot_record.get("hardware", {})
-    run_id = session_id or manifest.get("run_id", "capture-session")
+    run_id = session_id or m.run_id
 
     run_bundle: dict[str, Any] = {
         "run_bundle_version": "v1",
