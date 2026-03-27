@@ -26,7 +26,6 @@ from pkg.common.deterministic import (
     utc_now_iso,
 )
 from pkg.manifest.model import Manifest
-from pkg.networkdet import create_net_stack
 
 
 PCI_ID_RE = re.compile(r"^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-7]$")
