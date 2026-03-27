@@ -20,8 +20,8 @@ def deterministic_dispatch(manifest: dict[str, Any], replicas: list[str]) -> lis
     if not replicas:
         raise ValidationError("At least one replica is required")
 
-    rack_count = manifest["hardware_profile"]["topology"]["rack_count"]
-    algorithm = manifest["deterministic_dispatcher"]["algorithm"]
+    rack_count = manifest.get("hardware_profile", {}).get("topology", {}).get("rack_count", 1)
+    algorithm = manifest.get("deterministic_dispatcher", {}).get("algorithm", "round_robin_hash")
 
     assignments: list[dict[str, Any]] = []
     for seq, req in enumerate(manifest["requests"]):

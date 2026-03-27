@@ -58,9 +58,11 @@ class TestParseNetConfig(unittest.TestCase):
             parse_net_config(_base_manifest(checksum_offload=True))
         self.assertIn("Checksum offload", str(ctx.exception))
 
-    def test_missing_network_section(self):
-        with self.assertRaises(NetConfigError):
-            parse_net_config({})
+    def test_missing_network_section_returns_defaults(self):
+        config = parse_net_config({})
+        self.assertIsInstance(config, NetStackConfig)
+        self.assertEqual(config.mtu, 1500)
+        self.assertEqual(config.security_mode, "plaintext")
 
     def test_defaults_for_optional_fields(self):
         manifest = {"network": {

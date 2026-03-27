@@ -66,7 +66,6 @@ def render_html(
 ) -> str:
     env = bundle.get("environment_info", {})
     hw_conf = bundle.get("hardware_conformance", {})
-    net = bundle.get("network_provenance", {})
     obs = bundle.get("observables", {})
     exec_ctx = bundle.get("execution_context", {})
     trace_meta = bundle.get("execution_trace_metadata", {})
@@ -243,12 +242,6 @@ def render_html(
         <tr><td>Route mode</td><td><code>{net.get('route_mode','')}</code></td></tr>
         <tr><td>Security</td><td><code>{net.get('security_mode','')}</code></td></tr>
         <tr><td>Frames</td><td>{net.get('frame_count', 0)}</td></tr>
-        <tr><td>Capture</td><td><code>{net.get('capture_mode','')}</code> / <code>{net.get('capture_isolation','')}</code></td></tr>
-        <tr><td>Non-perturbing</td><td>{'Yes' if net.get('capture_non_perturbing') else 'No'}</td></tr>
-        <tr><td>Capture digest</td><td>{_digest_pill(net.get('capture_digest',''))}</td></tr>
-        <tr><td>NIC fingerprint</td><td>{_digest_pill(net.get('nic_fingerprint',''))}</td></tr>
-        <tr><td>Net stack</td><td>{_digest_pill(net.get('network_stack_artifact_digest',''))}</td></tr>
-        <tr><td>PMD driver</td><td>{_digest_pill(net.get('pmd_driver_artifact_digest',''))}</td></tr>
     </table>
 </div>
 
@@ -258,9 +251,6 @@ def render_html(
     <table>
         <tr><td>Entrypoint</td><td><code>{exec_ctx.get('entrypoint','')}</code></td></tr>
         <tr><td>Replica</td><td><code>{exec_ctx.get('replica_id','')}</code></td></tr>
-        <tr><td>Pod</td><td><code>{exec_ctx.get('pod',{}).get('name','')}</code> on <code>{exec_ctx.get('pod',{}).get('node_name','')}</code></td></tr>
-        <tr><td>Batch sizes</td><td class="mono">{json.dumps(trace_meta.get('actual_batch_sizes', []))}</td></tr>
-        <tr><td>Batch policy</td><td><code>{trace_meta.get('resolved_args',{}).get('batch_policy','')}</code></td></tr>
     </table>
 </div>
 

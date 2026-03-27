@@ -28,8 +28,6 @@ CLOSURE_COMPONENT_RULES: tuple[tuple[str, set[str]], ...] = (
     ("serving_stack", {"serving_stack"}),
     ("cuda_userspace_or_container", {"cuda_lib", "container_image"}),
     ("kernel_libraries", {"kernel_library", "compiled_extension"}),
-    ("network_stack", {"network_stack_binary"}),
-    ("pmd_driver", {"pmd_driver"}),
 )
 
 SHA256_RE = re.compile(r"^sha256:[a-f0-9]{64}$")

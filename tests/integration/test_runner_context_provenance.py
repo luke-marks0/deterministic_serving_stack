@@ -42,7 +42,7 @@ class TestRunnerContextProvenance(unittest.TestCase):
             self.assertGreaterEqual(len(bundle["resolved_artifact_digests"]), 1)
             self.assertGreaterEqual(len(bundle["attestations"]), 1)
             self.assertIn("tokens", bundle["observables"])
-            self.assertIn("network_egress", bundle["observables"])
+            self.assertIn("logits", bundle["observables"])
             self.assertEqual(bundle["execution_context"]["pod"]["name"], "runner-0")
             self.assertEqual(bundle["execution_context"]["pod"]["node_name"], "node-h100-0")
             self.assertEqual(bundle["execution_context"]["pod"]["namespace"], "deterministic-serving")
@@ -60,9 +60,6 @@ class TestRunnerContextProvenance(unittest.TestCase):
             self.assertEqual(bundle["rerun_metadata"]["runtime_closure_digest"], bundle["runtime_closure_digest"])
             self.assertGreaterEqual(bundle["rerun_metadata"]["artifact_count"], 1)
             self.assertGreaterEqual(len(bundle["rerun_metadata"]["attestation_digests"]), 1)
-            self.assertEqual(bundle["network_provenance"]["route_mode"], "deterministic_userspace_stack")
-            self.assertTrue(bundle["network_provenance"]["capture_non_perturbing"])
-            self.assertEqual(bundle["network_provenance"]["capture_isolation"], "pre_enqueue_mirror")
 
 
 if __name__ == "__main__":

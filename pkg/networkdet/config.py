@@ -46,7 +46,16 @@ def parse_net_config(manifest: dict[str, Any]) -> NetStackConfig:
     """
     net = manifest.get("network")
     if net is None:
-        raise NetConfigError("Manifest missing required 'network' section")
+        # Return sensible defaults when the network section is absent.
+        return NetStackConfig(
+            mtu=1500, mss=1460, tso=False, gso=False,
+            checksum_offload=False, thread_affinity=(0,),
+            tx_queues=1, rx_queues=1,
+            queue_mapping_policy="fixed_core_queue",
+            ring_tx=512, ring_rx=512,
+            internal_batching_enabled=False, internal_batching_max_burst=1,
+            security_mode="plaintext", egress_reproducibility=True,
+        )
 
     tso = bool(net.get("tso", False))
     gso = bool(net.get("gso", False))

@@ -1,0 +1,1245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Deterministic Serving Stack — /manifest Endpoint</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --text-muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --red: #f85149;
+    --orange: #d29922;
+    --purple: #bc8cff;
+    --cyan: #39d2c0;
+    --font: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 0;
+  }
+  .hero {
+    text-align: center;
+    padding: 60px 20px 40px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, #0d1117 0%, #161b22 100%);
+  }
+  .hero h1 {
+    font-size: 2.4em;
+    font-weight: 700;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, var(--accent), var(--cyan));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .hero .subtitle {
+    color: var(--text-muted);
+    font-size: 1.15em;
+    max-width: 600px;
+    margin: 0 auto;
+  }
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 40px 20px;
+  }
+  h2 {
+    font-size: 1.5em;
+    margin-bottom: 16px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h2 .badge {
+    font-size: 0.5em;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .badge-post { background: #1f6feb33; color: var(--accent); border: 1px solid #1f6feb55; }
+  .badge-get { background: #3fb95033; color: var(--green); border: 1px solid #3fb95055; }
+
+  /* Flow diagram */
+  .flow {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    margin: 30px 0 50px;
+    overflow-x: auto;
+    padding-bottom: 10px;
+  }
+  .flow-step {
+    flex: 1;
+    min-width: 160px;
+    padding: 20px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    text-align: center;
+    position: relative;
+    transition: all 0.3s;
+  }
+  .flow-step:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 20px #58a6ff15;
+  }
+  .flow-step .icon {
+    font-size: 1.8em;
+    margin-bottom: 8px;
+    display: block;
+  }
+  .flow-step .label {
+    font-weight: 600;
+    font-size: 0.95em;
+    margin-bottom: 4px;
+  }
+  .flow-step .detail {
+    font-size: 0.78em;
+    color: var(--text-muted);
+  }
+  .flow-arrow {
+    display: flex;
+    align-items: center;
+    padding: 0 6px;
+    color: var(--text-muted);
+    font-size: 1.4em;
+    flex-shrink: 0;
+  }
+
+  /* Interactive demo */
+  .demo-panel {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin: 20px 0 50px;
+  }
+  @media (max-width: 768px) {
+    .demo-panel { grid-template-columns: 1fr; }
+  }
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .panel-header {
+    padding: 12px 16px;
+    background: #1c2128;
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+    font-size: 0.9em;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .panel-body {
+    padding: 16px;
+  }
+  .panel-body pre {
+    font-family: var(--font);
+    font-size: 0.82em;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: var(--text);
+    max-height: 350px;
+    overflow-y: auto;
+  }
+  .json-key { color: var(--accent); }
+  .json-string { color: var(--green); }
+  .json-number { color: var(--orange); }
+  .json-bool { color: var(--purple); }
+  .json-null { color: var(--text-muted); }
+
+  /* Buttons */
+  .btn-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin: 16px 0;
+  }
+  .btn {
+    padding: 8px 18px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 0.88em;
+    font-family: inherit;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn:hover { border-color: var(--accent); background: #1f6feb22; }
+  .btn.active { border-color: var(--accent); background: #1f6feb33; color: var(--accent); }
+  .btn-primary {
+    background: #1f6feb;
+    border-color: #1f6feb;
+    color: white;
+  }
+  .btn-primary:hover { background: #388bfd; }
+
+  /* Decision table */
+  .decision-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0 40px;
+    font-size: 0.9em;
+  }
+  .decision-table th, .decision-table td {
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    text-align: left;
+  }
+  .decision-table th {
+    background: #1c2128;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .decision-table td { background: var(--surface); }
+  .tag-restart {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.8em;
+    font-weight: 600;
+    background: #f8514922;
+    color: var(--red);
+    border: 1px solid #f8514944;
+  }
+  .tag-hot {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.8em;
+    font-weight: 600;
+    background: #3fb95022;
+    color: var(--green);
+    border: 1px solid #3fb95044;
+  }
+
+  /* Status indicator */
+  .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85em;
+    font-weight: 500;
+  }
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .status-dot.green { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .status-dot.orange { background: var(--orange); box-shadow: 0 0 6px var(--orange); animation: pulse 1.5s infinite; }
+  .status-dot.red { background: var(--red); }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* Timeline */
+  .timeline {
+    margin: 20px 0;
+    padding-left: 24px;
+    border-left: 2px solid var(--border);
+  }
+  .timeline-entry {
+    position: relative;
+    padding: 0 0 24px 20px;
+  }
+  .timeline-entry::before {
+    content: '';
+    position: absolute;
+    left: -29px;
+    top: 6px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 2px solid var(--accent);
+  }
+  .timeline-entry.complete::before { background: var(--green); border-color: var(--green); }
+  .timeline-entry.active::before { background: var(--orange); border-color: var(--orange); }
+  .timeline-entry .time {
+    font-family: var(--font);
+    font-size: 0.75em;
+    color: var(--text-muted);
+  }
+  .timeline-entry .event {
+    font-weight: 600;
+    font-size: 0.92em;
+    margin: 2px 0;
+  }
+  .timeline-entry .meta {
+    font-size: 0.82em;
+    color: var(--text-muted);
+  }
+
+  /* Architecture diagram */
+  .arch-diagram {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    margin: 30px 0;
+    flex-wrap: wrap;
+  }
+  .arch-box {
+    padding: 18px 22px;
+    border-radius: 10px;
+    text-align: center;
+    min-width: 140px;
+  }
+  .arch-box.client {
+    background: #1f6feb22;
+    border: 1px solid #1f6feb55;
+  }
+  .arch-box.proxy {
+    background: #bc8cff22;
+    border: 2px solid #bc8cff88;
+  }
+  .arch-box.vllm {
+    background: #3fb95022;
+    border: 1px solid #3fb95055;
+  }
+  .arch-box .arch-label {
+    font-weight: 700;
+    font-size: 0.95em;
+    margin-bottom: 4px;
+  }
+  .arch-box .arch-detail {
+    font-size: 0.75em;
+    color: var(--text-muted);
+  }
+  .arch-arrow {
+    padding: 0 8px;
+    color: var(--text-muted);
+    font-size: 1.3em;
+    flex-shrink: 0;
+  }
+  .arch-endpoint {
+    font-family: var(--font);
+    font-size: 0.72em;
+    color: var(--cyan);
+    background: #39d2c015;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-top: 4px;
+    display: inline-block;
+  }
+
+  .section { margin-bottom: 50px; }
+  .divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 40px 0;
+  }
+  code {
+    font-family: var(--font);
+    background: #1c2128;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.88em;
+  }
+  .test-results {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 16px 0;
+  }
+  @media (max-width: 768px) {
+    .test-results { grid-template-columns: 1fr; }
+  }
+  .test-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .test-card h4 {
+    font-size: 0.9em;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .test-card .count {
+    font-family: var(--font);
+    font-size: 2em;
+    font-weight: 700;
+    margin: 8px 0;
+  }
+  .test-card .count.green { color: var(--green); }
+  /* Schema explainer */
+  .schema-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .schema-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  .schema-section:hover { border-color: #484f58; }
+  .schema-section.open { border-color: var(--accent); }
+  .schema-header {
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    user-select: none;
+  }
+  .schema-chevron {
+    font-size: 0.7em;
+    color: var(--text-muted);
+    transition: transform 0.2s;
+    display: inline-block;
+    width: 14px;
+  }
+  .schema-section.open .schema-chevron { transform: rotate(90deg); }
+  .schema-title {
+    font-family: var(--font);
+    font-weight: 600;
+    font-size: 0.95em;
+    color: var(--accent);
+  }
+  .schema-required {
+    font-size: 0.75em;
+    color: var(--text-muted);
+    padding: 2px 8px;
+    background: #1c2128;
+    border-radius: 4px;
+  }
+  .schema-body {
+    display: none;
+    padding: 0 16px 16px;
+    border-top: 1px solid var(--border);
+  }
+  .schema-section.open .schema-body { display: block; padding-top: 14px; }
+  .schema-field {
+    padding: 8px 0;
+    border-bottom: 1px solid #21262d;
+    display: grid;
+    grid-template-columns: 180px 120px 1fr;
+    gap: 8px;
+    align-items: baseline;
+    font-size: 0.88em;
+  }
+  .schema-field:last-child { border-bottom: none; }
+  .sf-name { color: var(--cyan); font-size: 0.9em; }
+  .sf-type { color: var(--orange); font-size: 0.82em; }
+  .sf-desc { color: var(--text-muted); font-size: 0.85em; }
+  .schema-subsection {
+    margin: 12px 0 4px;
+    padding: 12px;
+    background: #0d111755;
+    border-radius: 8px;
+    border: 1px solid #21262d;
+  }
+  .schema-subheader {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+    font-weight: 600;
+    font-size: 0.9em;
+  }
+  .schema-subheader code {
+    color: var(--purple);
+    background: none;
+    padding: 0;
+    font-size: 1em;
+  }
+  .schema-field-inline {
+    font-size: 0.85em;
+    color: var(--text-muted);
+    line-height: 1.7;
+  }
+  .schema-field-inline code {
+    color: var(--cyan);
+    font-size: 0.92em;
+  }
+  .schema-note {
+    font-size: 0.83em;
+    color: var(--text-muted);
+    font-style: italic;
+    margin-top: 8px;
+  }
+  .comparator-modes {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .comp-mode {
+    padding: 8px 12px;
+    background: #0d111755;
+    border-radius: 6px;
+    border: 1px solid #21262d;
+    font-size: 0.85em;
+  }
+  .comp-mode code {
+    color: var(--green);
+    margin-right: 8px;
+  }
+  .comp-mode span { color: var(--text-muted); }
+  .artifact-types {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .artifact-tag {
+    font-family: var(--font);
+    font-size: 0.75em;
+    padding: 3px 10px;
+    border-radius: 4px;
+    background: #1c2128;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+  }
+  @media (max-width: 768px) {
+    .schema-field { grid-template-columns: 1fr; }
+    .comparator-modes { grid-template-columns: 1fr; }
+  }
+
+  .footer {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-muted);
+    font-size: 0.85em;
+    border-top: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>POST /manifest</h1>
+  <p class="subtitle">Submit a manifest describing your inference run. The server validates it, configures vLLM to match, and serves the requests.</p>
+</div>
+
+<div class="container">
+
+<!-- Architecture -->
+<div class="section">
+  <h2>Architecture</h2>
+  <div class="arch-diagram">
+    <div class="arch-box client">
+      <div class="arch-label">Client</div>
+      <div class="arch-detail">curl / SDK</div>
+    </div>
+    <div class="arch-arrow">
+      <div style="text-align:center">
+        <div style="font-size:0.6em;color:var(--cyan)">POST /manifest</div>
+        <div>&#8594;</div>
+        <div style="font-size:0.6em;color:var(--text-muted)">GET /manifest</div>
+      </div>
+    </div>
+    <div class="arch-box proxy">
+      <div class="arch-label">Proxy Server</div>
+      <div class="arch-detail">:8000</div>
+      <div class="arch-endpoint">/manifest</div>
+      <div class="arch-endpoint">/v1/chat/completions</div>
+      <div class="arch-endpoint">/egress-digest</div>
+    </div>
+    <div class="arch-arrow">
+      <div style="text-align:center">
+        <div style="font-size:0.6em;color:var(--text-muted)">forward</div>
+        <div>&#8594;</div>
+        <div style="font-size:0.6em;color:var(--text-muted)">start / stop</div>
+      </div>
+    </div>
+    <div class="arch-box vllm">
+      <div class="arch-label">vLLM Engine</div>
+      <div class="arch-detail">:8001 (internal)</div>
+      <div class="arch-endpoint">OpenAI-compatible API</div>
+    </div>
+  </div>
+</div>
+
+<!-- Request flow -->
+<div class="section">
+  <h2>Request Flow <span class="badge badge-post">POST</span></h2>
+  <div class="flow">
+    <div class="flow-step">
+      <span class="icon">1</span>
+      <div class="label">Parse JSON</div>
+      <div class="detail">400 if malformed</div>
+    </div>
+    <div class="flow-arrow">&#8594;</div>
+    <div class="flow-step">
+      <span class="icon">2</span>
+      <div class="label">Validate Schema</div>
+      <div class="detail">422 if invalid</div>
+    </div>
+    <div class="flow-arrow">&#8594;</div>
+    <div class="flow-step">
+      <span class="icon">3</span>
+      <div class="label">Acquire Lock</div>
+      <div class="detail">409 if busy</div>
+    </div>
+    <div class="flow-arrow">&#8594;</div>
+    <div class="flow-step">
+      <span class="icon">4</span>
+      <div class="label">Start vLLM</div>
+      <div class="detail">stop old, launch new</div>
+    </div>
+    <div class="flow-arrow">&#8594;</div>
+    <div class="flow-step">
+      <span class="icon">5</span>
+      <div class="label">200 OK</div>
+      <div class="detail">digest + model + run_id</div>
+    </div>
+  </div>
+</div>
+
+<!-- What a manifest is -->
+<div class="section">
+  <h2>What is a Manifest?</h2>
+  <p style="color:var(--text-muted);margin-bottom:16px;">
+    A manifest is a <strong>complete declaration of an inference run</strong>: the model, the hardware,
+    the determinism settings, the requests, and how to compare results. Each POST /manifest
+    is a new run — the server validates the manifest, (re)starts vLLM to match the config,
+    and is then ready to serve.
+  </p>
+  <table class="decision-table">
+    <thead>
+      <tr><th>Section</th><th>What it declares</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>model</code></td><td>Which model, which exact revision, per-file digests</td></tr>
+      <tr><td><code>runtime</code></td><td>Engine config, batch invariance, deterministic knobs, seed</td></tr>
+      <tr><td><code>hardware_profile</code></td><td>GPU, NIC, topology — what hardware this run requires</td></tr>
+      <tr><td><code>network</code></td><td>MTU, offloads, queue mapping — network determinism config</td></tr>
+      <tr><td><code>requests</code></td><td>The actual prompts to serve, with temperature and token limits</td></tr>
+      <tr><td><code>comparison</code></td><td>How the verifier compares two runs (exact, ULP, hash)</td></tr>
+      <tr><td><code>artifact_inputs</code></td><td>Every software component, content-addressed</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<hr class="divider">
+
+<!-- Interactive demo -->
+<div class="section">
+  <h2>Interactive Demo</h2>
+  <p style="color:var(--text-muted);margin-bottom:12px;">Click a scenario to see the request/response and server behavior.</p>
+
+  <div class="btn-row">
+    <button class="btn active" onclick="showScenario('post')">POST /manifest</button>
+    <button class="btn" onclick="showScenario('invalid')">Invalid Manifest (422)</button>
+    <button class="btn" onclick="showScenario('get')">GET /manifest</button>
+  </div>
+
+  <div class="demo-panel">
+    <div class="panel">
+      <div class="panel-header">
+        <span id="req-label">REQUEST</span>
+        <span id="req-method" style="font-family:var(--font);font-size:0.85em;color:var(--accent)">POST /manifest</span>
+      </div>
+      <div class="panel-body">
+        <pre id="req-body"></pre>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <span>RESPONSE</span>
+        <span id="resp-status" style="font-family:var(--font);font-size:0.85em"></span>
+      </div>
+      <div class="panel-body">
+        <pre id="resp-body"></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- Server state timeline -->
+  <div id="timeline-container">
+    <h3 style="margin-bottom:12px;font-size:1.1em;">Server Timeline</h3>
+    <div class="timeline" id="timeline"></div>
+  </div>
+</div>
+
+<hr class="divider">
+
+<!-- Test results -->
+<div class="section">
+  <h2>Test Results</h2>
+  <div class="test-results">
+    <div class="test-card">
+      <h4><span class="status-dot green"></span> Unit Tests</h4>
+      <div class="count green">10/10</div>
+      <div style="font-size:0.82em;color:var(--text-muted)">
+        Schema validation: valid, missing fields,<br>
+        bad values, different configs still valid
+      </div>
+    </div>
+    <div class="test-card">
+      <h4><span class="status-dot green"></span> Integration Tests (live GPU)</h4>
+      <div class="count green">4/4</div>
+      <div style="font-size:0.82em;color:var(--text-muted)">
+        GET /manifest<br>
+        POST /manifest (validate + start vLLM)<br>
+        Reject invalid manifest<br>
+        Inference works after apply
+      </div>
+    </div>
+  </div>
+  <p style="color:var(--text-muted);font-size:0.85em;margin-top:8px;">
+    Tested on 2x NVIDIA GH200 480GB (Lambda Cloud) running the nix-built container.
+  </p>
+</div>
+
+<hr class="divider">
+
+<!-- Manifest Schema Explainer -->
+<div class="section">
+  <h2>Manifest Schema (v1)</h2>
+  <p style="color:var(--text-muted);margin-bottom:20px;">
+    The manifest is a complete, self-describing declaration of an inference run. Every field is validated against
+    <code>manifest.v1.schema.json</code> before the server accepts it. Click any section to expand.
+  </p>
+
+  <div class="schema-grid">
+
+    <!-- Top-level fields -->
+    <div class="schema-section" onclick="toggleSchema(this)">
+      <div class="schema-header">
+        <span class="schema-chevron">&#9654;</span>
+        <span class="schema-title">Top-level</span>
+        <span class="schema-required">4 required</span>
+      </div>
+      <div class="schema-body">
+        <div class="schema-field">
+          <code class="sf-name">manifest_version</code>
+          <span class="sf-type">const "v1"</span>
+          <span class="sf-desc">Schema version. Always <code>"v1"</code>.</span>
+        </div>
+        <div class="schema-field">
+          <code class="sf-name">run_id</code>
+          <span class="sf-type">string</span>
+          <span class="sf-desc">Unique identifier for this run. Pattern: <code>^[A-Za-z0-9][A-Za-z0-9._-]{2,127}$</code></span>
+        </div>
+        <div class="schema-field">
+          <code class="sf-name">created_at</code>
+          <span class="sf-type">date-time</span>
+          <span class="sf-desc">ISO 8601 timestamp of manifest creation.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Model -->
+    <div class="schema-section" onclick="toggleSchema(this)">
+      <div class="schema-header">
+        <span class="schema-chevron">&#9654;</span>
+        <span class="schema-title">model</span>
+        <span class="schema-required">6 required</span>
+      </div>
+      <div class="schema-body">
+        <div class="schema-field">
+          <code class="sf-name">source</code>
+          <span class="sf-type">string</span>
+          <span class="sf-desc">HuggingFace model ID. Pattern: <code>^hf://Org/Model$</code></span>
+        </div>
+        <div class="schema-field">
+          <code class="sf-name">resolved_revision</code>
+          <span class="sf-type">string (sha1)</span>
+          <span class="sf-desc">Pinned HF commit hash (40 hex chars). Set by resolver.</span>
+        </div>
+        <div class="schema-field">
+          <code class="sf-name">weights_revision</code>
+          <span class="sf-type">string (sha1)</span>
+          <span class="sf-desc">Commit that produced the weights files.</span>
+        </div>
+        <div class="schema-field">
+          <code class="sf-name">tokenizer_revision</code>
+          <span class="sf-type">string (sha1)</span>
+          <span class="sf-desc">Commit for the tokenizer files.</span>
+        </div>
+        <div class="schema-field">
+          <code class="sf-name">trust_remote_code</code>
+          <span class="sf-type">boolean</span>
+          <span class="sf-desc">If true, <code>remote_code</code> block is required (commit + digest).</span>
+        </div>
+        <div class="schema-field">
+          <code class="sf-name">required_files</code>
+          <span class="sf-type">array (min 6)</span>
+          <span class="sf-desc">Per-file manifest: role, path, URI, sha256 digest, size. Roles: <code>weights_shard</code>, <code>config</code>, <code>tokenizer</code>, <code>generation_config</code>, <code>chat_template</code>, <code>prompt_formatter</code>.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Runtime -->
+    <div class="schema-section" onclick="toggleSchema(this)">
+      <div class="schema-header">
+        <span class="schema-chevron">&#9654;</span>
+        <span class="schema-title">runtime</span>
+        <span class="schema-required">9 required</span>
+      </div>
+      <div class="schema-body">
+        <div class="schema-subsection">
+          <div class="schema-subheader">
+            <code>serving_engine</code>
+          </div>
+          <div class="schema-field">
+            <code class="sf-name">max_model_len</code>
+            <span class="sf-type">integer</span>
+            <span class="sf-desc">Maximum context length. Allocated at engine init.</span>
+          </div>
+          <div class="schema-field">
+            <code class="sf-name">max_num_seqs</code>
+            <span class="sf-type">integer</span>
+            <span class="sf-desc">Max concurrent sequences. Allocated at engine init.</span>
+          </div>
+          <div class="schema-field">
+            <code class="sf-name">gpu_memory_utilization</code>
+            <span class="sf-type">number (0.1–1.0)</span>
+            <span class="sf-desc">Fraction of GPU memory for KV cache.</span>
+          </div>
+          <div class="schema-field">
+            <code class="sf-name">dtype</code>
+            <span class="sf-type">enum</span>
+            <span class="sf-desc"><code>auto</code> | <code>float16</code> | <code>bfloat16</code> | <code>float32</code></span>
+          </div>
+          <div class="schema-field">
+            <code class="sf-name">attention_backend</code>
+            <span class="sf-type">enum</span>
+            <span class="sf-desc"><code>FLASH_ATTN</code> | <code>TRITON_ATTN</code> | <code>FLASH_ATTN_MLA</code> | <code>TRITON_MLA</code></span>
+          </div>
+        </div>
+        <div class="schema-subsection">
+          <div class="schema-subheader">
+            <code>batch_invariance</code>
+          </div>
+          <div class="schema-field">
+            <code class="sf-name">enabled</code>
+            <span class="sf-type">boolean</span>
+            <span class="sf-desc">Enable <code>VLLM_BATCH_INVARIANT=1</code> deterministic mode.</span>
+          </div>
+          <div class="schema-field">
+            <code class="sf-name">enforce_eager</code>
+            <span class="sf-type">boolean</span>
+            <span class="sf-desc">Disable CUDA graphs (required for batch invariance).</span>
+          </div>
+        </div>
+        <div class="schema-subsection">
+          <div class="schema-subheader">
+            <code>deterministic_knobs</code>
+          </div>
+          <div class="schema-field">
+            <code class="sf-name">seed</code>
+            <span class="sf-type">integer</span>
+            <span class="sf-desc">Random seed. Passed per-request in sampling params.</span>
+          </div>
+          <div class="schema-field">
+            <code class="sf-name">torch_deterministic</code>
+            <span class="sf-type">boolean</span>
+            <span class="sf-desc">Enable <code>torch.use_deterministic_algorithms(True)</code>.</span>
+          </div>
+          <div class="schema-field">
+            <code class="sf-name">cuda_launch_blocking</code>
+            <span class="sf-type">boolean</span>
+            <span class="sf-desc">Synchronous CUDA launches.</span>
+          </div>
+        </div>
+        <div class="schema-subsection">
+          <div class="schema-subheader"><code>batch_cardinality</code></div>
+          <div class="schema-field-inline">
+            <code>min_requests</code>, <code>target_batch_size</code>, <code>max_requests</code> — batch sizing policy.
+          </div>
+        </div>
+        <div class="schema-subsection">
+          <div class="schema-subheader"><code>engine_trace</code></div>
+          <div class="schema-field-inline">
+            <code>enabled</code> + <code>events[]</code> — trace batch composition, reordering, backend selection, collective selection.
+          </div>
+        </div>
+        <div class="schema-subsection">
+          <div class="schema-subheader"><code>nix_pin</code></div>
+          <div class="schema-field-inline">
+            <code>flake_ref</code> + <code>flake_hash</code> — pins the exact Nix flake used to build the runtime.
+          </div>
+        </div>
+        <div class="schema-field" style="margin-top:8px">
+          <code class="sf-name">strict_hardware</code>
+          <span class="sf-type">boolean</span>
+          <span class="sf-desc">Reject boot if hardware fingerprint doesn't match.</span>
+        </div>
+        <div class="schema-field">
+          <code class="sf-name">batch_policy</code>
+          <span class="sf-type">enum</span>
+          <span class="sf-desc"><code>fixed</code> | <code>queued_fixed</code></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hardware Profile -->
+    <div class="schema-section" onclick="toggleSchema(this)">
+      <div class="schema-header">
+        <span class="schema-chevron">&#9654;</span>
+        <span class="schema-title">hardware_profile</span>
+        <span class="schema-required">3 required</span>
+      </div>
+      <div class="schema-body">
+        <div class="schema-subsection">
+          <div class="schema-subheader"><code>gpu</code></div>
+          <div class="schema-field-inline">
+            <code>vendor</code> (nvidia), <code>model</code>, <code>count</code>, <code>driver_version</code>, <code>cuda_driver_version</code>, <code>pci_ids[]</code>
+          </div>
+        </div>
+        <div class="schema-subsection">
+          <div class="schema-subheader"><code>nic</code></div>
+          <div class="schema-field-inline">
+            <code>model</code>, <code>pci_id</code>, <code>firmware</code>, <code>link_speed_gbps</code>, <code>offloads</code> (tso, gso, checksum, vlan_strip)
+          </div>
+        </div>
+        <div class="schema-subsection">
+          <div class="schema-subheader"><code>topology</code></div>
+          <div class="schema-field-inline">
+            <code>mode</code> (single_node | replicated | tensor_parallel | pipeline_parallel), <code>node_count</code>, <code>rack_count</code>, <code>collective_fabric</code>
+          </div>
+        </div>
+        <p class="schema-note">Conditional: if topology is replicated/TP/PP, a <code>deterministic_dispatcher</code> is required. If TP/PP, <code>artifact_inputs</code> must include a <code>collective_stack</code> artifact.</p>
+      </div>
+    </div>
+
+    <!-- Network -->
+    <div class="schema-section" onclick="toggleSchema(this)">
+      <div class="schema-header">
+        <span class="schema-chevron">&#9654;</span>
+        <span class="schema-title">network</span>
+        <span class="schema-required">11 required</span>
+      </div>
+      <div class="schema-body">
+        <div class="schema-field">
+          <code class="sf-name">security_mode</code>
+          <span class="sf-type">enum</span>
+          <span class="sf-desc"><code>plaintext</code> | <code>tls_deterministic_test_only</code> | <code>tls</code>. If TLS, egress reproducibility must be false.</span>
+        </div>
+        <div class="schema-field">
+          <code class="sf-name">egress_reproducibility</code>
+          <span class="sf-type">boolean</span>
+          <span class="sf-desc">Whether network egress bytes must be bitwise reproducible.</span>
+        </div>
+        <div class="schema-field">
+          <code class="sf-name">mtu / mss</code>
+          <span class="sf-type">integer</span>
+          <span class="sf-desc">MTU (576–9216) and MSS (536–9000) for deterministic framing.</span>
+        </div>
+        <div class="schema-field">
+          <code class="sf-name">tso / gso / checksum_offload</code>
+          <span class="sf-type">boolean</span>
+          <span class="sf-desc">NIC offload toggles. Deterministic mode typically disables all.</span>
+        </div>
+        <div class="schema-field">
+          <code class="sf-name">queue_mapping</code>
+          <span class="sf-type">object</span>
+          <span class="sf-desc">TX/RX queue counts + mapping policy (<code>fixed_core_queue</code> | <code>flow_hash</code>).</span>
+        </div>
+        <div class="schema-field">
+          <code class="sf-name">ring_sizes</code>
+          <span class="sf-type">object</span>
+          <span class="sf-desc">TX/RX ring buffer sizes (min 64).</span>
+        </div>
+        <div class="schema-field">
+          <code class="sf-name">thread_affinity</code>
+          <span class="sf-type">integer[]</span>
+          <span class="sf-desc">CPU core pinning for network threads.</span>
+        </div>
+        <div class="schema-field">
+          <code class="sf-name">internal_batching</code>
+          <span class="sf-type">object</span>
+          <span class="sf-desc"><code>enabled</code> + <code>max_burst</code> for packet batching.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Requests -->
+    <div class="schema-section" onclick="toggleSchema(this)">
+      <div class="schema-header">
+        <span class="schema-chevron">&#9654;</span>
+        <span class="schema-title">requests</span>
+        <span class="schema-required">min 1 item</span>
+      </div>
+      <div class="schema-body">
+        <div class="schema-field">
+          <code class="sf-name">id</code>
+          <span class="sf-type">string</span>
+          <span class="sf-desc">Unique request ID. Pattern: <code>^[A-Za-z0-9._:-]+$</code></span>
+        </div>
+        <div class="schema-field">
+          <code class="sf-name">prompt</code>
+          <span class="sf-type">string</span>
+          <span class="sf-desc">The input text. Min length 1.</span>
+        </div>
+        <div class="schema-field">
+          <code class="sf-name">max_new_tokens</code>
+          <span class="sf-type">integer (1–4096)</span>
+          <span class="sf-desc">Maximum tokens to generate.</span>
+        </div>
+        <div class="schema-field">
+          <code class="sf-name">temperature</code>
+          <span class="sf-type">number (0–2)</span>
+          <span class="sf-desc">Sampling temperature. 0 = greedy.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Comparison -->
+    <div class="schema-section" onclick="toggleSchema(this)">
+      <div class="schema-header">
+        <span class="schema-chevron">&#9654;</span>
+        <span class="schema-title">comparison</span>
+        <span class="schema-required">4 comparators</span>
+      </div>
+      <div class="schema-body">
+        <p class="schema-note" style="margin-bottom:12px">Defines how the verifier compares two run bundles. Each comparator has a <code>mode</code>:</p>
+        <div class="comparator-modes">
+          <div class="comp-mode">
+            <code>exact</code>
+            <span>Bitwise identical</span>
+          </div>
+          <div class="comp-mode">
+            <code>hash</code>
+            <span>SHA256 match (<code>algorithm</code> required)</span>
+          </div>
+          <div class="comp-mode">
+            <code>ulp</code>
+            <span>Units in Last Place tolerance (<code>ulp</code> required)</span>
+          </div>
+          <div class="comp-mode">
+            <code>absrel</code>
+            <span>Absolute + relative tolerance (<code>atol</code>, <code>rtol</code> required)</span>
+          </div>
+        </div>
+        <div class="schema-field" style="margin-top:12px">
+          <span class="sf-desc">Applied to: <code>tokens</code>, <code>logits</code>, <code>activations</code>, <code>network_egress</code></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Artifact Inputs -->
+    <div class="schema-section" onclick="toggleSchema(this)">
+      <div class="schema-header">
+        <span class="schema-chevron">&#9654;</span>
+        <span class="schema-title">artifact_inputs</span>
+        <span class="schema-required">min 10 items</span>
+      </div>
+      <div class="schema-body">
+        <p class="schema-note" style="margin-bottom:12px">Every software component is tracked as a content-addressed artifact. Minimum 10 artifacts covering the full stack:</p>
+        <div class="artifact-types">
+          <span class="artifact-tag">model_weights</span>
+          <span class="artifact-tag">model_config</span>
+          <span class="artifact-tag">tokenizer</span>
+          <span class="artifact-tag">serving_stack</span>
+          <span class="artifact-tag">cuda_lib</span>
+          <span class="artifact-tag">kernel_library</span>
+          <span class="artifact-tag">network_stack_binary</span>
+          <span class="artifact-tag">pmd_driver</span>
+          <span class="artifact-tag">runtime_knob_set</span>
+          <span class="artifact-tag">request_set</span>
+          <span class="artifact-tag">batching_policy</span>
+          <span class="artifact-tag">nic_link_config</span>
+          <span class="artifact-tag">collective_stack</span>
+          <span class="artifact-tag">compiled_extension</span>
+          <span class="artifact-tag">remote_code</span>
+        </div>
+        <div class="schema-field" style="margin-top:12px">
+          <span class="sf-desc">Each artifact has: <code>artifact_id</code>, <code>artifact_type</code>, <code>source_kind</code> (hf|oci|s3|http|git|nix|inline), <code>source_uri</code>, <code>immutable_ref</code>, and optional <code>expected_digest</code>.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Deterministic Dispatcher -->
+    <div class="schema-section" onclick="toggleSchema(this)">
+      <div class="schema-header">
+        <span class="schema-chevron">&#9654;</span>
+        <span class="schema-title">deterministic_dispatcher</span>
+        <span class="schema-required">conditional</span>
+      </div>
+      <div class="schema-body">
+        <p class="schema-note" style="margin-bottom:12px">Required when topology mode is replicated, tensor_parallel, or pipeline_parallel.</p>
+        <div class="schema-field">
+          <code class="sf-name">enabled</code>
+          <span class="sf-type">boolean</span>
+          <span class="sf-desc">Must be true for multi-node topologies.</span>
+        </div>
+        <div class="schema-field">
+          <code class="sf-name">algorithm</code>
+          <span class="sf-type">enum</span>
+          <span class="sf-desc"><code>round_robin_hash</code> | <code>sequence_map</code></span>
+        </div>
+        <div class="schema-field">
+          <code class="sf-name">request_order_source</code>
+          <span class="sf-type">enum</span>
+          <span class="sf-desc"><code>ingress_sequence</code> — order determined by arrival.</span>
+        </div>
+        <div class="schema-field">
+          <code class="sf-name">replay_log_required</code>
+          <span class="sf-type">boolean</span>
+          <span class="sf-desc">Whether dispatch decisions must be logged for replay.</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</div>
+
+<div class="footer">
+  Deterministic Serving Stack &mdash; Bitwise identical inference across servers, batch sizes, and time.
+</div>
+
+<script>
+const scenarios = {
+  post: {
+    method: 'POST /manifest',
+    status: '200 OK',
+    statusColor: 'var(--green)',
+    request: {
+      run_id: "experiment-042",
+      model: { source: "hf://Qwen/Qwen3-1.7B", resolved_revision: "a1b2c3..." },
+      runtime: {
+        deterministic_knobs: { seed: 42 },
+        serving_engine: { max_model_len: 8192, attention_backend: "TRITON_ATTN" },
+        batch_invariance: { enabled: true, enforce_eager: true }
+      },
+      requests: [{ id: "req-001", prompt: "Explain determinism.", max_new_tokens: 100, temperature: 0 }],
+      hardware_profile: { "...": "gpu, nic, topology" },
+      network: { "...": "mtu, security, offloads" },
+      comparison: { tokens: { mode: "exact" }, "...": "logits, activations, network_egress" },
+      artifact_inputs: ["...10+ content-addressed artifacts"]
+    },
+    response: {
+      status: "ok",
+      manifest_digest: "sha256:a4f8c2e1...",
+      model: "hf://Qwen/Qwen3-1.7B",
+      run_id: "experiment-042",
+      applied_at: "2026-03-24T08:15:30Z"
+    },
+    timeline: [
+      { time: '08:15:00.001', event: 'POST /manifest received', meta: 'Qwen3-1.7B, seed=42, 1 request', cls: 'complete' },
+      { time: '08:15:00.005', event: 'Schema validation passed', meta: 'manifest.v1.schema.json', cls: 'complete' },
+      { time: '08:15:00.010', event: 'Lock acquired', meta: '', cls: 'complete' },
+      { time: '08:15:00.015', event: 'Stopping old vLLM', meta: 'SIGTERM \u2192 exit 0', cls: 'complete' },
+      { time: '08:15:02.000', event: 'Starting vLLM', meta: '--model Qwen/Qwen3-1.7B --max-model-len 8192 --enforce-eager', cls: 'complete' },
+      { time: '08:15:25.000', event: 'Model loaded, health check passed', meta: '0.45 GiB, 2 shards', cls: 'complete' },
+      { time: '08:15:30.000', event: '200 OK returned', meta: 'sha256:a4f8c2e1...', cls: 'complete' },
+    ]
+  },
+  invalid: {
+    method: 'POST /manifest',
+    status: '422 Unprocessable Entity',
+    statusColor: 'var(--red)',
+    request: {
+      not: "a valid manifest",
+      missing: "required fields"
+    },
+    response: {
+      error: "manifest.v1.schema.json: 'run_id' is a required property; 'model' is a required property; 'hardware_profile' is a required property; 'runtime' is a required property"
+    },
+    timeline: [
+      { time: '08:17:00.001', event: 'POST /manifest received', meta: '2 fields, no run_id/model', cls: 'complete' },
+      { time: '08:17:00.002', event: 'Schema validation FAILED', meta: '4 required properties missing', cls: 'complete' },
+      { time: '08:17:00.003', event: '422 returned', meta: 'no lock acquired, no state change', cls: 'complete' },
+    ]
+  },
+  get: {
+    method: 'GET /manifest',
+    status: '200 OK',
+    statusColor: 'var(--green)',
+    request: null,
+    response: {
+      manifest: {
+        run_id: "experiment-042",
+        model: { source: "hf://Qwen/Qwen3-1.7B" },
+        runtime: { "...": "full runtime config" },
+        requests: ["..."],
+        "...": "complete manifest"
+      },
+      manifest_digest: "sha256:a4f8c2e1...",
+      applied_at: "2026-03-24T08:15:30Z",
+      vllm_healthy: true
+    },
+    timeline: [
+      { time: '08:18:00.001', event: 'GET /manifest received', meta: '', cls: 'complete' },
+      { time: '08:18:00.002', event: 'Health check: vLLM alive', meta: '/health \u2192 200', cls: 'complete' },
+      { time: '08:18:00.003', event: '200 OK returned', meta: 'manifest + digest + health', cls: 'complete' },
+    ]
+  }
+};
+
+function syntaxHighlight(json) {
+  if (typeof json != 'string') json = JSON.stringify(json, null, 2);
+  json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return json.replace(/("(\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+    var cls = 'json-number';
+    if (/^"/.test(match)) {
+      if (/:$/.test(match)) { cls = 'json-key'; }
+      else { cls = 'json-string'; }
+    } else if (/true|false/.test(match)) { cls = 'json-bool'; }
+    else if (/null/.test(match)) { cls = 'json-null'; }
+    return '<span class="' + cls + '">' + match + '</span>';
+  });
+}
+
+function showScenario(key) {
+  const s = scenarios[key];
+  document.querySelectorAll('.btn-row .btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+
+  document.getElementById('req-method').textContent = s.method;
+  document.getElementById('resp-status').textContent = s.status;
+  document.getElementById('resp-status').style.color = s.statusColor;
+
+  if (s.request) {
+    document.getElementById('req-body').innerHTML = syntaxHighlight(s.request);
+    document.getElementById('req-label').textContent = 'REQUEST BODY';
+  } else {
+    document.getElementById('req-body').innerHTML = '<span style="color:var(--text-muted)">(no body)</span>';
+    document.getElementById('req-label').textContent = 'REQUEST';
+  }
+
+  document.getElementById('resp-body').innerHTML = syntaxHighlight(s.response);
+
+  const tl = document.getElementById('timeline');
+  tl.innerHTML = s.timeline.map(e =>
+    `<div class="timeline-entry ${e.cls}">
+      <div class="time">${e.time}</div>
+      <div class="event">${e.event}</div>
+      ${e.meta ? `<div class="meta">${e.meta}</div>` : ''}
+    </div>`
+  ).join('');
+}
+
+function toggleSchema(el) {
+  el.classList.toggle('open');
+}
+
+// Init
+showScenario('post');
+</script>
+
+</body>
+</html>

@@ -47,9 +47,7 @@ class MirrorStore(Protocol):
 @dataclass(frozen=True)
 class ResolvedHF:
     resolved_revision: str
-    required_files: list[dict[str, Any]]
     model_artifacts: list[dict[str, Any]]
-    remote_code: dict[str, Any] | None
 
 
 HF_RESOLUTION_MODES = {"online", "cache_first", "offline"}
@@ -517,7 +515,6 @@ def resolve_hf_model(
         resolution_mode=resolution_mode,
     )
 
-    required_files: list[dict[str, Any]] = []
     artifacts: list[dict[str, Any]] = []
     downloaded: dict[str, Path] = {}
 
@@ -541,16 +538,6 @@ def resolve_hf_model(
         size_bytes = local.stat().st_size
         uri = f"hf://{repo_id}/{file_path}"
 
-        required_files.append(
-            {
-                "role": role,
-                "path": file_path,
-                "uri": uri,
-                "digest": digest,
-                "size_bytes": size_bytes,
-            }
-        )
-
         artifacts.append(
             {
                 "artifact_id": _artifact_id(role, file_path),
@@ -561,6 +548,8 @@ def resolve_hf_model(
                 "immutable_ref": commit,
                 "expected_digest": digest,
                 "size_bytes": size_bytes,
+                "path": file_path,
+                "role": role,
             }
         )
 
@@ -570,7 +559,6 @@ def resolve_hf_model(
     for role in ["config", "tokenizer", "generation_config", "chat_template", "prompt_formatter"]:
         add_file(role, str(selected[role]))  # type: ignore[index]
 
-    remote_code: dict[str, Any] | None = None
     if trust_remote_code:
         python_files = [item for item in _normalize_repo_files(files) if item.endswith(".py")]
         if not python_files:
@@ -579,11 +567,6 @@ def resolve_hf_model(
             python_files=python_files,
             download_file=materialize,
         )
-        remote_code = {
-            "commit": commit,
-            "uri": f"hf://{repo_id}?revision={commit}#remote_code",
-            "digest": rc_digest,
-        }
         artifacts.append(
             {
                 "artifact_id": "hf-remote-code",
@@ -597,12 +580,9 @@ def resolve_hf_model(
             }
         )
 
-    required_files = sorted(required_files, key=lambda item: (item["role"], item["path"]))
     artifacts = sorted(artifacts, key=lambda item: (item["artifact_type"], item["artifact_id"], item["expected_digest"]))
 
     return ResolvedHF(
         resolved_revision=commit,
-        required_files=required_files,
         model_artifacts=artifacts,
-        remote_code=remote_code,
     )

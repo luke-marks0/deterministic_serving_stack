@@ -46,8 +46,6 @@ class TestBuilderClosureProfile(unittest.TestCase):
                 "serving_stack",
                 "cuda_userspace_or_container",
                 "kernel_libraries",
-                "network_stack",
-                "pmd_driver",
             }
             component_names = {item["name"] for item in build["components"]}
             self.assertEqual(component_names, expected_components)
