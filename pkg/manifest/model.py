@@ -9,7 +9,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 # -- Enums --
@@ -199,6 +199,17 @@ class Comparator(BaseModel):
     atol: float | None = None      # for absrel mode
     rtol: float | None = None      # for absrel mode
 
+    @model_validator(mode="after")
+    def _check_mode_fields(self) -> Comparator:
+        if self.mode == ComparisonMode.hash and self.algorithm is None:
+            raise ValueError("algorithm is required when mode is 'hash'")
+        if self.mode == ComparisonMode.ulp and self.ulp is None:
+            raise ValueError("ulp is required when mode is 'ulp'")
+        if self.mode == ComparisonMode.absrel:
+            if self.atol is None or self.rtol is None:
+                raise ValueError("atol and rtol are required when mode is 'absrel'")
+        return self
+
 
 class ComparisonConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -255,7 +266,7 @@ class Manifest(BaseModel):
 
     manifest_version: Literal["v1"] = "v1"
     run_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{2,127}$")
-    created_at: str  # ISO 8601 datetime
+    created_at: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}")
     model: ModelConfig
     runtime: RuntimeConfig
     hardware_profile: HardwareProfile

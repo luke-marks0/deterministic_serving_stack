@@ -129,6 +129,10 @@ class TestManifestRejectsInvalid(unittest.TestCase):
         m = Manifest.model_validate(d)
         self.assertEqual(len(m.artifact_inputs), 0)
 
+    def test_rejects_bad_created_at(self) -> None:
+        with self.assertRaises(PydanticValidationError):
+            Manifest.model_validate(self._mutate(**{"created_at": "not-a-date"}))
+
 
 class TestSubModels(unittest.TestCase):
     """Test individual sub-models in isolation."""
@@ -142,6 +146,26 @@ class TestSubModels(unittest.TestCase):
         c = Comparator(mode=ComparisonMode.absrel, atol=1e-6, rtol=1e-4)
         self.assertEqual(c.atol, 1e-6)
         self.assertEqual(c.rtol, 1e-4)
+
+    def test_comparator_hash_valid(self) -> None:
+        c = Comparator(mode=ComparisonMode.hash, algorithm="sha256")
+        self.assertEqual(c.algorithm, "sha256")
+
+    def test_comparator_ulp_valid(self) -> None:
+        c = Comparator(mode=ComparisonMode.ulp, ulp=2)
+        self.assertEqual(c.ulp, 2)
+
+    def test_comparator_hash_requires_algorithm(self) -> None:
+        with self.assertRaises(PydanticValidationError):
+            Comparator(mode=ComparisonMode.hash)
+
+    def test_comparator_ulp_requires_ulp(self) -> None:
+        with self.assertRaises(PydanticValidationError):
+            Comparator(mode=ComparisonMode.ulp)
+
+    def test_comparator_absrel_requires_atol_rtol(self) -> None:
+        with self.assertRaises(PydanticValidationError):
+            Comparator(mode=ComparisonMode.absrel, atol=1e-6)
 
     def test_artifact_input_minimal(self) -> None:
         a = ArtifactInput(

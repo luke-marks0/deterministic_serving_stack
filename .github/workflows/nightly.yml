@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install Python dependencies
+        run: pip install pydantic
       - name: Install ripgrep
         run: |
           if ! command -v rg >/dev/null 2>&1; then

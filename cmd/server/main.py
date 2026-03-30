@@ -180,7 +180,7 @@ def _build_vllm_cmd(manifest: Manifest, host: str, port: int) -> list[str]:
     revision = _enforce_model_revision(manifest)
     if revision:
         cmd.extend(["--revision", revision])
-        cmd.extend(["--tokenizer-revision", model.tokenizer_revision or revision])
+        cmd.extend(["--tokenizer-revision", model.tokenizer_revision])
 
     # Serving engine -- every field applied
     engine = runtime.serving_engine
@@ -189,8 +189,7 @@ def _build_vllm_cmd(manifest: Manifest, host: str, port: int) -> list[str]:
     cmd.extend(["--max-model-len", str(engine.max_model_len)])
     cmd.extend(["--gpu-memory-utilization", str(engine.gpu_memory_utilization)])
 
-    if engine.max_num_seqs:
-        cmd.extend(["--max-num-seqs", str(engine.max_num_seqs)])
+    cmd.extend(["--max-num-seqs", str(engine.max_num_seqs)])
 
     cmd.extend(["--attention-backend", engine.attention_backend.value])
 
@@ -214,17 +213,23 @@ def _build_vllm_cmd(manifest: Manifest, host: str, port: int) -> list[str]:
     if engine.block_size:
         cmd.extend(["--block-size", str(engine.block_size)])
 
-    if engine.enable_prefix_caching:
+    if engine.enable_prefix_caching is True:
         cmd.append("--enable-prefix-caching")
+    elif engine.enable_prefix_caching is False:
+        cmd.append("--no-enable-prefix-caching")
 
-    if engine.enable_chunked_prefill:
+    if engine.enable_chunked_prefill is True:
         cmd.append("--enable-chunked-prefill")
+    elif engine.enable_chunked_prefill is False:
+        cmd.append("--no-enable-chunked-prefill")
 
     if engine.scheduling_policy:
         cmd.extend(["--scheduling-policy", engine.scheduling_policy.value])
 
-    if engine.disable_sliding_window:
+    if engine.disable_sliding_window is True:
         cmd.append("--disable-sliding-window")
+    elif engine.disable_sliding_window is False:
+        cmd.append("--no-disable-sliding-window")
 
     tp = engine.tensor_parallel_size
     if tp and tp > 1:
@@ -234,8 +239,10 @@ def _build_vllm_cmd(manifest: Manifest, host: str, port: int) -> list[str]:
     if pp and pp > 1:
         cmd.extend(["--pipeline-parallel-size", str(pp)])
 
-    if engine.disable_custom_all_reduce:
+    if engine.disable_custom_all_reduce is True:
         cmd.append("--disable-custom-all-reduce")
+    elif engine.disable_custom_all_reduce is False:
+        cmd.append("--no-disable-custom-all-reduce")
 
     # Trust remote code
     if model.trust_remote_code:
@@ -282,6 +289,13 @@ def _set_deterministic_env(manifest: Manifest) -> None:
     os.environ["CUBLAS_WORKSPACE_CONFIG"] = knobs.cublas_workspace_config or ":4096:8"
     os.environ["CUDA_LAUNCH_BLOCKING"] = str(int(knobs.cuda_launch_blocking))
     os.environ["PYTHONHASHSEED"] = knobs.pythonhashseed or "0"
+
+    if knobs.torch_deterministic:
+        os.environ["TORCH_CUDNN_DETERMINISTIC"] = "1"
+        os.environ["TORCH_CUDNN_BENCHMARK"] = "0"
+    else:
+        os.environ.pop("TORCH_CUDNN_DETERMINISTIC", None)
+        os.environ.pop("TORCH_CUDNN_BENCHMARK", None)
 
     if manifest.runtime.batch_invariance.enabled:
         os.environ["VLLM_BATCH_INVARIANT"] = "1"

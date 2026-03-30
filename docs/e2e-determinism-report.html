@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>E2E Determinism Report</title>
+<style>
+  :root { --bg: #0d1117; --surface: #161b22; --border: #30363d; --text: #c9d1d9; --muted: #8b949e; --green: #3fb950; --red: #f85149; --accent: #58a6ff; --cyan: #39d2c0; --font: 'SF Mono', 'Fira Code', monospace; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; padding: 0; }
+  .hero { text-align: center; padding: 50px 20px 30px; border-bottom: 1px solid var(--border); }
+  .hero h1 { font-size: 2.2em; background: linear-gradient(135deg, var(--accent), var(--cyan)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 8px; }
+  .hero .sub { color: var(--muted); font-size: 1.1em; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 30px 20px; }
+  h2 { font-size: 1.4em; margin: 30px 0 16px; color: var(--text); }
+  .verdict { text-align: center; padding: 30px; margin: 30px 0; border-radius: 12px; font-size: 1.8em; font-weight: 700; }
+  .verdict-pass { background: #3fb95015; border: 2px solid var(--green); color: var(--green); }
+  .verdict-fail { background: #f8514915; border: 2px solid var(--red); color: var(--red); }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+  @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .card h3 { font-size: 0.9em; color: var(--muted); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .kv { display: flex; justify-content: space-between; padding: 4px 0; font-size: 0.88em; border-bottom: 1px solid #21262d; }
+  .kv:last-child { border-bottom: none; }
+  .kv .k { color: var(--muted); }
+  .kv .v { font-family: var(--font); color: var(--text); font-size: 0.9em; }
+  .kv .v.hash { color: var(--cyan); }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.88em; }
+  th, td { padding: 8px 12px; border: 1px solid var(--border); text-align: left; }
+  th { background: #1c2128; font-weight: 600; }
+  td { background: var(--surface); }
+  td code { font-family: var(--font); font-size: 0.9em; color: var(--cyan); }
+  .match { color: var(--green); font-weight: 700; }
+  .mismatch { color: var(--red); font-weight: 700; }
+  .hexrow td { background: #0d1117; padding: 4px 12px; }
+  .hexdump { font-family: var(--font); font-size: 0.75em; color: var(--muted); word-break: break-all; white-space: pre-wrap; margin: 4px 0; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 0.82em; }
+  .digest-box { background: #0d1117; border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin: 12px 0; font-family: var(--font); font-size: 0.82em; word-break: break-all; }
+  .digest-box .label { color: var(--muted); font-size: 0.85em; margin-bottom: 4px; }
+  .digest-box .val { color: var(--cyan); }
+  .footer { text-align: center; padding: 30px; color: var(--muted); font-size: 0.82em; border-top: 1px solid var(--border); margin-top: 40px; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>E2E Determinism Report</h1>
+  <p class="sub">Nix container, manifest-driven inference, warden-normalized packets</p>
+</div>
+
+<div class="container">
+
+<div class="verdict verdict-pass">DETERMINISTIC</div>
+
+<h2>Server Configuration</h2>
+<div class="grid">
+  <div class="card">
+    <h3>Model</h3>
+    <div class="kv"><span class="k">Source</span><span class="v">hf://Qwen/Qwen3-1.7B</span></div>
+    <div class="kv"><span class="k">Revision</span><span class="v hash">70d244cc86ccca08...</span></div>
+    <div class="kv"><span class="k">Dtype</span><span class="v">auto</span></div>
+    <div class="kv"><span class="k">Attention</span><span class="v">TRITON_ATTN</span></div>
+    <div class="kv"><span class="k">Max model len</span><span class="v">8192</span></div>
+  </div>
+  <div class="card">
+    <h3>Determinism</h3>
+    <div class="kv"><span class="k">Seed</span><span class="v">42</span></div>
+    <div class="kv"><span class="k">Batch invariance</span><span class="v">True</span></div>
+    <div class="kv"><span class="k">Strict hardware</span><span class="v">False</span></div>
+    <div class="kv"><span class="k">Comparison</span><span class="v">{'tokens': 'exact', 'logits': 'absrel'}</span></div>
+    <div class="kv"><span class="k">vLLM healthy</span><span class="v">True</span></div>
+  </div>
+</div>
+
+<h2>Closure</h2>
+<div class="digest-box">
+  <div class="label">Manifest digest</div>
+  <div class="val">sha256:b85fb37534ecc348713175b03d45c230d47e5f2bea96f8eb3731ae9c3e4c5e4b</div>
+</div>
+<div class="digest-box">
+  <div class="label">Nix closure hash</div>
+  <div class="val">567d246a87d577163c91291c7825aeecd5d1be30174914da98cff454901be6f5</div>
+</div>
+
+<h2>Inference Comparison (Run 1 vs Run 2)</h2>
+<table>
+  <thead><tr><th>Request</th><th>Prompt</th><th>Tokens</th><th>Run 1 Hash</th><th>Run 2 Hash</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>req-warmup</code></td>
+      <td>Hello</td>
+      <td>4</td>
+      <td><code>40d46cb3f0c0ca43...</code></td>
+      <td><code>40d46cb3f0c0ca43...</code></td>
+      <td class="match">MATCH</td>
+    </tr>
+    <tr>
+      <td><code>req-determinism-1</code></td>
+      <td>The capital of France is</td>
+      <td>32</td>
+      <td><code>610921959b11d47b...</code></td>
+      <td><code>610921959b11d47b...</code></td>
+      <td class="match">MATCH</td>
+    </tr>
+    <tr>
+      <td><code>req-determinism-2</code></td>
+      <td>Explain quantum computing in one sentence:</td>
+      <td>64</td>
+      <td><code>042cb2e1b84e7c88...</code></td>
+      <td><code>042cb2e1b84e7c88...</code></td>
+      <td class="match">MATCH</td>
+    </tr>
+    <tr>
+      <td><code>req-determinism-3</code></td>
+      <td>Write a Python function that computes the factoria...</td>
+      <td>128</td>
+      <td><code>872ad1bd356d583d...</code></td>
+      <td><code>872ad1bd356d583d...</code></td>
+      <td class="match">MATCH</td>
+    </tr></tbody>
+</table>
+
+<h2>Packet Comparison</h2>
+<div class="grid">
+  <div class="digest-box">
+    <div class="label">Run 1 packet digest</div>
+    <div class="val">sha256:cc65210bfe778d2711c2c037df5e80bf1f8dbed761dc5ca6e387db0884141b3b</div>
+  </div>
+  <div class="digest-box">
+    <div class="label">Run 2 packet digest</div>
+    <div class="val">sha256:cc65210bfe778d2711c2c037df5e80bf1f8dbed761dc5ca6e387db0884141b3b</div>
+  </div>
+</div>
+
+<table>
+  <thead><tr><th>Frame</th><th>Size</th><th>Ethernet</th><th>IP/TCP</th><th>Headers</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>0</td>
+      <td>559</td>
+      <td><code>02:00:00:00:00:01</code> → <code>02:00:00:00:00:02</code></td>
+      <td><code>10.0.0.1:8000</code> → <code>10.0.0.2:80</code></td>
+      <td>TTL=64, SEQ=1192844754</td>
+      <td class="match">MATCH</td>
+    </tr>
+    <tr class="hexrow">
+      <td colspan="6">
+        <details>
+          <summary>Hex dump (559 bytes)</summary>
+          <pre class="hexdump">02 00 00 00 00 02 02 00 00 00 00 01 08 00 45 00 02 21 6e 2a 40 00 40 06 b6 aa 0a 00 00 01 0a 00 00 02 1f 40 00 50 47 19 5d d2 00 00 00 00 50 18 02 00 58 66 00 00 7b 22 63 68 6f 69 63 65 73 22 3a 5b 7b 22 66 69 6e 69 73 68 5f 72 65 61 73 6f 6e 22 3a 22 6c 65 6e 67 74 68 22 2c 22 69 6e 64 65 78 22 3a...</pre>
+        </details>
+      </td>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>681</td>
+      <td><code>02:00:00:00:00:01</code> → <code>02:00:00:00:00:02</code></td>
+      <td><code>10.0.0.1:8000</code> → <code>10.0.0.2:80</code></td>
+      <td>TTL=64, SEQ=1985120567</td>
+      <td class="match">MATCH</td>
+    </tr>
+    <tr class="hexrow">
+      <td colspan="6">
+        <details>
+          <summary>Hex dump (681 bytes)</summary>
+          <pre class="hexdump">02 00 00 00 00 02 02 00 00 00 00 01 08 00 45 00 02 9b 6e 2a 40 00 40 06 b6 30 0a 00 00 01 0a 00 00 02 1f 40 00 50 76 52 89 37 00 00 00 00 50 18 02 00 3c 7f 00 00 7b 22 63 68 6f 69 63 65 73 22 3a 5b 7b 22 66 69 6e 69 73 68 5f 72 65 61 73 6f 6e 22 3a 22 6c 65 6e 67 74 68 22 2c 22 69 6e 64 65 78 22 3a...</pre>
+        </details>
+      </td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>839</td>
+      <td><code>02:00:00:00:00:01</code> → <code>02:00:00:00:00:02</code></td>
+      <td><code>10.0.0.1:8000</code> → <code>10.0.0.2:80</code></td>
+      <td>TTL=64, SEQ=1246705187</td>
+      <td class="match">MATCH</td>
+    </tr>
+    <tr class="hexrow">
+      <td colspan="6">
+        <details>
+          <summary>Hex dump (839 bytes)</summary>
+          <pre class="hexdump">02 00 00 00 00 02 02 00 00 00 00 01 08 00 45 00 03 39 6e 2a 40 00 40 06 b5 92 0a 00 00 01 0a 00 00 02 1f 40 00 50 4a 4f 36 23 00 00 00 00 50 18 02 00 fc c1 00 00 7b 22 63 68 6f 69 63 65 73 22 3a 5b 7b 22 66 69 6e 69 73 68 5f 72 65 61 73 6f 6e 22 3a 22 6c 65 6e 67 74 68 22 2c 22 69 6e 64 65 78 22 3a...</pre>
+        </details>
+      </td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td>1010</td>
+      <td><code>02:00:00:00:00:01</code> → <code>02:00:00:00:00:02</code></td>
+      <td><code>10.0.0.1:8000</code> → <code>10.0.0.2:80</code></td>
+      <td>TTL=64, SEQ=1893648565</td>
+      <td class="match">MATCH</td>
+    </tr>
+    <tr class="hexrow">
+      <td colspan="6">
+        <details>
+          <summary>Hex dump (1010 bytes)</summary>
+          <pre class="hexdump">02 00 00 00 00 02 02 00 00 00 00 01 08 00 45 00 03 e4 6e 2a 40 00 40 06 b4 e7 0a 00 00 01 0a 00 00 02 1f 40 00 50 70 de c8 b5 00 00 00 00 50 18 02 00 82 31 00 00 7b 22 63 68 6f 69 63 65 73 22 3a 5b 7b 22 66 69 6e 69 73 68 5f 72 65 61 73 6f 6e 22 3a 22 6c 65 6e 67 74 68 22 2c 22 69 6e 64 65 78 22 3a...</pre>
+        </details>
+      </td>
+    </tr></tbody>
+</table>
+
+</div>
+
+<div class="footer">
+  Deterministic Serving Stack — (nix, manifest) &rarr; (inference, packets)
+</div>
+
+</body>
+</html>

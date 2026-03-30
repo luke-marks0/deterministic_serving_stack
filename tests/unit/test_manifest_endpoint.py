@@ -316,6 +316,46 @@ class TestBuildVllmCmd(unittest.TestCase):
         cmd = _build_vllm_cmd(m, "127.0.0.1", 8001)
         self.assertNotIn("--disable-custom-all-reduce", cmd)
 
+    def test_enable_prefix_caching_flag_false(self) -> None:
+        d = _load_manifest_dict()
+        d["runtime"]["serving_engine"]["enable_prefix_caching"] = False
+        m = _manifest_from_dict(d)
+        cmd = _build_vllm_cmd(m, "127.0.0.1", 8001)
+        self.assertIn("--no-enable-prefix-caching", cmd)
+        self.assertNotIn("--enable-prefix-caching", cmd)
+
+    def test_enable_chunked_prefill_flag_false(self) -> None:
+        d = _load_manifest_dict()
+        d["runtime"]["serving_engine"]["enable_chunked_prefill"] = False
+        m = _manifest_from_dict(d)
+        cmd = _build_vllm_cmd(m, "127.0.0.1", 8001)
+        self.assertIn("--no-enable-chunked-prefill", cmd)
+        self.assertNotIn("--enable-chunked-prefill", cmd)
+
+    def test_disable_sliding_window_flag_false(self) -> None:
+        d = _load_manifest_dict()
+        d["runtime"]["serving_engine"]["disable_sliding_window"] = False
+        m = _manifest_from_dict(d)
+        cmd = _build_vllm_cmd(m, "127.0.0.1", 8001)
+        self.assertIn("--no-disable-sliding-window", cmd)
+        self.assertNotIn("--disable-sliding-window", cmd)
+
+    def test_disable_custom_all_reduce_flag_false(self) -> None:
+        d = _load_manifest_dict()
+        d["runtime"]["serving_engine"]["disable_custom_all_reduce"] = False
+        m = _manifest_from_dict(d)
+        cmd = _build_vllm_cmd(m, "127.0.0.1", 8001)
+        self.assertIn("--no-disable-custom-all-reduce", cmd)
+        self.assertNotIn("--disable-custom-all-reduce", cmd)
+
+    def test_tokenizer_revision_in_cmd(self) -> None:
+        d = _load_manifest_dict()
+        d["model"]["tokenizer_revision"] = "bb" * 20
+        m = _manifest_from_dict(d)
+        cmd = _build_vllm_cmd(m, "127.0.0.1", 8001)
+        self.assertIn("--tokenizer-revision", cmd)
+        self.assertEqual(cmd[cmd.index("--tokenizer-revision") + 1], "bb" * 20)
+
 
 class TestSetDeterministicEnv(unittest.TestCase):
     """Test that _set_deterministic_env reads knobs from manifest."""
@@ -347,6 +387,24 @@ class TestSetDeterministicEnv(unittest.TestCase):
         m = _manifest_from_dict(d)
         _set_deterministic_env(m)
         self.assertEqual(os.environ["PYTHONHASHSEED"], "0")
+
+    def test_torch_deterministic_true_sets_env(self) -> None:
+        d = _load_manifest_dict()
+        d["runtime"]["deterministic_knobs"]["torch_deterministic"] = True
+        m = _manifest_from_dict(d)
+        _set_deterministic_env(m)
+        self.assertEqual(os.environ["TORCH_CUDNN_DETERMINISTIC"], "1")
+        self.assertEqual(os.environ["TORCH_CUDNN_BENCHMARK"], "0")
+
+    def test_torch_deterministic_false_unsets_env(self) -> None:
+        os.environ["TORCH_CUDNN_DETERMINISTIC"] = "1"
+        os.environ["TORCH_CUDNN_BENCHMARK"] = "0"
+        d = _load_manifest_dict()
+        d["runtime"]["deterministic_knobs"]["torch_deterministic"] = False
+        m = _manifest_from_dict(d)
+        _set_deterministic_env(m)
+        self.assertNotIn("TORCH_CUDNN_DETERMINISTIC", os.environ)
+        self.assertNotIn("TORCH_CUDNN_BENCHMARK", os.environ)
 
 
 class TestClosureHash(unittest.TestCase):
