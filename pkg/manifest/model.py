@@ -216,6 +216,7 @@ class ComparisonConfig(BaseModel):
 
     tokens: Comparator
     logits: Comparator
+    network_egress: Comparator | None = None
 
 
 class ArtifactInput(BaseModel):
