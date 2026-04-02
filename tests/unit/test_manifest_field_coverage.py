@@ -172,6 +172,7 @@ def _build_coverage_manifests() -> list[dict]:
     m_ulp["comparison"] = {
         "tokens": {"mode": "ulp", "ulp": 2},
         "logits": {"mode": "hash", "algorithm": "sha256"},
+        "network_egress": {"mode": "exact"},
     }
     manifests.append(m_ulp)
 
@@ -181,6 +182,7 @@ def _build_coverage_manifests() -> list[dict]:
     m_cross["comparison"] = {
         "tokens": {"mode": "hash", "algorithm": "sha256"},
         "logits": {"mode": "ulp", "ulp": 4},
+        "network_egress": {"mode": "ulp", "ulp": 1},
     }
     manifests.append(m_cross)
 
@@ -190,6 +192,7 @@ def _build_coverage_manifests() -> list[dict]:
     m_absrel_tok["comparison"] = {
         "tokens": {"mode": "absrel", "atol": 1e-5, "rtol": 1e-3},
         "logits": {"mode": "exact"},
+        "network_egress": {"mode": "absrel", "atol": 1e-6, "rtol": 1e-4},
     }
     manifests.append(m_absrel_tok)
 

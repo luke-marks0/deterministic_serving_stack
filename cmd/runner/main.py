@@ -26,6 +26,7 @@ from pkg.common.deterministic import (
     utc_now_iso,
 )
 from pkg.manifest.model import Manifest
+from pkg.networkdet import create_net_stack
 
 
 PCI_ID_RE = re.compile(r"^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-7]$")
@@ -271,10 +272,20 @@ def _env_or_default(cli_value: str | None, env_key: str, default: str) -> str:
 
 def _synthetic_observables(
     m: Manifest,
+    manifest_dict: dict[str, Any],
     lockfile: dict[str, Any],
     replica_id: str,
-) -> list[dict[str, Any]]:
-    """Generate synthetic observables for testing/CI (no GPU required)."""
+    *,
+    network_backend: str = "sim",
+) -> tuple[list[dict[str, Any]], Any]:
+    """Generate synthetic observables for testing/CI (no GPU required).
+
+    Returns (request_outputs, net_stack). net_stack is the DeterministicNetStack
+    used to generate frames (or None if legacy backend).
+    """
+    use_legacy = network_backend == "legacy"
+    net = None if use_legacy else create_net_stack(manifest_dict, lockfile, backend="sim")
+
     request_outputs: list[dict[str, Any]] = []
 
     for idx, req in enumerate(m.requests):
@@ -284,7 +295,11 @@ def _synthetic_observables(
 
         request_outputs.append({"id": req.id, "tokens": toks, "logits": lgt})
 
-    return request_outputs
+        if not use_legacy:
+            response_bytes = canonical_json_bytes({"id": req.id, "tokens": toks, "logits": lgt})
+            net.process_response(conn_index=idx, response_bytes=response_bytes)
+
+    return request_outputs, net
 
 
 def _vllm_observables(
@@ -363,16 +378,41 @@ def run(
 
     vllm_env_info: dict[str, Any] | None = None
 
+    net = None
     if mode == "vllm":
         request_outputs, vllm_env_info = _vllm_observables(
             manifest_dict, lockfile, replica_id,
         )
+        # Generate frames from vLLM output too
+        net = create_net_stack(manifest_dict, lockfile, backend="sim")
+        for idx, r in enumerate(request_outputs):
+            response_bytes = canonical_json_bytes({"id": r["id"], "tokens": r["tokens"], "logits": r["logits"]})
+            net.process_response(conn_index=idx, response_bytes=response_bytes)
     else:
-        request_outputs = _synthetic_observables(
-            m, lockfile, replica_id,
+        request_outputs, net = _synthetic_observables(
+            m, manifest_dict, lockfile, replica_id,
+            network_backend=network_backend,
         )
 
+    # Write network frames
     observables_dir = out_dir / "observables"
+    network_path = observables_dir / "network_egress.json"
+
+    if net is not None:
+        frames = net.capture_frames_hex()
+        network_digest = _write_json(network_path, frames)
+        network_frame_count = net.frame_count()
+        network_capture_digest = net.capture_digest()
+    else:
+        # Legacy fallback
+        frames = []
+        for req in m.requests:
+            seed = _seed_for_request(m.run_id, req.id, req.prompt)
+            frames.append({"request_id": req.id, "frame_hex": _network_frame_hex_legacy(seed, req.id)})
+        network_digest = _write_json(network_path, frames)
+        network_frame_count = len(frames)
+        network_capture_digest = network_digest
+
     tokens_path = observables_dir / "tokens.json"
     logits_path = observables_dir / "logits.json"
 
@@ -448,6 +488,15 @@ def run(
             },
         },
         "rerun_metadata": rerun_metadata,
+        "network_provenance": {
+            "capture_path": str(network_path.relative_to(out_dir)),
+            "capture_digest": network_capture_digest,
+            "frame_count": network_frame_count,
+            "capture_mode": "userspace_pre_enqueue",
+            "capture_isolation": "pre_enqueue_mirror",
+            "capture_non_perturbing": True,
+            "route_mode": "deterministic_userspace_stack",
+        },
         "observables": {
             "tokens": {
                 "path": str(tokens_path.relative_to(out_dir)),
@@ -456,6 +505,10 @@ def run(
             "logits": {
                 "path": str(logits_path.relative_to(out_dir)),
                 "digest": logits_digest,
+            },
+            "network_egress": {
+                "path": str(network_path.relative_to(out_dir)),
+                "digest": network_digest,
             },
         },
         "attestations": [
