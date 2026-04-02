@@ -112,8 +112,6 @@ def run_vllm(
 
     # Extract observables
     request_outputs = []
-    engine_events = []
-    target_batch = runtime["batch_cardinality"]["target_batch_size"]
 
     for idx, (req_id, output) in enumerate(zip(request_ids, outputs)):
         result = output.outputs[0]
@@ -129,48 +127,13 @@ def run_vllm(
                 else:
                     logits.append(0.0)
 
-        # Activations: not directly available from vLLM API, emit token hashes as proxy
-        activations = [round(float((tok * 3) % 991) / 991.0, 8) for tok in tokens]
-
         request_outputs.append({
             "id": req_id,
             "tokens": tokens,
             "logits": logits,
-            "activations": activations,
             "text": result.text,
             "finish_reason": result.finish_reason,
         })
-
-        engine_events.append({
-            "step": idx,
-            "event": "batch_composition",
-            "batch_size": target_batch,
-            "request_id": req_id,
-        })
-
-        if "request_reorder" in runtime["engine_trace"].get("events", []):
-            engine_events.append({
-                "step": idx,
-                "event": "request_reorder",
-                "before": idx,
-                "after": idx,
-            })
-
-        if "attention_backend_selection" in runtime["engine_trace"].get("events", []):
-            engine_events.append({
-                "step": idx,
-                "event": "attention_backend_selection",
-                "backend": "flash_attention_2",
-            })
-
-        if "collective_algorithm_selection" in runtime["engine_trace"].get("events", []):
-            topo = manifest["hardware_profile"]["topology"]["mode"]
-            algorithm = "none" if topo == "single_node" else "ring_all_reduce"
-            engine_events.append({
-                "step": idx,
-                "event": "collective_algorithm_selection",
-                "algorithm": algorithm,
-            })
 
     # Collect environment info from the running vLLM instance
     gpu_inventory = []
@@ -201,7 +164,6 @@ def run_vllm(
 
     return {
         "request_outputs": request_outputs,
-        "engine_events": engine_events,
         "env_info": env_info,
         "resolved_env": resolved_env,
     }

@@ -29,5 +29,7 @@ jobs:
     needs: [lint, schema]
     steps:
       - uses: actions/checkout@v4
+      - name: Install Python dependencies
+        run: pip install pydantic
       - name: Fast Tests
         run: bash scripts/ci/test_fast.sh

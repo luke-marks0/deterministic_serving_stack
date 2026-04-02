@@ -183,28 +183,15 @@ def _base_manifest() -> dict[str, object]:
         "created_at": "2026-03-05T00:00:00Z",
         "model": {
             "source": "hf://org/model",
-            "requested_revision": "main",
-            "resolved_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "tokenizer_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
             "weights_revision": "cccccccccccccccccccccccccccccccccccccccc",
             "trust_remote_code": False,
-            "required_files": _placeholder_required_files(),
         },
         "runtime": {
             "strict_hardware": True,
-            "batch_policy": "fixed",
             "batch_invariance": {
                 "enabled": True,
                 "enforce_eager": True,
-            },
-            "batch_cardinality": {
-                "min_requests": 1,
-                "target_batch_size": 1,
-                "max_requests": 1,
-            },
-            "engine_trace": {
-                "enabled": True,
-                "events": ["batch_composition"],
             },
             "deterministic_knobs": {
                 "seed": 42,
@@ -218,61 +205,13 @@ def _base_manifest() -> dict[str, object]:
                 "dtype": "auto",
                 "attention_backend": "FLASH_ATTN",
             },
-            "nix_pin": {
-                "flake_ref": "github:test/test/0000000",
-                "flake_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-            },
-            "allow_non_reproducible_egress": False,
         },
         "hardware_profile": {
             "gpu": {
-                "vendor": "nvidia",
                 "model": "H100-SXM-80GB",
                 "count": 1,
                 "driver_version": "550.54.15",
                 "cuda_driver_version": "12.4",
-                "pci_ids": ["0000:65:00.0"],
-            },
-            "nic": {
-                "model": "ConnectX-7",
-                "pci_id": "0000:17:00.0",
-                "firmware": "28.40.1000",
-                "link_speed_gbps": 200,
-                "offloads": {
-                    "tso": False,
-                    "gso": False,
-                    "checksum": False,
-                    "vlan_strip": False,
-                },
-            },
-            "topology": {
-                "mode": "single_node",
-                "node_count": 1,
-                "rack_count": 1,
-                "collective_fabric": "none",
-            },
-        },
-        "network": {
-            "egress_reproducibility": True,
-            "security_mode": "plaintext",
-            "mtu": 1500,
-            "mss": 1460,
-            "tso": False,
-            "gso": False,
-            "checksum_offload": False,
-            "queue_mapping": {
-                "tx_queues": 1,
-                "rx_queues": 1,
-                "mapping_policy": "fixed_core_queue",
-            },
-            "ring_sizes": {
-                "tx": 256,
-                "rx": 256,
-            },
-            "thread_affinity": [1],
-            "internal_batching": {
-                "enabled": False,
-                "max_burst": 1,
             },
         },
         "requests": [
@@ -286,17 +225,6 @@ def _base_manifest() -> dict[str, object]:
         "comparison": {
             "tokens": {"mode": "exact"},
             "logits": {"mode": "exact"},
-            "activations": {"mode": "exact"},
-            "network_egress": {
-                "mode": "hash",
-                "algorithm": "sha256",
-            },
-        },
-        "deterministic_dispatcher": {
-            "enabled": False,
-            "algorithm": "round_robin_hash",
-            "request_order_source": "ingress_sequence",
-            "replay_log_required": True,
         },
         "artifact_inputs": [
             {
@@ -330,26 +258,6 @@ def _base_manifest() -> dict[str, object]:
                 "size_bytes": 100,
             },
             {
-                "artifact_id": "network-stack",
-                "artifact_type": "network_stack_binary",
-                "name": "net",
-                "source_kind": "s3",
-                "source_uri": "s3://mirror/net",
-                "immutable_ref": "sha256:" + ("d" * 64),
-                "expected_digest": "sha256:" + ("d" * 64),
-                "size_bytes": 100,
-            },
-            {
-                "artifact_id": "pmd-driver",
-                "artifact_type": "pmd_driver",
-                "name": "pmd",
-                "source_kind": "s3",
-                "source_uri": "s3://mirror/pmd",
-                "immutable_ref": "sha256:" + ("e" * 64),
-                "expected_digest": "sha256:" + ("e" * 64),
-                "size_bytes": 100,
-            },
-            {
                 "artifact_id": "runtime-knobs",
                 "artifact_type": "runtime_knob_set",
                 "name": "knobs",
@@ -370,26 +278,6 @@ def _base_manifest() -> dict[str, object]:
                 "size_bytes": 100,
             },
             {
-                "artifact_id": "batching-policy",
-                "artifact_type": "batching_policy",
-                "name": "batching",
-                "source_kind": "inline",
-                "source_uri": "inline://batching",
-                "immutable_ref": "v1",
-                "expected_digest": "sha256:" + ("2" * 64),
-                "size_bytes": 100,
-            },
-            {
-                "artifact_id": "nic-link",
-                "artifact_type": "nic_link_config",
-                "name": "nic",
-                "source_kind": "inline",
-                "source_uri": "inline://nic",
-                "immutable_ref": "v1",
-                "expected_digest": "sha256:" + ("3" * 64),
-                "size_bytes": 100,
-            },
-            {
                 "artifact_id": "compiled-ext",
                 "artifact_type": "compiled_extension",
                 "name": "compiled",
@@ -406,12 +294,9 @@ def _base_manifest() -> dict[str, object]:
 def _base_model(*, trust_remote_code: bool = False) -> dict[str, object]:
     return {
         "source": "hf://org/model",
-        "requested_revision": "main",
-        "resolved_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "tokenizer_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
         "weights_revision": "cccccccccccccccccccccccccccccccccccccccc",
         "trust_remote_code": trust_remote_code,
-        "required_files": [],
     }
 
 
@@ -481,32 +366,16 @@ class TestHFResolution(unittest.TestCase):
             resolved = resolve_hf_model(_base_model(), False, client=client, cache_dir=root)
 
             self.assertEqual(resolved.resolved_revision, client.commit)
+            self.assertTrue(any(item["artifact_type"] == "model_config" for item in resolved.model_artifacts))
+            self.assertTrue(any(item["artifact_type"] == "tokenizer" for item in resolved.model_artifacts))
+            self.assertTrue(any(item["artifact_type"] == "generation_config" for item in resolved.model_artifacts))
+            self.assertTrue(any(item["artifact_type"] == "chat_template" for item in resolved.model_artifacts))
+            self.assertTrue(any(item["artifact_type"] == "prompt_formatter" for item in resolved.model_artifacts))
             self.assertEqual(
-                [item["path"] for item in resolved.required_files if item["role"] == "config"],
-                ["configs/config.json"],
-            )
-            self.assertEqual(
-                [item["path"] for item in resolved.required_files if item["role"] == "tokenizer"],
-                ["tokenizer/tokenizer.json"],
-            )
-            self.assertEqual(
-                [item["path"] for item in resolved.required_files if item["role"] == "generation_config"],
-                ["settings/generation_config.json"],
-            )
-            self.assertEqual(
-                [item["path"] for item in resolved.required_files if item["role"] == "chat_template"],
-                ["templates/chat_template.jinja"],
-            )
-            self.assertEqual(
-                [item["path"] for item in resolved.required_files if item["role"] == "prompt_formatter"],
-                ["formatters/prompt_formatter.py"],
-            )
-            self.assertEqual(
-                len([item for item in resolved.required_files if item["role"] == "weights_shard"]),
+                len([item for item in resolved.model_artifacts if item["artifact_type"] == "model_weights"]),
                 2,
             )
-            self.assertTrue(all(item["digest"].startswith("sha256:") for item in resolved.required_files))
-            self.assertTrue(any(item["artifact_type"] == "model_weights" for item in resolved.model_artifacts))
+            self.assertTrue(all(item["expected_digest"].startswith("sha256:") for item in resolved.model_artifacts))
 
     def test_resolve_hf_model_with_remote_code_hashes_python_files(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -517,11 +386,10 @@ class TestHFResolution(unittest.TestCase):
 
             resolved = resolve_hf_model(_base_model(trust_remote_code=True), True, client=client, cache_dir=root)
 
-            self.assertIsNotNone(resolved.remote_code)
-            assert resolved.remote_code is not None
-            self.assertEqual(resolved.remote_code["commit"], client.commit)
-            self.assertEqual(resolved.remote_code["digest"], _expected_remote_code_digest(files))
             self.assertTrue(any(item["artifact_type"] == "remote_code" for item in resolved.model_artifacts))
+            rc_artifact = next(item for item in resolved.model_artifacts if item["artifact_type"] == "remote_code")
+            self.assertEqual(rc_artifact["immutable_ref"], client.commit)
+            self.assertEqual(rc_artifact["expected_digest"], _expected_remote_code_digest(files))
 
     def test_resolve_hf_model_offline_local_mirror_avoids_hf_client(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -657,8 +525,7 @@ class TestHFResolution(unittest.TestCase):
 
             model = manifest["model"]
             assert isinstance(model, dict)
-            self.assertEqual(model["resolved_revision"], _COMMIT)
-            self.assertGreaterEqual(len(model["required_files"]), 6)
+            self.assertEqual(model["weights_revision"], _COMMIT)
             self.assertTrue(any(item["artifact_type"] == "model_weights" for item in lockfile["artifacts"]))
             expected_manifest_digest = "sha256:" + hashlib.sha256(canonical_json_bytes(manifest)).hexdigest()
             self.assertEqual(lockfile["manifest_digest"], expected_manifest_digest)

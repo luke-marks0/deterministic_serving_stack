@@ -26,9 +26,6 @@ class TestLongRunDeterminism(unittest.TestCase):
                     {
                         "tokens": bundle["observables"]["tokens"]["digest"],
                         "logits": bundle["observables"]["logits"]["digest"],
-                        "activations": bundle["observables"]["activations"]["digest"],
-                        "engine_trace": bundle["observables"]["engine_trace"]["digest"],
-                        "network_egress": bundle["observables"]["network_egress"]["digest"],
                     }
                 )
 

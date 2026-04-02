@@ -328,6 +328,8 @@
             cp -r pkg $out/pkg
             cp -r schemas $out/schemas
             cp -r manifests $out/manifests 2>/dev/null || true
+            cp flake.nix $out/flake.nix
+            cp flake.lock $out/flake.lock 2>/dev/null || true
           '';
         };
 
@@ -364,6 +366,9 @@
               "HOME=/tmp"
               "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
               "NIX_SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
+              "CLOSURE_HASH=${builtins.hashString "sha256" (builtins.toString runtimeClosure.outPath)}"
+              "FLAKE_NIX_PATH=${appSrc}/flake.nix"
+              "FLAKE_LOCK_PATH=${appSrc}/flake.lock"
             ];
           };
         };

@@ -98,7 +98,7 @@ class DeterministicRouter:
     def __init__(self, manifest: dict[str, Any], pool: ReplicaPool):
         self.manifest = manifest
         self.pool = pool
-        self.algorithm = manifest["deterministic_dispatcher"]["algorithm"]
+        self.algorithm = manifest.get("deterministic_dispatcher", {}).get("algorithm", "round_robin_hash")
         self._seq = 0
         self._lock = threading.Lock()
 
@@ -283,7 +283,7 @@ def main() -> int:
 
     print("=== Deterministic Coordinator ===")
     print(f"Replicas: {replica_urls}")
-    print(f"Algorithm: {manifest['deterministic_dispatcher']['algorithm']}")
+    print(f"Algorithm: {manifest.get('deterministic_dispatcher', {}).get('algorithm', 'round_robin_hash')}")
 
     # Health check
     health = pool.check_health()

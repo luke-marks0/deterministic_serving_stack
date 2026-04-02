@@ -11,3 +11,6 @@ __pycache__/
 
 # OS files
 .DS_Store
+
+.claude/skills/
+.claude/worktrees/
