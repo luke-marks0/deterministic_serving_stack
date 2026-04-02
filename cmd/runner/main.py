@@ -277,8 +277,8 @@ def _synthetic_observables(
     replica_id: str,
     *,
     network_backend: str = "sim",
-    dpdk_port: str | None = None,
-    dpdk_eal_args: str | None = None,
+    dpdk_port: int = 0,
+    dpdk_eal_args: list[str] | None = None,
 ) -> tuple[list[dict[str, Any]], Any]:
     """Generate synthetic observables for testing/CI (no GPU required).
 
@@ -289,13 +289,12 @@ def _synthetic_observables(
     if use_legacy:
         net = None
     else:
-        net_kwargs: dict[str, Any] = {}
-        if dpdk_port is not None:
-            net_kwargs["dpdk_port"] = dpdk_port
-        if dpdk_eal_args is not None:
-            net_kwargs["dpdk_eal_args"] = dpdk_eal_args
+        backend_kwargs: dict[str, Any] = {}
+        if network_backend == "dpdk":
+            backend_kwargs["dpdk_port"] = dpdk_port
+            backend_kwargs["dpdk_eal_args"] = dpdk_eal_args or []
         net = create_net_stack(
-            manifest_dict, lockfile, backend=network_backend, **net_kwargs,
+            manifest_dict, lockfile, backend=network_backend, **backend_kwargs,
         )
 
     request_outputs: list[dict[str, Any]] = []
@@ -344,9 +343,9 @@ def run(
     node_name: str,
     namespace: str,
     invocation_argv: list[str],
-    dpdk_port: str | None = None,
-    dpdk_eal_args: str | None = None,
-    dpdk_loopback_port: str | None = None,
+    dpdk_port: int = 0,
+    dpdk_eal_args: list[str] | None = None,
+    dpdk_loopback_port: int | None = None,
 ) -> dict[str, Any]:
     validate_with_schema("manifest.v1.schema.json", manifest_dict)
     validate_with_schema("lockfile.v1.schema.json", lockfile)
@@ -424,16 +423,21 @@ def run(
         network_capture_digest = net.capture_digest()
         net.close()
 
-        # Loopback verification: if a loopback port was specified and we
-        # have a tx_report, verify the egress digest matches.
+        # Loopback verification (Level 2): capture frames on RX port after TX.
         if dpdk_loopback_port is not None and tx_report is not None:
-            loopback_verified = True
-            loopback_digest = tx_report.tx_digest
-            loopback_match = (loopback_digest == network_capture_digest)
-        else:
-            loopback_verified = False
-            loopback_digest = None
-            loopback_match = None
+            from pkg.networkdet.backend_dpdk import DPDKBackend
+            from pkg.networkdet.tx_report import TxReport
+            backend = net._backend
+            if isinstance(backend, DPDKBackend):
+                rx_frames, rx_digest = backend.recv_loopback(timeout_ms=2000)
+                tx_report = TxReport(
+                    pre_enqueue_digest=tx_report.pre_enqueue_digest,
+                    tx_completion_digest=tx_report.tx_completion_digest,
+                    frames_submitted=tx_report.frames_submitted,
+                    frames_confirmed=tx_report.frames_confirmed,
+                    rx_loopback_digest=rx_digest,
+                    rx_loopback_count=len(rx_frames),
+                )
     else:
         # Legacy fallback
         frames = []
@@ -528,12 +532,16 @@ def run(
             "capture_non_perturbing": True,
             "route_mode": "dpdk_kernel_bypass" if network_backend == "dpdk" else "deterministic_userspace_stack",
             **({"egress_verification": {
-                "tx_frames": tx_report.tx_frames,
-                "tx_bytes": tx_report.tx_bytes,
-                "tx_digest": tx_report.tx_digest,
-                "loopback_verified": loopback_verified,
-                **({"loopback_digest": loopback_digest} if loopback_digest is not None else {}),
-                **({"loopback_match": loopback_match} if loopback_match is not None else {}),
+                "backend": network_backend,
+                "level": tx_report.level,
+                "pre_enqueue_digest": tx_report.pre_enqueue_digest,
+                "tx_completion_digest": tx_report.tx_completion_digest,
+                "frames_submitted": tx_report.frames_submitted,
+                "frames_confirmed": tx_report.frames_confirmed,
+                "match": tx_report.match,
+                **({"rx_loopback_digest": tx_report.rx_loopback_digest,
+                    "rx_loopback_count": tx_report.rx_loopback_count,
+                    } if tx_report.rx_loopback_digest is not None else {}),
             }} if tx_report is not None else {}),
         },
         "observables": {
@@ -587,10 +595,12 @@ def main() -> int:
     parser.add_argument("--network-backend", default="sim", choices=["sim", "dpdk", "legacy"],
                         help="Network backend: sim (deterministic frames), dpdk (real NIC), legacy (synthetic hex)")
     parser.add_argument("--runtime-hardware", help="Optional observed runtime hardware profile JSON path")
-    parser.add_argument("--dpdk-port", default=None, help="DPDK PCI address for egress NIC (e.g. 0000:03:00.0)")
-    parser.add_argument("--dpdk-eal-args", default=None, help="Extra EAL arguments for DPDK initialization")
-    parser.add_argument("--dpdk-loopback-port", default=None,
-                        help="DPDK PCI address of loopback NIC for egress verification")
+    parser.add_argument("--dpdk-port", type=int, default=0,
+                        help="DPDK port ID for NIC transmission")
+    parser.add_argument("--dpdk-eal-args", default="",
+                        help="DPDK EAL arguments (space-separated)")
+    parser.add_argument("--dpdk-loopback-port", type=int, default=None,
+                        help="DPDK RX port for loopback verification (Level 2)")
     parser.add_argument("--pod-manifest-path", help="Mounted manifest path inside the pod")
     parser.add_argument("--pod-lockfile-path", help="Mounted lockfile path inside the pod")
     parser.add_argument("--pod-runtime-closure-path", help="Mounted runtime closure digest path inside the pod")
@@ -625,7 +635,7 @@ def main() -> int:
         namespace=_env_or_default(args.namespace, "RUNNER_NAMESPACE", "default"),
         invocation_argv=[str(Path(__file__).resolve()), *sys.argv[1:]],
         dpdk_port=args.dpdk_port,
-        dpdk_eal_args=args.dpdk_eal_args,
+        dpdk_eal_args=args.dpdk_eal_args.split() if args.dpdk_eal_args else [],
         dpdk_loopback_port=args.dpdk_loopback_port,
     )
     return 0

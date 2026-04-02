@@ -54,13 +54,16 @@ class DPDKBackend(NetworkBackend):
         if not self._initialised or not self._tx_buffer:
             return None
 
-        # Compute pre-enqueue digest (same algorithm as CaptureRing.digest)
+        result = self._lib.send(self._ctx, self._tx_buffer)
+
+        # Compute pre-enqueue digest over only the confirmed frames,
+        # so it matches the tx_completion digest scope (which covers
+        # only what rte_eth_tx_burst accepted).
         h = hashlib.sha256()
-        for frame in self._tx_buffer:
+        for frame in self._tx_buffer[:result.confirmed]:
             h.update(frame)
         pre_enqueue = f"sha256:{h.hexdigest()}"
 
-        result = self._lib.send(self._ctx, self._tx_buffer)
         self._tx_buffer.clear()
 
         return TxReport(

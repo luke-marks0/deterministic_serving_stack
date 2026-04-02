@@ -121,9 +121,6 @@ netdet_tx_result netdet_send(netdet_ctx* ctx,
 
     if (!ctx || count <= 0) return result;
 
-    EVP_MD_CTX* sha_ctx = EVP_MD_CTX_new();
-    EVP_DigestInit_ex(sha_ctx, EVP_sha256(), NULL);
-
     /* Allocate mbufs on heap for large counts */
     struct rte_mbuf** mbufs = calloc(count, sizeof(struct rte_mbuf*));
     if (!mbufs) return result;
@@ -144,6 +141,9 @@ netdet_tx_result netdet_send(netdet_ctx* ctx,
     }
 
     result.submitted = count;
+
+    EVP_MD_CTX* sha_ctx = EVP_MD_CTX_new();
+    EVP_DigestInit_ex(sha_ctx, EVP_sha256(), NULL);
 
     /* Transmit burst */
     uint16_t sent = rte_eth_tx_burst(ctx->port_id, 0,
