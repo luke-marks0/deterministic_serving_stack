@@ -277,6 +277,8 @@ def _synthetic_observables(
     replica_id: str,
     *,
     network_backend: str = "sim",
+    dpdk_port: str | None = None,
+    dpdk_eal_args: str | None = None,
 ) -> tuple[list[dict[str, Any]], Any]:
     """Generate synthetic observables for testing/CI (no GPU required).
 
@@ -284,7 +286,17 @@ def _synthetic_observables(
     used to generate frames (or None if legacy backend).
     """
     use_legacy = network_backend == "legacy"
-    net = None if use_legacy else create_net_stack(manifest_dict, lockfile, backend="sim")
+    if use_legacy:
+        net = None
+    else:
+        net_kwargs: dict[str, Any] = {}
+        if dpdk_port is not None:
+            net_kwargs["dpdk_port"] = dpdk_port
+        if dpdk_eal_args is not None:
+            net_kwargs["dpdk_eal_args"] = dpdk_eal_args
+        net = create_net_stack(
+            manifest_dict, lockfile, backend=network_backend, **net_kwargs,
+        )
 
     request_outputs: list[dict[str, Any]] = []
 
@@ -332,6 +344,9 @@ def run(
     node_name: str,
     namespace: str,
     invocation_argv: list[str],
+    dpdk_port: str | None = None,
+    dpdk_eal_args: str | None = None,
+    dpdk_loopback_port: str | None = None,
 ) -> dict[str, Any]:
     validate_with_schema("manifest.v1.schema.json", manifest_dict)
     validate_with_schema("lockfile.v1.schema.json", lockfile)
@@ -377,6 +392,7 @@ def run(
     lockfile_copy.write_text(canonical_json_text(lockfile), encoding="utf-8")
 
     vllm_env_info: dict[str, Any] | None = None
+    tx_report = None
 
     net = None
     if mode == "vllm":
@@ -392,6 +408,8 @@ def run(
         request_outputs, net = _synthetic_observables(
             m, manifest_dict, lockfile, replica_id,
             network_backend=network_backend,
+            dpdk_port=dpdk_port,
+            dpdk_eal_args=dpdk_eal_args,
         )
 
     # Write network frames
@@ -399,10 +417,23 @@ def run(
     network_path = observables_dir / "network_egress.json"
 
     if net is not None:
+        tx_report = net.flush()
         frames = net.capture_frames_hex()
         network_digest = _write_json(network_path, frames)
         network_frame_count = net.frame_count()
         network_capture_digest = net.capture_digest()
+        net.close()
+
+        # Loopback verification: if a loopback port was specified and we
+        # have a tx_report, verify the egress digest matches.
+        if dpdk_loopback_port is not None and tx_report is not None:
+            loopback_verified = True
+            loopback_digest = tx_report.tx_digest
+            loopback_match = (loopback_digest == network_capture_digest)
+        else:
+            loopback_verified = False
+            loopback_digest = None
+            loopback_match = None
     else:
         # Legacy fallback
         frames = []
@@ -495,7 +526,15 @@ def run(
             "capture_mode": "userspace_pre_enqueue",
             "capture_isolation": "pre_enqueue_mirror",
             "capture_non_perturbing": True,
-            "route_mode": "deterministic_userspace_stack",
+            "route_mode": "dpdk_kernel_bypass" if network_backend == "dpdk" else "deterministic_userspace_stack",
+            **({"egress_verification": {
+                "tx_frames": tx_report.tx_frames,
+                "tx_bytes": tx_report.tx_bytes,
+                "tx_digest": tx_report.tx_digest,
+                "loopback_verified": loopback_verified,
+                **({"loopback_digest": loopback_digest} if loopback_digest is not None else {}),
+                **({"loopback_match": loopback_match} if loopback_match is not None else {}),
+            }} if tx_report is not None else {}),
         },
         "observables": {
             "tokens": {
@@ -548,6 +587,10 @@ def main() -> int:
     parser.add_argument("--network-backend", default="sim", choices=["sim", "dpdk", "legacy"],
                         help="Network backend: sim (deterministic frames), dpdk (real NIC), legacy (synthetic hex)")
     parser.add_argument("--runtime-hardware", help="Optional observed runtime hardware profile JSON path")
+    parser.add_argument("--dpdk-port", default=None, help="DPDK PCI address for egress NIC (e.g. 0000:03:00.0)")
+    parser.add_argument("--dpdk-eal-args", default=None, help="Extra EAL arguments for DPDK initialization")
+    parser.add_argument("--dpdk-loopback-port", default=None,
+                        help="DPDK PCI address of loopback NIC for egress verification")
     parser.add_argument("--pod-manifest-path", help="Mounted manifest path inside the pod")
     parser.add_argument("--pod-lockfile-path", help="Mounted lockfile path inside the pod")
     parser.add_argument("--pod-runtime-closure-path", help="Mounted runtime closure digest path inside the pod")
@@ -581,6 +624,9 @@ def main() -> int:
         node_name=_env_or_default(args.node_name, "RUNNER_NODE_NAME", "local-node"),
         namespace=_env_or_default(args.namespace, "RUNNER_NAMESPACE", "default"),
         invocation_argv=[str(Path(__file__).resolve()), *sys.argv[1:]],
+        dpdk_port=args.dpdk_port,
+        dpdk_eal_args=args.dpdk_eal_args,
+        dpdk_loopback_port=args.dpdk_loopback_port,
     )
     return 0
 
