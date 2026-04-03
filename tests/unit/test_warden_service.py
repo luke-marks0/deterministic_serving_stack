@@ -346,5 +346,55 @@ class TestFakeEthHeader(unittest.TestCase):
         self.assertEqual(recovered, raw_ip)
 
 
+class TestWardenServiceCapture(unittest.TestCase):
+    """Test capture ring and raw packet recording."""
+
+    def _make_service(self, **kwargs):
+        config = WardenConfig(**kwargs)
+        return WardenService(config)
+
+    def test_capture_records_normalized_frames(self):
+        svc = self._make_service(secret=b"capture-test", skip_isn_rewrite=True)
+        raw = _build_ip_tcp_packet(tcp_flags=0x10, seq=5000, ack=1000)
+        pkt = MockNFPacket(raw)
+        svc._packet_callback(pkt)
+        self.assertEqual(svc.capture.frame_count, 1)
+        self.assertTrue(svc.capture_digest().startswith("sha256:"))
+
+    def test_capture_reset_clears(self):
+        svc = self._make_service(skip_isn_rewrite=True)
+        raw = _build_ip_tcp_packet(tcp_flags=0x10, seq=5000, ack=1000)
+        svc._packet_callback(MockNFPacket(raw))
+        svc.capture_reset()
+        self.assertEqual(svc.capture.frame_count, 0)
+        self.assertEqual(len(svc.raw_packets()), 0)
+
+    def test_raw_packets_recorded(self):
+        svc = self._make_service(skip_isn_rewrite=True)
+        raw = _build_ip_tcp_packet(tcp_flags=0x10, seq=5000, ack=1000)
+        svc._packet_callback(MockNFPacket(raw))
+        self.assertEqual(len(svc.raw_packets()), 1)
+        self.assertEqual(svc.raw_packets()[0], raw)
+
+    def test_determinism_replay(self):
+        """Replaying raw packets through a fresh warden produces identical output."""
+        from pkg.networkdet.warden import ActiveWarden
+        secret = b"replay-test"
+        svc = self._make_service(secret=secret, skip_isn_rewrite=True)
+        packets = [
+            _build_ip_tcp_packet(tcp_flags=0x10, seq=5000 + i, ack=1000)
+            for i in range(3)
+        ]
+        for raw in packets:
+            svc._packet_callback(MockNFPacket(raw))
+
+        captured = svc.capture.drain()
+        fresh = ActiveWarden(secret=secret, skip_isn_rewrite=True)
+        for raw, expected in zip(packets, captured):
+            frame = FAKE_ETH + raw
+            result = fresh.normalize(frame)
+            self.assertEqual(result, expected)
+
+
 if __name__ == "__main__":
     unittest.main()
