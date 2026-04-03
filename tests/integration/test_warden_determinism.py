@@ -244,6 +244,95 @@ def run_test():
 
     print()
 
+    # --- Independent Witness: raw socket captures what the kernel delivers ---
+    print("Independent Witness (raw socket)")
+
+    # Use a raw socket (AF_PACKET) as an independent observer.
+    # This is a separate capture mechanism from NFQUEUE — it sees packets
+    # after the kernel re-injects them from the warden.
+    import socket as sock_mod
+
+    raw_sock = sock_mod.socket(sock_mod.AF_PACKET, sock_mod.SOCK_RAW, sock_mod.htons(3))  # ETH_P_ALL
+    raw_sock.settimeout(0.1)
+    raw_sock.bind(("lo", 0))
+    witness_packets: list[bytes] = []
+
+    # Fresh warden capture for this trial.
+    svc.capture_reset()
+    svc.warden.reset()
+
+    # Drain any stale packets from the raw socket.
+    while True:
+        try:
+            raw_sock.recv(65535)
+        except (sock_mod.timeout, BlockingIOError):
+            break
+
+    try:
+        resp = urllib.request.urlopen(
+            f"http://127.0.0.1:{SERVER_PORT}/deterministic", timeout=5,
+        )
+        resp.read()
+    except Exception:
+        pass
+
+    time.sleep(0.5)  # Let trailing packets arrive.
+
+    # Collect everything the raw socket captured.
+    while True:
+        try:
+            pkt = raw_sock.recv(65535)
+            witness_packets.append(pkt)
+        except (sock_mod.timeout, BlockingIOError):
+            break
+
+    raw_sock.close()
+
+    # Filter to server→client TCP packets on our port.
+    # Raw socket on lo delivers Ethernet frames (14-byte header + IP).
+    wire_ip_packets = []
+    for pkt in witness_packets:
+        if len(pkt) < 34:  # ETH(14) + IP(20) minimum
+            continue
+        ethertype = struct.unpack("!H", pkt[12:14])[0]
+        if ethertype != 0x0800:
+            continue
+        ip_start = 14
+        protocol = pkt[ip_start + 9]
+        if protocol != 6:  # TCP
+            continue
+        ihl = (pkt[ip_start] & 0x0F) * 4
+        tcp_start = ip_start + ihl
+        if len(pkt) < tcp_start + 4:
+            continue
+        src_port = struct.unpack("!H", pkt[tcp_start:tcp_start + 2])[0]
+        if src_port == SERVER_PORT:
+            wire_ip_packets.append(pkt[ip_start:])
+
+    check(f"Raw socket captured {len(wire_ip_packets)} server packets",
+          len(wire_ip_packets) > 0)
+
+    # Compare: strip fake Ethernet from warden frames to get IP bytes,
+    # then match against what the raw socket independently observed.
+    warden_frames = list(svc.capture.drain())
+    warden_ip_packets = [f[ETH_HEADER_LEN:] for f in warden_frames]
+
+    matched = 0
+    wire_set = set()
+    for wp in wire_ip_packets:
+        wire_set.add(wp)
+    for wp in warden_ip_packets:
+        if wp in wire_set:
+            matched += 1
+
+    check(
+        f"Wire witness: {matched}/{len(warden_ip_packets)} warden frames seen by raw socket",
+        matched == len(warden_ip_packets),
+        f"only {matched} of {len(warden_ip_packets)} matched",
+    )
+
+    print()
+
     # --- Sanity Check: different request -> different digest ---
     print("Sanity Check")
     svc.capture_reset()
