@@ -703,5 +703,35 @@ class TestWardenCovertChannelElimination(unittest.TestCase):
         self.assertEqual(ip["total_length"], 20 + tcp["data_offset"])
 
 
+class TestSkipISNRewrite(unittest.TestCase):
+
+    def test_skip_isn_rewrite_preserves_seq(self):
+        """With skip_isn_rewrite=True, SYN ISN passes through unchanged."""
+        frame = _build_frame(
+            tcp_kwargs={"flags": 0x02, "seq": 0xDEADBEEF, "ack": 0},
+        )
+        warden = ActiveWarden(secret=b"test", skip_isn_rewrite=True)
+        result = warden.normalize(frame)
+        tcp = _parse_tcp(result)
+        self.assertEqual(tcp["seq"], 0xDEADBEEF)
+        # IP ID should still be rewritten.
+        ip_orig = _parse_ip(frame)
+        ip_norm = _parse_ip(result)
+        self.assertNotEqual(ip_orig["ip_id"], ip_norm["ip_id"])
+        # ISN rewrites counter should be 0.
+        self.assertEqual(warden.stats.isn_rewrites, 0)
+
+    def test_isn_rewrite_default_changes_seq(self):
+        """Without skip_isn_rewrite, SYN ISN is rewritten."""
+        frame = _build_frame(
+            tcp_kwargs={"flags": 0x02, "seq": 0xDEADBEEF, "ack": 0},
+        )
+        warden = ActiveWarden(secret=b"test", skip_isn_rewrite=False)
+        result = warden.normalize(frame)
+        tcp = _parse_tcp(result)
+        self.assertNotEqual(tcp["seq"], 0xDEADBEEF)
+        self.assertEqual(warden.stats.isn_rewrites, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

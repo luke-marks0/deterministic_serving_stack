@@ -104,9 +104,11 @@ class ActiveWarden:
     - Returns the normalized frame, or None if the frame should be dropped
     """
 
-    def __init__(self, *, secret: bytes = b"warden-default-key", ttl: int = 64) -> None:
+    def __init__(self, *, secret: bytes = b"warden-default-key", ttl: int = 64,
+                 skip_isn_rewrite: bool = False) -> None:
         self._secret = secret
         self._ttl = ttl
+        self._skip_isn_rewrite = skip_isn_rewrite
         self._connections: dict[ConnKey, ConnState] = {}
         self.stats = WardenStats()
 
@@ -235,32 +237,33 @@ class ActiveWarden:
             is_syn = bool(tcp_flags & TCP_FLAG_SYN)
             is_ack = bool(tcp_flags & TCP_FLAG_ACK)
 
-            if is_syn and not is_ack:
-                # SYN (client -> server): rewrite ISN, record offset.
-                new_isn = self._new_isn(tcp_seq, conn_key)
-                conn.seq_offset = (new_isn - tcp_seq) & 0xFFFFFFFF
-                conn.seen_syn = True
-                tcp_seq = new_isn
-                self.stats.isn_rewrites += 1
-            elif is_syn and is_ack:
-                # SYN-ACK (server -> client): rewrite server ISN,
-                # adjust ACK to match rewritten client ISN.
-                reverse_key = self._reverse_key(conn_key)
-                reverse_conn = self._get_conn(reverse_key)
-                new_isn = self._new_isn(tcp_seq, conn_key)
-                conn.seq_offset = (new_isn - tcp_seq) & 0xFFFFFFFF
-                conn.seen_syn_ack = True
-                tcp_seq = new_isn
-                # Adjust ACK number using the client's offset.
-                tcp_ack = (tcp_ack + reverse_conn.seq_offset) & 0xFFFFFFFF
-                self.stats.isn_rewrites += 1
-            else:
-                # Data/ACK/FIN/RST: apply stored offsets.
-                tcp_seq = (tcp_seq + conn.seq_offset) & 0xFFFFFFFF
-                reverse_key = self._reverse_key(conn_key)
-                if reverse_key in self._connections:
-                    reverse_conn = self._connections[reverse_key]
+            if not self._skip_isn_rewrite:
+                if is_syn and not is_ack:
+                    # SYN (client -> server): rewrite ISN, record offset.
+                    new_isn = self._new_isn(tcp_seq, conn_key)
+                    conn.seq_offset = (new_isn - tcp_seq) & 0xFFFFFFFF
+                    conn.seen_syn = True
+                    tcp_seq = new_isn
+                    self.stats.isn_rewrites += 1
+                elif is_syn and is_ack:
+                    # SYN-ACK (server -> client): rewrite server ISN,
+                    # adjust ACK to match rewritten client ISN.
+                    reverse_key = self._reverse_key(conn_key)
+                    reverse_conn = self._get_conn(reverse_key)
+                    new_isn = self._new_isn(tcp_seq, conn_key)
+                    conn.seq_offset = (new_isn - tcp_seq) & 0xFFFFFFFF
+                    conn.seen_syn_ack = True
+                    tcp_seq = new_isn
+                    # Adjust ACK number using the client's offset.
                     tcp_ack = (tcp_ack + reverse_conn.seq_offset) & 0xFFFFFFFF
+                    self.stats.isn_rewrites += 1
+                else:
+                    # Data/ACK/FIN/RST: apply stored offsets.
+                    tcp_seq = (tcp_seq + conn.seq_offset) & 0xFFFFFFFF
+                    reverse_key = self._reverse_key(conn_key)
+                    if reverse_key in self._connections:
+                        reverse_conn = self._connections[reverse_key]
+                        tcp_ack = (tcp_ack + reverse_conn.seq_offset) & 0xFFFFFFFF
 
             struct.pack_into("!I", buf, tcp_start + 4, tcp_seq)
             struct.pack_into("!I", buf, tcp_start + 8, tcp_ack)

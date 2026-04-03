@@ -12,6 +12,7 @@ import logging
 import struct
 import threading
 
+from pkg.networkdet.capture import CaptureRing
 from pkg.networkdet.warden import ActiveWarden, ETH_HEADER_LEN
 from pkg.networkdet.warden_config import WardenConfig
 
@@ -41,9 +42,14 @@ class WardenService:
 
     def __init__(self, config: WardenConfig) -> None:
         self.config = config
-        self.warden = ActiveWarden(secret=config.secret, ttl=config.ttl)
+        self.warden = ActiveWarden(
+            secret=config.secret, ttl=config.ttl,
+            skip_isn_rewrite=config.skip_isn_rewrite,
+        )
         self._nfqueue = None
         self._stats_thread: threading.Thread | None = None
+        self.capture = CaptureRing()
+        self._raw_packets: list[bytes] = []
 
     def _packet_callback(self, pkt) -> None:
         """Called for every packet pulled from the NFQUEUE."""
@@ -58,6 +64,10 @@ class WardenService:
             if normalized is None:
                 pkt.drop()
                 return
+
+            # Record for determinism verification.
+            self.capture.record(normalized)
+            self._raw_packets.append(bytes(raw_ip))
 
             # Strip the fake Ethernet header to get back to L3.
             normalized_ip = normalized[ETH_HEADER_LEN:]
@@ -117,6 +127,19 @@ class WardenService:
             pass
         finally:
             self.stop()
+
+    def capture_digest(self) -> str:
+        """SHA-256 digest over all captured normalized frames."""
+        return self.capture.digest()
+
+    def capture_reset(self) -> None:
+        """Clear capture ring and raw packet buffer."""
+        self.capture = CaptureRing()
+        self._raw_packets.clear()
+
+    def raw_packets(self) -> list[bytes]:
+        """Return copies of raw L3 packets received before normalization."""
+        return list(self._raw_packets)
 
     def stop(self) -> None:
         """Unbind from NFQUEUE and shut down."""

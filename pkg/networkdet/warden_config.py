@@ -45,6 +45,10 @@ class WardenConfig:
     # iptables chain to hook (FORWARD for bridge/gateway, INPUT/OUTPUT for host).
     chain: str = "FORWARD"
 
+    # Skip ISN rewriting (for single-host OUTPUT chain testing where ISN
+    # rewriting breaks the kernel TCP state machine).
+    skip_isn_rewrite: bool = False
+
 
 def load_config(path: str | None = None) -> WardenConfig:
     """Load configuration, preferring YAML file then environment variables.
@@ -91,5 +95,7 @@ def load_config(path: str | None = None) -> WardenConfig:
         cfg.log_level = os.environ["WARDEN_LOG_LEVEL"].upper()
     if "WARDEN_CHAIN" in os.environ:
         cfg.chain = os.environ["WARDEN_CHAIN"].upper()
+    if "WARDEN_SKIP_ISN_REWRITE" in os.environ:
+        cfg.skip_isn_rewrite = os.environ["WARDEN_SKIP_ISN_REWRITE"].lower() in ("1", "true", "yes")
 
     return cfg
