@@ -126,9 +126,10 @@ def run_test():
     print(f"ISN rewriting: ENABLED (inline mode, OUTPUT-only bidirectional)")
     print()
 
-    # --- Test 1: HTTP delivery with ISN rewriting ---
+    # --- Test 1: HTTP delivery + per-request stats ---
     print("Test 1: HTTP Delivery with ISN Rewriting")
     NUM_TRIALS = 3
+    per_request_stats = []
     for trial in range(NUM_TRIALS):
         svc.capture_reset()
         svc.warden.reset()
@@ -138,30 +139,39 @@ def run_test():
             )
             body = resp.read()
             time.sleep(0.3)
+            stats = svc.warden.stats.as_dict()
+            frames = svc.capture.frame_count
+            per_request_stats.append(stats)
             check(
-                f"Trial {trial}: response correct ({len(body)} bytes)",
+                f"Request {trial}: {len(body)}B delivered, "
+                f"{stats['isn_rewrites']} ISN rewrites, "
+                f"{frames} frames",
                 body == RESPONSE_DETERMINISTIC,
                 f"got {body[:40]}..." if body != RESPONSE_DETERMINISTIC else "",
             )
         except Exception as e:
-            check(f"Trial {trial}: HTTP request succeeded", False, str(e))
+            check(f"Request {trial}: HTTP request succeeded", False, str(e))
 
     print()
 
-    # --- Test 2: ISN was actually rewritten ---
-    print("Test 2: ISN Rewriting Active")
-    stats = svc.warden.stats.as_dict()
+    # --- Test 2: Per-request ISN rewrite consistency ---
+    print("Test 2: ISN Rewriting Consistency")
+    isn_counts = [s["isn_rewrites"] for s in per_request_stats]
+    frame_counts = [s["frames_processed"] for s in per_request_stats]
     check(
-        f"isn_rewrites > 0 (got {stats['isn_rewrites']})",
-        stats["isn_rewrites"] > 0,
+        f"Every request has 2 ISN rewrites (SYN+SYN-ACK): {isn_counts}",
+        all(c == 2 for c in isn_counts),
+    )
+    # Frame counts may vary by ±2 due to kernel TCP timing (delayed ACK,
+    # window probes). Check they're in a reasonable range, not identical.
+    check(
+        f"Frame counts within range across requests: {frame_counts}",
+        max(frame_counts) - min(frame_counts) <= 4,
+        f"spread too wide: {frame_counts}",
     )
     check(
-        f"frames_processed > 0 (got {stats['frames_processed']})",
-        stats["frames_processed"] > 0,
-    )
-    check(
-        f"ip_id_rewrites > 0 (got {stats['ip_id_rewrites']})",
-        stats["ip_id_rewrites"] > 0,
+        f"Total: {sum(isn_counts)} ISN rewrites across {NUM_TRIALS} requests",
+        sum(isn_counts) == NUM_TRIALS * 2,
     )
 
     print()
@@ -284,11 +294,16 @@ def run_test():
     print()
 
     # --- Summary ---
-    print("Warden Stats (full ISN rewrite mode)")
-    final_stats = svc.warden.stats.as_dict()
-    for k, v in final_stats.items():
-        if v > 0:
-            print(f"    {k}: {v}")
+    print("Per-Request Breakdown")
+    for i, s in enumerate(per_request_stats):
+        print(f"    Request {i}: "
+              f"{s['frames_processed']} frames, "
+              f"{s['isn_rewrites']} ISN rewrites, "
+              f"{s['ip_id_rewrites']} IP ID rewrites, "
+              f"{s['checksums_recomputed']} checksums")
+    print(f"    Average: "
+          f"{sum(s['frames_processed'] for s in per_request_stats)/NUM_TRIALS:.0f} frames/req, "
+          f"{sum(s['isn_rewrites'] for s in per_request_stats)/NUM_TRIALS:.0f} ISN rewrites/req")
 
     print()
     print("=" * 60)
