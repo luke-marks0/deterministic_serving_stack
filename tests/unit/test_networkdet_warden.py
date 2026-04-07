@@ -703,6 +703,170 @@ class TestWardenCovertChannelElimination(unittest.TestCase):
         self.assertEqual(ip["total_length"], 20 + tcp["data_offset"])
 
 
+class TestInlineISNRewrite(unittest.TestCase):
+    """Test inline mode where the warden sits in the live packet path.
+
+    In inline mode, the server sees rewritten client ISNs (because the
+    warden modified the SYN before it reached the server). The warden
+    must subtract offsets on the return path so the client kernel sees
+    its original ISN reflected back.
+    """
+
+    # Client = 10.0.0.1:50000, Server = 10.0.0.2:80
+    C2S = {"src": "10.0.0.1", "dst": "10.0.0.2"}  # client→server IP kwargs
+    S2C = {"src": "10.0.0.2", "dst": "10.0.0.1"}  # server→client IP kwargs
+
+    def test_inline_handshake_roundtrip(self):
+        """Full SYN → SYN-ACK → ACK with inline ISN rewriting."""
+        CLIENT_ISN = 1000
+        SERVER_ISN = 5000
+        warden = ActiveWarden(secret=b"inline-test", inline=True)
+
+        # 1. Client SYN: seq=1000 → warden rewrites to X'
+        syn = _build_frame(
+            ip_kwargs=self.C2S,
+            tcp_kwargs={"flags": 0x02, "seq": CLIENT_ISN, "ack": 0,
+                        "src_port": 50000, "dst_port": 80},
+        )
+        syn_out = warden.normalize(syn)
+        client_rewritten = _parse_tcp(syn_out)["seq"]
+        self.assertNotEqual(client_rewritten, CLIENT_ISN)
+        client_offset = (client_rewritten - CLIENT_ISN) & 0xFFFFFFFF
+
+        # 2. Server SYN-ACK: the server SAW the rewritten client ISN,
+        #    so it acks client_rewritten+1. The warden must undo this
+        #    so the client sees ack=CLIENT_ISN+1.
+        syn_ack = _build_frame(
+            ip_kwargs=self.S2C,
+            tcp_kwargs={"flags": 0x12, "seq": SERVER_ISN,
+                        "ack": client_rewritten + 1,
+                        "src_port": 80, "dst_port": 50000},
+        )
+        syn_ack_out = warden.normalize(syn_ack)
+        sa = _parse_tcp(syn_ack_out)
+        server_rewritten = sa["seq"]
+        self.assertNotEqual(server_rewritten, SERVER_ISN)
+        # KEY ASSERTION: client receives ack = original ISN + 1
+        self.assertEqual(sa["ack"], (CLIENT_ISN + 1) & 0xFFFFFFFF)
+
+        server_offset = (server_rewritten - SERVER_ISN) & 0xFFFFFFFF
+
+        # 3. Client ACK: client uses original seq=1001, ack=server_rewritten+1
+        #    (client saw the rewritten server ISN in the SYN-ACK).
+        #    Warden shifts seq by client offset, subtracts server offset from ack.
+        client_ack = _build_frame(
+            ip_kwargs=self.C2S,
+            tcp_kwargs={"flags": 0x10, "seq": CLIENT_ISN + 1,
+                        "ack": server_rewritten + 1,
+                        "src_port": 50000, "dst_port": 80},
+        )
+        ack_out = warden.normalize(client_ack)
+        a = _parse_tcp(ack_out)
+        # seq shifted into rewritten space
+        self.assertEqual(a["seq"], (CLIENT_ISN + 1 + client_offset) & 0xFFFFFFFF)
+        # ack restored for server (server expects its original ISN+1)
+        self.assertEqual(a["ack"], (SERVER_ISN + 1) & 0xFFFFFFFF)
+
+    def test_inline_data_transfer(self):
+        """Data packets after handshake have correct seq/ack adjustments."""
+        CLIENT_ISN = 1000
+        SERVER_ISN = 5000
+        warden = ActiveWarden(secret=b"inline-data", inline=True)
+
+        # Handshake
+        syn = _build_frame(
+            ip_kwargs=self.C2S,
+            tcp_kwargs={"flags": 0x02, "seq": CLIENT_ISN, "ack": 0,
+                        "src_port": 50000, "dst_port": 80},
+        )
+        syn_out = warden.normalize(syn)
+        client_rewritten = _parse_tcp(syn_out)["seq"]
+        client_offset = (client_rewritten - CLIENT_ISN) & 0xFFFFFFFF
+
+        syn_ack = _build_frame(
+            ip_kwargs=self.S2C,
+            tcp_kwargs={"flags": 0x12, "seq": SERVER_ISN,
+                        "ack": client_rewritten + 1,
+                        "src_port": 80, "dst_port": 50000},
+        )
+        syn_ack_out = warden.normalize(syn_ack)
+        server_rewritten = _parse_tcp(syn_ack_out)["seq"]
+        server_offset = (server_rewritten - SERVER_ISN) & 0xFFFFFFFF
+
+        # Server sends data: seq=5001, ack=client_rewritten+1
+        # (server knows client as client_rewritten)
+        server_data = _build_frame(
+            ip_kwargs=self.S2C,
+            tcp_kwargs={
+                "flags": 0x18, "seq": SERVER_ISN + 1,
+                "ack": client_rewritten + 1,
+                "src_port": 80, "dst_port": 50000,
+            },
+            payload=b"HTTP/1.0 200 OK\r\n\r\nhello",
+        )
+        data_out = warden.normalize(server_data)
+        d = _parse_tcp(data_out)
+        # Server seq shifted into rewritten space
+        self.assertEqual(d["seq"], (SERVER_ISN + 1 + server_offset) & 0xFFFFFFFF)
+        # Ack restored to client's original ISN space
+        self.assertEqual(d["ack"], (CLIENT_ISN + 1) & 0xFFFFFFFF)
+
+        # Verify checksums are valid after transformation
+        self.assertTrue(_verify_ip_checksum(data_out))
+        self.assertTrue(_verify_tcp_checksum(data_out))
+
+    def test_inline_vs_offline_differ(self):
+        """Inline and offline produce different ack values."""
+        CLIENT_ISN = 1000
+        SERVER_ISN = 5000
+
+        offline = ActiveWarden(secret=b"compare", inline=False)
+        inline = ActiveWarden(secret=b"compare", inline=True)
+
+        # Same SYN (client→server)
+        syn = _build_frame(
+            ip_kwargs=self.C2S,
+            tcp_kwargs={"flags": 0x02, "seq": CLIENT_ISN, "ack": 0,
+                        "src_port": 50000, "dst_port": 80},
+        )
+        off_syn = offline.normalize(syn)
+        inl_syn = inline.normalize(syn)
+        # SYN rewrite is the same (same secret, same input)
+        self.assertEqual(_parse_tcp(off_syn)["seq"], _parse_tcp(inl_syn)["seq"])
+        client_rewritten = _parse_tcp(inl_syn)["seq"]
+
+        # SYN-ACK (server→client): server saw rewritten ISN
+        syn_ack = _build_frame(
+            ip_kwargs=self.S2C,
+            tcp_kwargs={"flags": 0x12, "seq": SERVER_ISN,
+                        "ack": client_rewritten + 1,
+                        "src_port": 80, "dst_port": 50000},
+        )
+        off_sa = offline.normalize(syn_ack)
+        inl_sa = inline.normalize(syn_ack)
+
+        # Ack values differ: offline adds, inline subtracts
+        off_ack = _parse_tcp(off_sa)["ack"]
+        inl_ack = _parse_tcp(inl_sa)["ack"]
+        self.assertNotEqual(off_ack, inl_ack)
+        # Inline restores original client ISN+1
+        self.assertEqual(inl_ack, CLIENT_ISN + 1)
+
+    def test_inline_deterministic_across_instances(self):
+        """Two inline wardens with same secret produce identical output."""
+        w1 = ActiveWarden(secret=b"det-inline", inline=True)
+        w2 = ActiveWarden(secret=b"det-inline", inline=True)
+
+        syn = _build_frame(
+            ip_kwargs=self.C2S,
+            tcp_kwargs={"flags": 0x02, "seq": 42000, "ack": 0,
+                        "src_port": 50000, "dst_port": 80},
+        )
+        r1 = w1.normalize(syn)
+        r2 = w2.normalize(syn)
+        self.assertEqual(r1, r2)
+
+
 class TestSkipISNRewrite(unittest.TestCase):
 
     def test_skip_isn_rewrite_preserves_seq(self):

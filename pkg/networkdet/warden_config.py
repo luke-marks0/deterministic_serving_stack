@@ -45,9 +45,13 @@ class WardenConfig:
     # iptables chain to hook (FORWARD for bridge/gateway, INPUT/OUTPUT for host).
     chain: str = "FORWARD"
 
-    # Skip ISN rewriting (for single-host OUTPUT chain testing where ISN
-    # rewriting breaks the kernel TCP state machine).
+    # Skip ISN rewriting entirely.
     skip_isn_rewrite: bool = False
+
+    # Inline mode: the warden sits in the live packet path. ISN ack
+    # adjustments subtract offsets (undo rewrite for the receiving kernel)
+    # instead of adding them (offline normalization for capture comparison).
+    inline: bool = False
 
 
 def load_config(path: str | None = None) -> WardenConfig:
@@ -97,5 +101,7 @@ def load_config(path: str | None = None) -> WardenConfig:
         cfg.chain = os.environ["WARDEN_CHAIN"].upper()
     if "WARDEN_SKIP_ISN_REWRITE" in os.environ:
         cfg.skip_isn_rewrite = os.environ["WARDEN_SKIP_ISN_REWRITE"].lower() in ("1", "true", "yes")
+    if "WARDEN_INLINE" in os.environ:
+        cfg.inline = os.environ["WARDEN_INLINE"].lower() in ("1", "true", "yes")
 
     return cfg

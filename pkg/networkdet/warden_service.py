@@ -45,6 +45,7 @@ class WardenService:
         self.warden = ActiveWarden(
             secret=config.secret, ttl=config.ttl,
             skip_isn_rewrite=config.skip_isn_rewrite,
+            inline=config.inline,
         )
         self._nfqueue = None
         self._stats_thread: threading.Thread | None = None
