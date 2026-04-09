@@ -249,6 +249,8 @@ class ConnectionState:
         run_id: str,
         conn_index: int,
         mss: int = 1460,
+        retransmit_timeout: float = 0.2,
+        max_retransmits: int = 5,
     ):
         self.client_ip = client_ip
         self.client_port = client_port
@@ -279,6 +281,24 @@ class ConnectionState:
         self.closed = False
         self.created_at = time.monotonic()
 
+        # --- Retransmission state ---
+        # Sent frames awaiting ACK: list of (seq_start, seq_end, frame_bytes)
+        # seq_end is the sequence number AFTER this segment's data.
+        self.unacked_frames: list[tuple[int, int, bytes]] = []
+        # The FIN frame (if sent), stored for retransmission.
+        self.fin_frame: bytes | None = None
+        # Sequence number of the FIN (FIN consumes 1 seq number).
+        self.fin_seq: int | None = None
+        # When we last sent/resent unacked data.
+        self.last_send_time: float = 0.0
+        # How many retransmission rounds we've done for the current window.
+        self.retransmit_count: int = 0
+        # Fixed retransmission timeout (deterministic — no adaptive RTO).
+        self.retransmit_timeout: float = retransmit_timeout
+        self.max_retransmits: int = max_retransmits
+        # Highest ACK number received from client (for our TX direction).
+        self.highest_ack: int = 0
+
     def wrap_frame(self, tcp_segment: bytes) -> bytes:
         """Wrap a TCP segment in IP + Ethernet."""
         ip_packet = self.ip_layer.build_packet(PROTO_TCP, tcp_segment)
@@ -298,6 +318,8 @@ class UserspaceServer:
         *,
         mss: int = 1460,
         run_id: str = "userspace-poc-run",
+        retransmit_timeout: float = 0.2,
+        max_retransmits: int = 5,
     ):
         self.interface = interface
         self.port = port
@@ -308,6 +330,8 @@ class UserspaceServer:
         self.gateway_mac_str = gateway_mac
         self.mss = mss
         self.run_id = run_id
+        self.retransmit_timeout = retransmit_timeout
+        self.max_retransmits = max_retransmits
 
         # Connection tracking: (client_ip, client_port) -> ConnectionState
         self.connections: dict[tuple[str, int], ConnectionState] = {}
@@ -325,6 +349,8 @@ class UserspaceServer:
             "fins_sent": 0,
             "packets_rx": 0,
             "packets_tx": 0,
+            "retransmissions": 0,
+            "retransmit_failures": 0,
         }
 
     def _setup_sockets(self) -> None:
@@ -334,7 +360,7 @@ class UserspaceServer:
             socket.AF_PACKET, socket.SOCK_RAW, socket.htons(0x0003)  # ETH_P_ALL
         )
         self._rx_sock.bind((self.interface, 0))
-        self._rx_sock.settimeout(0.1)  # 100ms timeout for polling
+        self._rx_sock.setblocking(False)
 
         # TX: send raw L2 frames
         self._tx_sock = socket.socket(
@@ -370,6 +396,8 @@ class UserspaceServer:
             run_id=self.run_id,
             conn_index=self.conn_counter,
             mss=self.mss,
+            retransmit_timeout=self.retransmit_timeout,
+            max_retransmits=self.max_retransmits,
         )
         self.connections[key] = conn
 
@@ -395,6 +423,32 @@ class UserspaceServer:
                 "Handshake complete with %s:%d",
                 pkt.src_ip_str, pkt.src_port,
             )
+
+        # Track the highest ACK the client has sent us (acknowledging our data).
+        ack = pkt.ack
+        # Prune frames that have been fully ACKed.
+        if conn.unacked_frames:
+            before = len(conn.unacked_frames)
+            conn.unacked_frames = [
+                (s, e, f) for s, e, f in conn.unacked_frames
+                if not self._seq_lte(e, ack)
+            ]
+            pruned = before - len(conn.unacked_frames)
+            if pruned > 0:
+                conn.retransmit_count = 0  # Reset on progress
+                conn.last_send_time = time.monotonic()
+                if conn.unacked_frames:
+                    log.debug(
+                        "ACK %d from %s:%d pruned %d frames, %d remain",
+                        ack, pkt.src_ip_str, pkt.src_port,
+                        pruned, len(conn.unacked_frames),
+                    )
+
+        # Check if FIN has been ACKed.
+        if conn.fin_seq is not None and self._seq_lte(
+            (conn.fin_seq + 1) & 0xFFFFFFFF, ack
+        ):
+            conn.fin_frame = None  # No need to retransmit FIN
 
         # If client sent data (HTTP request), send our response
         if pkt.has_data and not conn.response_sent:
@@ -423,9 +477,22 @@ class UserspaceServer:
             # Send the deterministic HTTP response
             self._send_response(conn, response_data)
 
+    @staticmethod
+    def _seq_lte(a: int, b: int) -> bool:
+        """True if sequence number *a* <= *b* in TCP wraparound arithmetic."""
+        # Treats the difference as a signed 32-bit value.
+        diff = (b - a) & 0xFFFFFFFF
+        return diff < 0x80000000
+
     def _send_response(self, conn: ConnectionState, response_data: bytes = FULL_RESPONSE) -> None:
-        """Send the HTTP response as deterministically segmented frames."""
-        # Segment the response at fixed MSS boundaries
+        """Send the HTTP response as deterministically segmented frames.
+
+        Each frame is stored in conn.unacked_frames for retransmission.
+        Frames are byte-identical on retransmit (deterministic).
+        """
+        # Snapshot seq before segmenting so we can track per-segment ranges.
+        seq_before = conn.tcp.seq
+
         data_segments = conn.tcp.segment_data(response_data)
         log.info(
             "Sending response: %d bytes in %d segments (MSS=%d) to %s:%d",
@@ -433,21 +500,34 @@ class UserspaceServer:
             conn.client_ip, conn.client_port,
         )
 
+        # Build and send all data frames, recording seq ranges.
+        running_seq = seq_before
         for i, segment in enumerate(data_segments):
             frame = conn.wrap_frame(segment)
+            # Compute how many payload bytes this segment carries.
+            # TCP header is the first 20 bytes of the segment (no options in data).
+            payload_len = len(segment) - TCP_HEADER_LEN
+            seg_end = (running_seq + payload_len) & 0xFFFFFFFF
+            conn.unacked_frames.append((running_seq, seg_end, frame))
             self._send_frame(frame)
-            log.info("  Sent segment %d/%d (%d bytes)", i + 1, len(data_segments), len(segment))
+            running_seq = seg_end
 
         conn.response_sent = True
+        conn.last_send_time = time.monotonic()
         self.stats["responses_sent"] += 1
 
-        # Send FIN after response
+        # Build and send FIN. FIN consumes 1 seq number.
         fin_segment = conn.tcp.build_fin()
         frame = conn.wrap_frame(fin_segment)
+        conn.fin_frame = frame
+        conn.fin_seq = running_seq  # FIN occupies this seq
         self._send_frame(frame)
         conn.fin_sent = True
         self.stats["fins_sent"] += 1
-        log.info("Sent FIN to %s:%d", conn.client_ip, conn.client_port)
+        log.info(
+            "Sent %d data segments + FIN to %s:%d",
+            len(data_segments), conn.client_ip, conn.client_port,
+        )
 
     def _handle_fin(self, pkt: ParsedPacket, conn: ConnectionState) -> None:
         """Handle incoming FIN from client."""
@@ -529,10 +609,51 @@ class UserspaceServer:
         except subprocess.CalledProcessError:
             pass
 
-    def _cleanup_stale_connections(self) -> None:
-        """Remove connections older than 10 seconds."""
+    def _check_retransmissions(self) -> None:
+        """Resend unacked frames whose timeout has expired.
+
+        Retransmitted frames are byte-identical to the originals —
+        determinism is preserved because we replay the stored frame,
+        not rebuild it.
+        """
         now = time.monotonic()
-        stale = [k for k, v in self.connections.items() if now - v.created_at > 10]
+        for key, conn in list(self.connections.items()):
+            if not conn.unacked_frames and conn.fin_frame is None:
+                continue
+            if conn.closed:
+                continue
+            elapsed = now - conn.last_send_time
+            if elapsed < conn.retransmit_timeout:
+                continue
+            if conn.retransmit_count >= conn.max_retransmits:
+                log.warning(
+                    "Max retransmits (%d) reached for %s:%d, giving up",
+                    conn.max_retransmits, conn.client_ip, conn.client_port,
+                )
+                conn.unacked_frames.clear()
+                conn.fin_frame = None
+                self.stats["retransmit_failures"] += 1
+                continue
+
+            conn.retransmit_count += 1
+            n = len(conn.unacked_frames)
+            for _seq_start, _seq_end, frame in conn.unacked_frames:
+                self._send_frame(frame)
+            if conn.fin_frame is not None:
+                self._send_frame(conn.fin_frame)
+                n += 1
+            conn.last_send_time = now
+            self.stats["retransmissions"] += n
+            log.info(
+                "Retransmit #%d: %d frames to %s:%d",
+                conn.retransmit_count, n,
+                conn.client_ip, conn.client_port,
+            )
+
+    def _cleanup_stale_connections(self) -> None:
+        """Remove connections older than 30 seconds."""
+        now = time.monotonic()
+        stale = [k for k, v in self.connections.items() if now - v.created_at > 30]
         for k in stale:
             log.info("Cleaning up stale connection %s:%d", k[0], k[1])
             del self.connections[k]
@@ -546,25 +667,41 @@ class UserspaceServer:
             "Userspace TCP server listening on %s:%d (interface=%s, MAC=%s)",
             self.local_ip, self.port, self.interface, self.local_mac_str,
         )
-        log.info("Response: %d bytes, MSS=%d", len(FULL_RESPONSE), self.mss)
+        log.info(
+            "Response: %d bytes, MSS=%d, retransmit_timeout=%.1fs, max_retransmits=%d",
+            len(FULL_RESPONSE), self.mss, self.retransmit_timeout, self.max_retransmits,
+        )
+
+        import select as _select
 
         try:
             cleanup_counter = 0
+            last_retx_check = time.monotonic()
             while True:
-                try:
-                    raw = self._rx_sock.recv(65535)
-                    self._process_packet(raw)
-                except socket.timeout:
-                    pass
-                except OSError as e:
-                    if e.errno == 100:  # Network down
-                        log.warning("Network down, retrying...")
-                        time.sleep(1)
-                    else:
-                        raise
+                # Use select with short timeout so we can check retransmissions
+                readable, _, _ = _select.select([self._rx_sock], [], [], 0.005)
+                if readable:
+                    try:
+                        while True:
+                            raw = self._rx_sock.recv(65535)
+                            self._process_packet(raw)
+                    except BlockingIOError:
+                        pass
+                    except OSError as e:
+                        if e.errno == 100:  # Network down
+                            log.warning("Network down, retrying...")
+                            time.sleep(1)
+                        else:
+                            raise
+
+                # Check retransmissions periodically (~every 20ms)
+                now = time.monotonic()
+                if now - last_retx_check >= 0.02:
+                    self._check_retransmissions()
+                    last_retx_check = now
 
                 cleanup_counter += 1
-                if cleanup_counter > 1000:
+                if cleanup_counter > 5000:
                     self._cleanup_stale_connections()
                     cleanup_counter = 0
 
@@ -649,6 +786,10 @@ def main() -> None:
     parser.add_argument("--local-mac", help="Override local MAC detection")
     parser.add_argument("--gateway-mac", help="Override gateway MAC detection")
     parser.add_argument("--run-id", default="userspace-poc-run", help="Deterministic run ID")
+    parser.add_argument("--retransmit-timeout", type=float, default=0.2,
+                        help="Fixed retransmission timeout in seconds (default: 0.2)")
+    parser.add_argument("--max-retransmits", type=int, default=5,
+                        help="Max retransmission attempts per connection (default: 5)")
     args = parser.parse_args()
 
     if args.local_ip and args.local_mac:
@@ -678,6 +819,8 @@ def main() -> None:
         gateway_mac=gateway_mac,
         mss=args.mss,
         run_id=args.run_id,
+        retransmit_timeout=args.retransmit_timeout,
+        max_retransmits=args.max_retransmits,
     )
     server.serve_forever()
 
