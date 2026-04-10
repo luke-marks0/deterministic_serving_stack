@@ -12,17 +12,25 @@ from pathlib import Path
 from typing import Any
 
 
-def _set_deterministic_env(knobs: dict[str, Any], *, tp_size: int = 1) -> dict[str, str]:
+def _set_deterministic_env(knobs: dict[str, Any], *, tp_size: int = 1, pp_size: int = 1) -> dict[str, str]:
     """Set environment variables for deterministic execution. Returns the env snapshot."""
     env = {
         "CUBLAS_WORKSPACE_CONFIG": ":4096:8",
         "CUDA_LAUNCH_BLOCKING": str(int(knobs.get("cuda_launch_blocking", True))),
         "PYTHONHASHSEED": "0",
     }
-    if tp_size > 1:
+    # Pin NCCL collective algorithms for distributed determinism
+    if tp_size > 1 or pp_size > 1:
         env["NCCL_ALGO"] = "Ring"
         env["NCCL_PROTO"] = "Simple"
         env["NCCL_DEBUG"] = "WARN"
+    # Multi-node: force NCCL over TCP sockets, disable local shortcuts
+    if pp_size > 1 or os.getenv("VLLM_MULTI_NODE"):
+        env["NCCL_SOCKET_IFNAME"] = os.getenv("NCCL_SOCKET_IFNAME", "eth0")
+        env["NCCL_NET"] = "Socket"
+        env["NCCL_P2P_DISABLE"] = "1"
+        env["NCCL_SHM_DISABLE"] = "1"
+        env["NCCL_BUFFSIZE"] = "8388608"
     for key, value in env.items():
         os.environ[key] = value
     return env
@@ -65,7 +73,7 @@ def run_vllm(
     tp = serving_engine.get("tensor_parallel_size") or 1
     pp = serving_engine.get("pipeline_parallel_size") or 1
 
-    resolved_env = _set_deterministic_env(knobs, tp_size=tp)
+    resolved_env = _set_deterministic_env(knobs, tp_size=tp, pp_size=pp)
 
     attn_backend = serving_engine.get("attention_backend")
     if attn_backend:
@@ -113,6 +121,10 @@ def run_vllm(
         engine_kwargs["disable_custom_all_reduce"] = True
     if attn_backend:
         engine_kwargs["attention_backend"] = attn_backend
+
+    distributed_backend = serving_engine.get("distributed_executor_backend")
+    if distributed_backend:
+        engine_kwargs["distributed_executor_backend"] = distributed_backend
 
     llm = LLM(**engine_kwargs)
 
