@@ -319,7 +319,13 @@ def _vllm_observables(
     replica_id: str,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Run real vLLM inference and return observables + env_info."""
-    from cmd.runner.vllm_runner import run_vllm
+    import importlib.util
+
+    _vllm_runner_path = Path(__file__).resolve().parent / "vllm_runner.py"
+    _spec = importlib.util.spec_from_file_location("vllm_runner", _vllm_runner_path)
+    _mod = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(_mod)
+    run_vllm = _mod.run_vllm
 
     result = run_vllm(manifest_dict, lockfile)
 
