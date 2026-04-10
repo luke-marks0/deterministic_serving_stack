@@ -4,6 +4,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 from pkg.networkdet.config import NetStackConfig
+from pkg.networkdet.tx_report import TxReport
 
 
 class NetworkBackend(ABC):
@@ -24,3 +25,7 @@ class NetworkBackend(ABC):
     @abstractmethod
     def close(self) -> None:
         """Tear down the backend and release resources."""
+
+    def flush(self) -> TxReport | None:
+        """Flush pending transmissions and return a TxReport, if supported."""
+        return None

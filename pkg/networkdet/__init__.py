@@ -21,6 +21,7 @@ from pkg.networkdet.backend_sim import SimulatedBackend
 from pkg.networkdet.capture import CaptureRing
 from pkg.networkdet.config import NetStackConfig, parse_net_config
 from pkg.networkdet.frame import DeterministicFrameBuilder
+from pkg.networkdet.tx_report import TxReport
 
 
 class DeterministicNetStack:
@@ -36,6 +37,7 @@ class DeterministicNetStack:
         *,
         run_id: str,
         backend: NetworkBackend | None = None,
+        verify_mrf: bool = False,
     ) -> None:
         self._config = config
         self._run_id = run_id
@@ -43,6 +45,10 @@ class DeterministicNetStack:
         self._backend = backend or SimulatedBackend()
         self._backend.init(config)
         self._builders: dict[int, DeterministicFrameBuilder] = {}
+        self._warden = None
+        if verify_mrf:
+            from pkg.networkdet.warden import ActiveWarden
+            self._warden = ActiveWarden()
 
     @property
     def capture_ring(self) -> CaptureRing:
@@ -66,11 +72,30 @@ class DeterministicNetStack:
         """Build deterministic L2 frames for a response payload.
 
         Frames are recorded in the capture ring and optionally sent
-        through the backend.
+        through the backend.  When verify_mrf is enabled, each frame
+        is passed through the ActiveWarden and structural violations
+        are asserted to be zero.
         """
         builder = self._get_builder(conn_index)
         frames = builder.build_response_frames(response_bytes)
-        for frame in frames:
+        for i, frame in enumerate(frames):
+            if self._warden is not None:
+                self._warden.reset()
+                self._warden.normalize(frame)
+                s = self._warden.stats
+                violations = (
+                    s.reserved_bits_zeroed + s.urgent_ptr_zeroed
+                    + s.options_stripped + s.timestamps_stripped
+                    + s.rst_payloads_stripped + s.tos_zeroed
+                    + s.ttl_normalized + s.padding_zeroed
+                )
+                if violations > 0:
+                    raise RuntimeError(
+                        f"Frame builder produced non-MRF-compliant frame "
+                        f"(conn_index={conn_index}, frame={i}). "
+                        f"Warden violations: {s.as_dict()}. "
+                        f"This is a bug in the frame builder."
+                    )
             self._backend.send_frame(frame)
         return frames
 
@@ -113,6 +138,10 @@ class DeterministicNetStack:
     def frame_count(self) -> int:
         return self._capture.frame_count
 
+    def flush(self) -> TxReport | None:
+        """Flush the backend and return a TxReport, if supported."""
+        return self._backend.flush()
+
     def close(self) -> None:
         self._backend.close()
 
@@ -129,6 +158,7 @@ def create_net_stack(
     dst_mac: str = "02:00:00:00:00:02",
     src_port: int = 8000,
     dst_port: int = 80,
+    **kwargs: Any,
 ) -> DeterministicNetStack:
     """Create a deterministic network stack from manifest and lockfile.
 
@@ -144,6 +174,8 @@ def create_net_stack(
         dst_mac: Destination MAC address.
         src_port: TCP source port.
         dst_port: TCP destination port.
+        **kwargs: Additional keyword arguments passed to the backend
+            (e.g. ``dpdk_port``, ``dpdk_eal_args`` for the DPDK backend).
     """
     config = parse_net_config(manifest)
     config = replace(
@@ -161,11 +193,16 @@ def create_net_stack(
     if backend == "sim":
         be: NetworkBackend = SimulatedBackend()
     elif backend == "dpdk":
-        raise NotImplementedError(
-            "DPDK backend not yet implemented (Phase 4). "
-            "Use backend='sim' for testing."
-        )
+        from pkg.networkdet.backend_dpdk import DPDKBackend
+        dpdk_port = kwargs.get("dpdk_port", 0)
+        dpdk_eal_args = kwargs.get("dpdk_eal_args", [])
+        be = DPDKBackend(port_id=dpdk_port, eal_args=dpdk_eal_args)
     else:
         raise ValueError(f"Unknown backend: {backend!r}")
 
-    return DeterministicNetStack(config, run_id=effective_run_id, backend=be)
+    return DeterministicNetStack(
+        config,
+        run_id=effective_run_id,
+        backend=be,
+        verify_mrf=(backend == "dpdk"),
+    )
