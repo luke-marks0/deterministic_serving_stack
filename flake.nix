@@ -255,7 +255,8 @@
           env = {
             CUDA_HOME = "${pkgs.cudaPackages.cuda_nvcc}";
             TORCH_CUDA_ARCH_LIST = "9.0";
-            MAX_JOBS = "8";
+            MAX_JOBS = "2";
+            NVCC_THREADS = "1";
             SETUPTOOLS_SCM_PRETEND_VERSION = version;
             VLLM_PYTHON_EXECUTABLE = "${python}/bin/python3";
             # Pre-fetched sources for cmake FetchContent (no network in sandbox)

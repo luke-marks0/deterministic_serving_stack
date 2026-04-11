@@ -244,18 +244,18 @@ class ActiveWarden:
                 self.stats.isn_rewrites += 1
             elif is_syn and is_ack:
                 # SYN-ACK (server -> client): rewrite server ISN,
-                # adjust ACK to match rewritten client ISN.
+                # adjust ACK for the client's ISN rewrite.
                 reverse_key = self._reverse_key(conn_key)
                 reverse_conn = self._get_conn(reverse_key)
                 new_isn = self._new_isn(tcp_seq, conn_key)
                 conn.seq_offset = (new_isn - tcp_seq) & 0xFFFFFFFF
                 conn.seen_syn_ack = True
                 tcp_seq = new_isn
-                # Adjust ACK number using the client's offset.
                 tcp_ack = (tcp_ack + reverse_conn.seq_offset) & 0xFFFFFFFF
                 self.stats.isn_rewrites += 1
             else:
-                # Data/ACK/FIN/RST: apply stored offsets.
+                # Data/ACK/FIN/RST: shift seq into rewritten space,
+                # adjust ack for the other side's rewrite.
                 tcp_seq = (tcp_seq + conn.seq_offset) & 0xFFFFFFFF
                 reverse_key = self._reverse_key(conn_key)
                 if reverse_key in self._connections:
