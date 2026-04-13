@@ -339,3 +339,164 @@ both absent; no HF_* env vars set).
 Wall time Phase 2: ~33 min. Cost Phase 2 (2 nodes): ~$4.70.
 Cumulative cost: ~$5.85.
 
+---
+
+## Phase 3: Full 4-Node D6 Experiment — BLOCKED
+
+### 2026-04-13T13:16Z → 15:50Z — COST: 4-node cluster spin-up
+
+- N1 (Phase 2 carry-over) 192.222.53.159 us-south-2 gpu_1x_h100_sxm5
+- N2 (Phase 2 carry-over) 192.222.52.85  us-south-2 gpu_1x_h100_sxm5
+- N3 6f2eda5621b44b7ca1226508586dbc7a 192.222.53.145 us-south-2 gpu_1x_h100_sxm5
+- N4 6182e5517050415d9ec64653753e85cf 192.222.54.37  **us-south-3** gpu_1x_h100_sxm5
+
+Node 4 polling took 96 iterations (~48 min) across both SXM5/PCIe before
+capacity opened — and only in us-south-3, a different region from N1/2/3.
+
+### 2026-04-13T14:13Z — SETBACK: Mistral Large 2 skipped from Phase 3
+
+Two-layer problem:
+1. HF token worked for direct curl of gated Mistral files (HTTP 302 → 200 OK on
+   4.8 GB safetensor), but `huggingface_hub.hf_hub_download` inside the
+   container hit `GatedRepoError 401`. Root cause: `pkg/common/hf_resolution.py:112`
+   calls `hf_hub_download(...)` WITHOUT passing the token — the token is only
+   given to `HfApi` for metadata. Fix: setting `HF_TOKEN` env var directly (not
+   `--hf-token-file`) lets hf_hub_download pick it up.
+2. Even with HF_TOKEN set, Mistral resolver wrote downloaded blobs to the
+   container's ephemeral `/tmp/.cache/huggingface/` rather than the host-mounted
+   volume. Would require re-download (~240 GB) for inference. Budget didn't
+   allow both Mistral and DBRX.
+
+Decision: skip Mistral, focus Phase 3 on DBRX alone.
+
+### 2026-04-13T14:10Z — SETBACK: databricks/dbrx-instruct pulled from HF
+
+`databricks/dbrx-instruct` returns 404 from HF Hub. The model was
+removed/renamed since the plan was written. Substituted `alpindale/dbrx-instruct`
+(a widely-used mirror) — verified has 61 safetensors shards / 263.2 GB,
+matching the plan's expected footprint.
+
+Patched both DBRX manifests to point at the mirror. Also had to:
+- Pin `tokenizer_revision` + `weights_revision` from `"main"` to the
+  current commit sha `8007650525bf3b67d6a4763caf02230061452d45` (manifest
+  schema requires a 40-char hex).
+- Flip `trust_remote_code: false` → `true` so AutoTokenizer uses DBRX's
+  tiktoken-based shipped tokenizer class (container has tiktoken 0.12.0).
+
+### 2026-04-13T15:00Z — MILESTONE: DBRX lockfiles resolved
+
+`lockfiles/dbrx-pp4-multinode.lockfile.json` and `dbrx-tp4-multinode.lockfile.json`
+generated via `cmd/resolver/main.py` running inside the ray-head container
+(laptop has no venv — project is Nix-based). Each lockfile has 72 artifacts
+including all 61 `model_weights` shards with sha256 digests.
+
+HF Hub 1.5.0 appears to supply LFS sha256 via Xet metadata without full download
+(lockfiles generated fast, HF cache empty). Good for resolver speed, fine
+for lockfile validity.
+
+### 2026-04-13T15:15Z — MILESTONE: DBRX weights on all 4 nodes
+
+Used `huggingface_hub.snapshot_download(cache_dir=/root/.cache/huggingface/hub)`
+inside each node's container with explicit HF_HOME to force writes to the
+host-mounted volume (default `/tmp/.cache/huggingface` would be lost on
+container rm). Download rate was ~3.5 GB/s per node via HF Xet CDN — 263 GB
+completed in ~80 seconds per node. All 4 nodes cached 246 GiB of DBRX weights.
+
+### 2026-04-13T15:59Z — MILESTONE: 4-node Ray cluster formed
+
+4 nodes × H100 SXM5 registered in one Ray cluster via public IPs:
+  Total: 0.0/104.0 CPU, 0.0/4.0 GPU, 618.98 GiB memory, 265.27 GiB object store
+Bound `--node-ip-address` to each node's PUBLIC IP (192.222.x.x), necessary
+because N4 in us-south-3 can't reach N1/2/3's us-south-2 private 172.27.x.x
+subnet. us-south-2 ↔ us-south-3 cross-region RTT: 7.5 ms (verified with
+ping), bidirectional TCP on port 29500 verified with nc.
+
+### 2026-04-13T16:07Z — SETBACK: DBRX tokenizer needs tiktoken (or trust_remote_code)
+
+First DBRX runner invocation failed with:
+  ValueError: Couldn't instantiate the backend tokenizer from one of:
+  (1) a `tokenizers` library serialization file,
+  (2) a slow tokenizer instance to convert or
+  (3) an equivalent slow tokenizer class to instantiate and convert.
+  You need to have sentencepiece or tiktoken installed to convert a slow
+  tokenizer to a fast one.
+
+Container does have tiktoken 0.12.0, but HF AutoTokenizer only sees DBRX's
+shipped tokenizer class when `trust_remote_code=True`. Patched both manifests,
+regenerated lockfiles.
+
+### 2026-04-13T17:02Z — SETBACK: vLLM Ray placement pinned to private IP
+
+Second attempt failed before inference with Ray placement group waiting
+forever on `{'node:172.27.124.243': 0.001, 'GPU': 1.0}` — vLLM computed
+its own "driver IP" via get_ip() which returned the private 172.27.124.243
+even though Ray itself had 4 nodes registered by public IPs.
+
+Fix: set `VLLM_HOST_IP=<public>` on every container. After rebuild, vLLM's
+placement pin used public IPs and all 4 ranks scheduled. Also verified via
+a Ray actor diagnostic that all 4 workers see correct VLLM_HOST_IP and
+`vllm.utils.network_utils.get_ip()` returns the expected public IP on each.
+
+### 2026-04-13T18:06Z — SETBACK: Gloo connectFullMesh cannot establish
+
+New failure mode after Ray placement fixed:
+  RuntimeError: Gloo connectFullMesh failed with [...pair.cc:152] timed out
+  connecting: SO_ERROR: Connection timed out,
+  remote=[172.27.124.243]:51074
+
+Rank 3 actor on 192.222.54.37 (Node 4, us-south-3) trying to reach Node 1's
+gloo listener at 172.27.124.243:51074 — the PRIVATE IP, unreachable
+cross-region. vLLM's NCCL init URL was correct (`tcp://192.222.53.159:<port>`),
+but torch's separate ProcessGroupGloo creates its own full-mesh rendezvous
+using `getifaddrs(eno1)[0]` for the bind address. The kernel returned private
+first in that ordering.
+
+**Workarounds tried, in order:**
+1. **`ip addr del` + re-add private IP** to put public first in `getifaddrs` →
+   verified `getifaddrs` now returns public first on all 4 nodes, but gloo
+   still published private addresses. gloo's bind address comes from somewhere
+   deeper than `getifaddrs` ordering.
+2. **Host-side `/etc/hosts` patching** mapping `hostname → public IP` →
+   `gethostbyname(gethostname())` returned public inside the containers, but
+   gloo error persisted (it's not using gethostbyname).
+3. **Container-side `/etc/hosts` patching + `--add-host` rebuild** so Ray
+   workers inherit correct hostname resolution from container birth →
+   verified inside all 4 containers, gloo error persisted. Error changed from
+   `Connection timed out` (unreachable IP) to `Connection refused` (reachable
+   but no listener on the published port) — which means gloo IS now publishing
+   the public IP (192.222.53.159 in the error), but its actual bind socket is
+   on a DIFFERENT IP (likely still private), so connections to the published
+   addr:port get RST because nothing listens there.
+4. **Added `VLLM_RAY_EXTRA_ENV_VAR_PREFIXES_TO_COPY=GLOO_,TP_` and
+   `GLOO_SOCKET_IFNAME=eno1`** so `GLOO_` env vars propagate to Ray workers
+   (default vLLM copy list only includes `HF_, HUGGING_FACE_, LMCACHE_, NCCL_,
+   UCX_, VLLM_` — **GLOO_ is silently missing**) → `GLOO_SOCKET_IFNAME` now
+   appears in the worker env copy list (confirmed in vllm log), but gloo error
+   persists identically.
+
+Independent cross-region TCP test from laptop: `python3` listener on N1
+`0.0.0.0:41111` + N3 `socket.create_connection(("192.222.53.159", 41111))`
+succeeded — so the underlying network connectivity is fine. The problem is
+specific to how torch's nix-built `ProcessGroupGloo` chooses its bind address.
+
+This is deep in libtorch C++ / nix build territory. At this point I've burned
+~2 hours on Phase 3 debugging and ~$30 of additional GPU spend past Phase 2.
+Decision: declare Phase 3 blocked on the torch/gloo bind-address issue,
+terminate all resources, write a partial report.
+
+Cross-region forced us down this path because us-south-2 had zero H100
+capacity when we needed Node 4. In a same-region cluster the private IPs
+match and Phase 2 showed the pipeline works. D6's **core property** — NCCL
+cross-node determinism over TCP sockets — was already proven via Phase 2's
+PP=2 + anti-cheat checks. Scaling to 4 GPUs × 2 regions is a deployment
+dimension, not a new correctness claim.
+
+### 2026-04-13T18:30Z — END Phase 3: blocked on torch/gloo + cross-region
+
+DBRX PP=4 harness NOT executed. TP=4 harness NOT executed. Writing partial
+report. Terminating all 4 Lambda instances.
+
+Wall time Phase 3: ~5h 15m.
+Cost Phase 3 (4 nodes, rolling overlap): estimated ~$43.
+Cumulative cost through END Phase 3: ~$48.50.
+
