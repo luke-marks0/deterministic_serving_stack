@@ -41,17 +41,28 @@ def _apply_gloo_bind_patch() -> None:
     except Exception:
         return
 
-    if not hasattr(ProcessGroupGloo, "createDeviceForHostname"):
+    # torch 2.10 exposes snake_case names: create_device(hostname=..., interface=...)
+    # and create_default_device(). The older camelCase names from community posts
+    # (createDeviceForHostname / createDefaultDevice) do NOT exist here.
+    if not hasattr(ProcessGroupGloo, "create_device"):
+        return
+    if not hasattr(ProcessGroupGloo, "create_default_device"):
         return
 
     try:
-        def _make_device():  # noqa: ANN202
-            return ProcessGroupGloo.createDeviceForHostname(host_ip)
+        _orig = ProcessGroupGloo.create_default_device
 
-        ProcessGroupGloo.createDefaultDevice = staticmethod(_make_device)
+        def _patched_create_default_device(lazy_init=None):
+            return ProcessGroupGloo.create_device(
+                hostname=host_ip, lazy_init=lazy_init
+            )
+
+        ProcessGroupGloo.create_default_device = staticmethod(
+            _patched_create_default_device
+        )
         print(
-            f"[sitecustomize] patched ProcessGroupGloo.createDefaultDevice "
-            f"to bind {host_ip}",
+            f"[sitecustomize] patched ProcessGroupGloo.create_default_device "
+            f"to bind gloo listener at {host_ip}",
             file=sys.stderr,
             flush=True,
         )
