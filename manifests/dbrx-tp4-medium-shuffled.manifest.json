@@ -1,0 +1,1514 @@
+{
+  "artifact_inputs": [
+    {
+      "artifact_id": "hf-chat_template-tokenizer_config.json",
+      "artifact_type": "chat_template",
+      "expected_digest": "sha256:04d1c7e686cd422bd4cade445fedc973b8db43aa1be3d0f35ac23635dd3649e5",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "tokenizer_config.json",
+      "path": "tokenizer_config.json",
+      "role": "chat_template",
+      "size_bytes": 1381,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/tokenizer_config.json"
+    },
+    {
+      "artifact_id": "compiled-ext",
+      "artifact_type": "compiled_extension",
+      "expected_digest": "sha256:abababababababababababababababababababababababababababababababab",
+      "immutable_ref": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "name": "xformers",
+      "size_bytes": 700,
+      "source_kind": "s3",
+      "source_uri": "s3://mirror/xformers.whl"
+    },
+    {
+      "artifact_id": "cuda-lib",
+      "artifact_type": "cuda_lib",
+      "expected_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "immutable_ref": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "name": "cuda-user-space",
+      "size_bytes": 3000,
+      "source_kind": "oci",
+      "source_uri": "oci://registry.example/cuda@sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    {
+      "artifact_id": "hf-generation_config-generation_config.json",
+      "artifact_type": "generation_config",
+      "expected_digest": "sha256:40cbcdb51ce81ad828d91f02d9586af72de443e862d3ce045995c20fd5dda374",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "generation_config.json",
+      "path": "generation_config.json",
+      "role": "generation_config",
+      "size_bytes": 117,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/generation_config.json"
+    },
+    {
+      "artifact_id": "kernel-lib",
+      "artifact_type": "kernel_library",
+      "expected_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "immutable_ref": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "name": "flash-attn",
+      "size_bytes": 400,
+      "source_kind": "s3",
+      "source_uri": "s3://mirror/flash-attn.whl"
+    },
+    {
+      "artifact_id": "hf-config-config.json",
+      "artifact_type": "model_config",
+      "expected_digest": "sha256:22ac9ec844ce98afd46f5d8a23fed9b7c68b5c615ebe7b174b92f5c0e1de45d8",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "config.json",
+      "path": "config.json",
+      "role": "config",
+      "size_bytes": 849,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/config.json"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00001-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:3cfdb9ef2003544c6d3f8c6244883e76ca151bc60b13ac6f67693bd8baf864da",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00001-of-00061.safetensors",
+      "path": "model-00001-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 3523437432,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00001-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00002-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:23b1468ea4f961710bc3241b52dbebf981aa8e1273a8e4b985915cf49dfa04af",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00002-of-00061.safetensors",
+      "path": "model-00002-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241288,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00002-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00003-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:eaf9bdd6896edda1c662ac7530a4053220d4a49da0c0361e90d8b7855141f251",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00003-of-00061.safetensors",
+      "path": "model-00003-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4227858704,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00003-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00004-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:be29f3fa53a5cf878bd77a56440fa2537a0f00cccb8651ad5741ed654689e460",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00004-of-00061.safetensors",
+      "path": "model-00004-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241288,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00004-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00005-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:0e6b9356183c8f24780675e281cb8ce0d1abac44008a79ed626abe72077a4e9d",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00005-of-00061.safetensors",
+      "path": "model-00005-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241288,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00005-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00006-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:8d06f6f69cc365df30371efea4514bca2bfc8a25ff31064d21e90995733f956b",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00006-of-00061.safetensors",
+      "path": "model-00006-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4227858704,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00006-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00007-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:9961227308e4e7212cab4eef4031e060512d55370aee3b911d80098f61cb096d",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00007-of-00061.safetensors",
+      "path": "model-00007-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241288,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00007-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00008-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:33941bb4a441d44870fed325e16ebfd88b31320e542e9e776d497c9d2d7f169e",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00008-of-00061.safetensors",
+      "path": "model-00008-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241288,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00008-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00009-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:47f5395b27077df7f4bcc94ec9dbf870e8fd0bdef35764e10e43017dcc13424f",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00009-of-00061.safetensors",
+      "path": "model-00009-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4227858704,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00009-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00010-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:5572004a402e03eb7b68630970417ffb1d8558984b448c24521bf36eaf1b9715",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00010-of-00061.safetensors",
+      "path": "model-00010-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241288,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00010-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00011-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:8a2405a3e78cb765efbffc5f502c5db84921733ba5ab6a15a6b8810fe69e8031",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00011-of-00061.safetensors",
+      "path": "model-00011-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241288,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00011-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00012-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:d1e0086fafd04d58ea6a61b7e7660f6bbe54a0380a6fa1f39464ac8be440e7d8",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00012-of-00061.safetensors",
+      "path": "model-00012-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4227858704,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00012-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00013-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:a8f77cffc1ba5af4b6ed8a05a38bf1aa18ebbc3ed06861eb75925a84dba3672f",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00013-of-00061.safetensors",
+      "path": "model-00013-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241288,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00013-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00014-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:107ce690fec4aa202cb07507af6e8f3971c974dd31f697c6c5dc39afcc899b67",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00014-of-00061.safetensors",
+      "path": "model-00014-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241288,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00014-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00015-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:a7d1cb9080dbf19ec925aff6beba736866ae505e334d5e852183468dc57188d0",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00015-of-00061.safetensors",
+      "path": "model-00015-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4227858704,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00015-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00016-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:c160424dedae5f805f10b2981e9e2bf261d4aed49c0d0d85cfb803ef445559f4",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00016-of-00061.safetensors",
+      "path": "model-00016-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241296,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00016-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00017-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:e498a7c62d501f649ca2dfa0f409f6fe188a359c31d91f2d209b23effe15b22f",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00017-of-00061.safetensors",
+      "path": "model-00017-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241296,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00017-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00018-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:24f9e0a148c17ae3fef677ae94a8290a562bd6a31a805e76e23f91c2dbbd9f18",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00018-of-00061.safetensors",
+      "path": "model-00018-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4227858712,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00018-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00019-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:73b3af8d33ad09039d052d000d122fc904c5542a247e2e6d05bb6aae6f5bb916",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00019-of-00061.safetensors",
+      "path": "model-00019-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241296,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00019-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00020-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:fe93ce5f12f216d9d9ca2b252eeabcfc47fb6d3785eb3b1ecf9a6c5c384ae3a5",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00020-of-00061.safetensors",
+      "path": "model-00020-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241296,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00020-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00021-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:af7b81ca660ca1afde8b1a0f697724a788e7566214e7178492d0839e441819a4",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00021-of-00061.safetensors",
+      "path": "model-00021-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4227858712,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00021-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00022-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:599a1d7323777aafe5edbaf22b8a56b8c84068f75ec20d382fc40e5c405bce38",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00022-of-00061.safetensors",
+      "path": "model-00022-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241296,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00022-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00023-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:9223edff1a6c3a73c6dacab2b104d2bfa280be2a5f8a3965fa24bf586fb683ad",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00023-of-00061.safetensors",
+      "path": "model-00023-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241296,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00023-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00024-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:02350eeaa1d595bf65fc5c16c9ee3241f195fa0118d9dc9f983374b145bf35ea",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00024-of-00061.safetensors",
+      "path": "model-00024-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4227858712,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00024-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00025-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:a5779cb1a15c4d3e2d0302c3481f5e3d2cf74e4434e44824464c282ec724eee6",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00025-of-00061.safetensors",
+      "path": "model-00025-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241296,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00025-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00026-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:65ce12b50281d2449f5eb5e43b7bef56e9ebd137b675f9649d31c0bffdd07ceb",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00026-of-00061.safetensors",
+      "path": "model-00026-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241296,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00026-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00027-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:1db31da422deb6f7098c79dd18a3fab823fe8d6ae95dfcd751e7bc7fa1650def",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00027-of-00061.safetensors",
+      "path": "model-00027-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4227858712,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00027-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00028-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:312da4cc278ab598b38ca994f70d453fc086fc560de6da851b55d602ef368ecc",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00028-of-00061.safetensors",
+      "path": "model-00028-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241296,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00028-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00029-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:d28d9280c500a9cbe5ce59df1043cf8bc07b531c0ddb8cc70365786b1a36900c",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00029-of-00061.safetensors",
+      "path": "model-00029-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241296,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00029-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00030-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:573a4ef61f3d9f1974f05612cc0299475c41f6a8d4e1ae530a0f21e8e6b04725",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00030-of-00061.safetensors",
+      "path": "model-00030-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4227858712,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00030-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00031-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:d2bb381b92c8bdb37a780fc4369904406fc8fdabda0007325a0debf4ba103a26",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00031-of-00061.safetensors",
+      "path": "model-00031-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241296,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00031-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00032-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:17a60f2ae29a04acead99434eedc40413954982cac787ca485378390c537ccb2",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00032-of-00061.safetensors",
+      "path": "model-00032-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241296,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00032-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00033-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:d410b47d48eb572478b80a6ea1766da7ef7b5fdbb8e9e4e611208b2677cb81bd",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00033-of-00061.safetensors",
+      "path": "model-00033-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4227858712,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00033-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00034-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:8e5e894489b1da3cf744345022a9fd6d3fcf14f66a205b9931146769892999e7",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00034-of-00061.safetensors",
+      "path": "model-00034-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241296,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00034-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00035-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:35b4937e5f449256f2e8277461af26d956c762a98f252f04445ca1852da30b7e",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00035-of-00061.safetensors",
+      "path": "model-00035-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241296,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00035-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00036-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:bc2d28e62edf58cf121924c4a57c172021a9dbe972d75cfdeb54180a1f21957b",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00036-of-00061.safetensors",
+      "path": "model-00036-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4227858712,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00036-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00037-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:3813a7e00dd6ed9129158314a92ac7229cea41f3562c186a6daee461f6bbbaa6",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00037-of-00061.safetensors",
+      "path": "model-00037-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241296,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00037-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00038-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:b9f4014248e2087083843eaff448d0232230dbd8b5fa33cc54d7ebf5003c26b3",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00038-of-00061.safetensors",
+      "path": "model-00038-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241296,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00038-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00039-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:1d6b612cb8b81dc0714c0f7db73e0e9b4e14eb463e7069b16f5387bd2673890a",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00039-of-00061.safetensors",
+      "path": "model-00039-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4227858712,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00039-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00040-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:8dde9e2e2bc8a1138d3801929b1fab01d301bf6e16c54be0094a9e1f407243ea",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00040-of-00061.safetensors",
+      "path": "model-00040-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241296,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00040-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00041-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:9730e3d757fd41b8cad918c66f041011a96e67c5e82d6e313d8b57cccb44bec0",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00041-of-00061.safetensors",
+      "path": "model-00041-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241296,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00041-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00042-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:128e0433397f8e992cd174ea9b2931af49e25feeb78aef9c6cd5335da6e86e82",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00042-of-00061.safetensors",
+      "path": "model-00042-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4227858712,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00042-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00043-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:e982d566cf1d966052f6365b655d26b38a34bfb3d0bdd75bbcc9d794fc485c32",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00043-of-00061.safetensors",
+      "path": "model-00043-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241296,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00043-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00044-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:713866fbc89733b067d799c4368e2495d4316193e91ad2586440b9d97e549952",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00044-of-00061.safetensors",
+      "path": "model-00044-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241296,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00044-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00045-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:8f8796101e5df9c327e6bcc376ffaba33191270a966be67cfa9d75ef1dbac695",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00045-of-00061.safetensors",
+      "path": "model-00045-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4227858712,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00045-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00046-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:d793734c75efe71ffa500c3048fd8c6a21eed8c8b692371be76d068fb8c044e3",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00046-of-00061.safetensors",
+      "path": "model-00046-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241296,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00046-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00047-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:53871e712da21c4ae6862e8fc546367a60572f9b336049b1f3b7cf0506437fbb",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00047-of-00061.safetensors",
+      "path": "model-00047-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241296,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00047-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00048-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:bcd0c10ef6ef58fbe5d59c81c0950022ce64b12c7534d162c5299a76776d5bc0",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00048-of-00061.safetensors",
+      "path": "model-00048-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4227858712,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00048-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00049-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:b2fcb794b7df43e7cfede55e5722d0f53ab709751cb7efbde77b14522d094011",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00049-of-00061.safetensors",
+      "path": "model-00049-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241296,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00049-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00050-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:48fd71f1e1b8ed9fd4ca47a621c9924d6485340d4e39749ed965f1f6ef045170",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00050-of-00061.safetensors",
+      "path": "model-00050-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241296,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00050-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00051-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:c4e5c439153215ccddf1d0d00cb05ccf6557cbddf9a2c963c47b9556958ce506",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00051-of-00061.safetensors",
+      "path": "model-00051-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4227858712,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00051-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00052-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:06b911989ad3040713c576ad78ddda8b34fa7509440aec61cace1a57263890c0",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00052-of-00061.safetensors",
+      "path": "model-00052-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241296,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00052-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00053-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:709079f70f812d17a2fdf8e639fd99f4c0d572cf23f1a5e3e323cc00b50db6a2",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00053-of-00061.safetensors",
+      "path": "model-00053-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241296,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00053-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00054-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:8bf788ff04aa4e73eec8abac378ebb4c765df0c6dc85e24522d24c0cca4aa344",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00054-of-00061.safetensors",
+      "path": "model-00054-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4227858712,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00054-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00055-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:5163f3f77874a4ea7a8e76f74da330b0a87fd19c6ed9ef42d36a0b1269ca92de",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00055-of-00061.safetensors",
+      "path": "model-00055-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241296,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00055-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00056-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:6c880fae2c3d3a98b1b1bfea849512df7be84004f3569adec642c350e3c814bc",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00056-of-00061.safetensors",
+      "path": "model-00056-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241296,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00056-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00057-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:c0d24334da4eaea54d3094a171b698e796a4102f954a1c9e988808b9a3afc905",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00057-of-00061.safetensors",
+      "path": "model-00057-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4227858712,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00057-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00058-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:70cab56497ef8b4bd74352678f4ac83ab5b5a0facf7aac394df2ae4669f5a57b",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00058-of-00061.safetensors",
+      "path": "model-00058-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241296,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00058-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00059-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:1ca70897eb949ac8871a9e0ac83d597c694d3f51c6e48a021231d3b749c5b667",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00059-of-00061.safetensors",
+      "path": "model-00059-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4404241296,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00059-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00060-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:492fe0baed3f76704206d454994c377e8355ca1bec43ef4cd4968b5df8fb669e",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00060-of-00061.safetensors",
+      "path": "model-00060-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4227858712,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00060-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00061-of-00061.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:00af0b1e9823022479242479f6f84ae3dfc543628acfe4e0e83e0b2034e4b220",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "model-00061-of-00061.safetensors",
+      "path": "model-00061-of-00061.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 3347067232,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/model-00061-of-00061.safetensors"
+    },
+    {
+      "artifact_id": "hf-prompt_formatter-tokenizer_config.json",
+      "artifact_type": "prompt_formatter",
+      "expected_digest": "sha256:04d1c7e686cd422bd4cade445fedc973b8db43aa1be3d0f35ac23635dd3649e5",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "tokenizer_config.json",
+      "path": "tokenizer_config.json",
+      "role": "prompt_formatter",
+      "size_bytes": 1381,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/tokenizer_config.json"
+    },
+    {
+      "artifact_id": "request-set",
+      "artifact_type": "request_set",
+      "expected_digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+      "immutable_ref": "v1",
+      "name": "requests",
+      "size_bytes": 64,
+      "source_kind": "inline",
+      "source_uri": "inline://requests"
+    },
+    {
+      "artifact_id": "runtime-knobs",
+      "artifact_type": "runtime_knob_set",
+      "expected_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "immutable_ref": "v1",
+      "name": "runtime-knobs",
+      "size_bytes": 64,
+      "source_kind": "inline",
+      "source_uri": "inline://runtime-knobs"
+    },
+    {
+      "artifact_id": "serving-stack",
+      "artifact_type": "serving_stack",
+      "expected_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "immutable_ref": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "name": "vllm-stack",
+      "size_bytes": 2000,
+      "source_kind": "oci",
+      "source_uri": "oci://registry.example/vllm@sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    {
+      "artifact_id": "hf-tokenizer-tokenizer_config.json",
+      "artifact_type": "tokenizer",
+      "expected_digest": "sha256:04d1c7e686cd422bd4cade445fedc973b8db43aa1be3d0f35ac23635dd3649e5",
+      "immutable_ref": "8007650525bf3b67d6a4763caf02230061452d45",
+      "name": "tokenizer_config.json",
+      "path": "tokenizer_config.json",
+      "role": "tokenizer",
+      "size_bytes": 1381,
+      "source_kind": "hf",
+      "source_uri": "hf://alpindale/dbrx-instruct/tokenizer_config.json"
+    }
+  ],
+  "comparison": {
+    "logits": {
+      "atol": 1e-06,
+      "mode": "absrel",
+      "rtol": 0.0001
+    },
+    "network_egress": {
+      "algorithm": "sha256",
+      "mode": "hash"
+    },
+    "tokens": {
+      "mode": "exact"
+    }
+  },
+  "created_at": "2026-04-13T00:00:00Z",
+  "hardware_profile": {
+    "gpu": {
+      "count": 4,
+      "cuda_driver_version": "12.8",
+      "driver_version": "580.126.20",
+      "model": "NVIDIA H100 80GB HBM3"
+    }
+  },
+  "manifest_version": "v1",
+  "model": {
+    "source": "hf://alpindale/dbrx-instruct",
+    "tokenizer_revision": "8007650525bf3b67d6a4763caf02230061452d45",
+    "trust_remote_code": true,
+    "weights_revision": "8007650525bf3b67d6a4763caf02230061452d45"
+  },
+  "requests": [
+    {
+      "id": "req-0024",
+      "max_new_tokens": 100,
+      "prompt": "What is a prime number? Give five examples.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0042",
+      "max_new_tokens": 100,
+      "prompt": "Describe the style of Vincent van Gogh's paintings.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0093",
+      "max_new_tokens": 100,
+      "prompt": "Say 'good morning' in five languages.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0046",
+      "max_new_tokens": 100,
+      "prompt": "What is magical realism?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0025",
+      "max_new_tokens": 100,
+      "prompt": "Explain Bayes' theorem with a simple example.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0097",
+      "max_new_tokens": 100,
+      "prompt": "Spell 'serendipity'.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0049",
+      "max_new_tokens": 100,
+      "prompt": "What was the Harlem Renaissance?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0026",
+      "max_new_tokens": 100,
+      "prompt": "What is the Fibonacci sequence?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0011",
+      "max_new_tokens": 100,
+      "prompt": "Who built the Great Wall of China and when?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0002",
+      "max_new_tokens": 100,
+      "prompt": "Why is the sky blue during the day and red at sunset?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0013",
+      "max_new_tokens": 100,
+      "prompt": "What was the Industrial Revolution and where did it start?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0068",
+      "max_new_tokens": 100,
+      "prompt": "Write a haiku about autumn leaves.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0031",
+      "max_new_tokens": 100,
+      "prompt": "Explain recursion using a simple example.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0078",
+      "max_new_tokens": 100,
+      "prompt": "What ocean separates the Americas from Europe and Africa?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0089",
+      "max_new_tokens": 100,
+      "prompt": "What does it mean for a number to be 'irrational'?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0021",
+      "max_new_tokens": 100,
+      "prompt": "Explain the difference between mean and median.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0079",
+      "max_new_tokens": 100,
+      "prompt": "What is the deepest known point in the ocean?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0072",
+      "max_new_tokens": 100,
+      "prompt": "What is the longest river in the world and where does it flow?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0095",
+      "max_new_tokens": 100,
+      "prompt": "Translate 'thank you' to French.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0022",
+      "max_new_tokens": 100,
+      "prompt": "What is a derivative in calculus?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0090",
+      "max_new_tokens": 100,
+      "prompt": "Hello.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0008",
+      "max_new_tokens": 100,
+      "prompt": "How does a refrigerator keep food cold?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0048",
+      "max_new_tokens": 100,
+      "prompt": "Who composed The Four Seasons?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0028",
+      "max_new_tokens": 100,
+      "prompt": "What is the difference between an integer and a real number?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0001",
+      "max_new_tokens": 100,
+      "prompt": "What is the difference between a virus and a bacterium?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0050",
+      "max_new_tokens": 100,
+      "prompt": "Describe how to make a simple loaf of sourdough bread.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0014",
+      "max_new_tokens": 100,
+      "prompt": "Who was Cleopatra and what made her famous?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0030",
+      "max_new_tokens": 100,
+      "prompt": "What is the difference between a list and a tuple in Python?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0038",
+      "max_new_tokens": 100,
+      "prompt": "Describe how DNS resolves a domain name.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0085",
+      "max_new_tokens": 100,
+      "prompt": "What is photosynthesis in one sentence?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0006",
+      "max_new_tokens": 100,
+      "prompt": "Why do leaves change color in autumn?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0016",
+      "max_new_tokens": 100,
+      "prompt": "What ended the cold war?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0053",
+      "max_new_tokens": 100,
+      "prompt": "How do you change a bicycle tire?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0034",
+      "max_new_tokens": 100,
+      "prompt": "What does the word 'compiler' mean?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0047",
+      "max_new_tokens": 100,
+      "prompt": "Describe the plot of The Great Gatsby in two sentences.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0080",
+      "max_new_tokens": 100,
+      "prompt": "Explain the concept of gravity to a curious child.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0003",
+      "max_new_tokens": 100,
+      "prompt": "Describe the structure of a typical neuron.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0037",
+      "max_new_tokens": 100,
+      "prompt": "What is Big O notation?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0091",
+      "max_new_tokens": 100,
+      "prompt": "What is 2 + 2?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0076",
+      "max_new_tokens": 100,
+      "prompt": "Where is the Amazon rainforest?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0054",
+      "max_new_tokens": 100,
+      "prompt": "Give me three tips for sleeping better.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0088",
+      "max_new_tokens": 100,
+      "prompt": "Explain in plain words what a black hole is.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0017",
+      "max_new_tokens": 100,
+      "prompt": "Tell me about the silk road in two paragraphs.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0029",
+      "max_new_tokens": 100,
+      "prompt": "Explain the concept of infinity.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0082",
+      "max_new_tokens": 100,
+      "prompt": "What is the difference between machine learning and AI?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0070",
+      "max_new_tokens": 100,
+      "prompt": "What is the capital of Australia and why is it not Sydney?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0044",
+      "max_new_tokens": 100,
+      "prompt": "Tell me about the Beat Generation writers.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0041",
+      "max_new_tokens": 100,
+      "prompt": "Who wrote Pride and Prejudice and when?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0000",
+      "max_new_tokens": 100,
+      "prompt": "Explain how photosynthesis works in one paragraph.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0084",
+      "max_new_tokens": 100,
+      "prompt": "How do birds know where to fly during migration?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0098",
+      "max_new_tokens": 100,
+      "prompt": "Count from one to ten.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0057",
+      "max_new_tokens": 100,
+      "prompt": "How do you fold a fitted sheet?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0081",
+      "max_new_tokens": 100,
+      "prompt": "What are the main causes of climate change?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0015",
+      "max_new_tokens": 100,
+      "prompt": "Describe the impact of the printing press on Europe.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0005",
+      "max_new_tokens": 100,
+      "prompt": "What is quantum entanglement in plain English?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0056",
+      "max_new_tokens": 100,
+      "prompt": "What is the best way to remove a wine stain?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0071",
+      "max_new_tokens": 100,
+      "prompt": "List the planets of the solar system in order.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0040",
+      "max_new_tokens": 100,
+      "prompt": "Summarize the plot of Hamlet in three sentences.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0069",
+      "max_new_tokens": 100,
+      "prompt": "Describe the feeling of stepping into the ocean for the first time.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0035",
+      "max_new_tokens": 100,
+      "prompt": "Explain what a Git merge conflict is.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0027",
+      "max_new_tokens": 100,
+      "prompt": "Why is zero a special number?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0018",
+      "max_new_tokens": 100,
+      "prompt": "Who was Genghis Khan?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0043",
+      "max_new_tokens": 100,
+      "prompt": "What is iambic pentameter?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0032",
+      "max_new_tokens": 100,
+      "prompt": "What is a hash table and when would you use one?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0077",
+      "max_new_tokens": 100,
+      "prompt": "What is the smallest country in the world?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0086",
+      "max_new_tokens": 100,
+      "prompt": "Describe how a microwave oven heats food.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0065",
+      "max_new_tokens": 100,
+      "prompt": "Describe a thunderstorm at midnight.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0020",
+      "max_new_tokens": 100,
+      "prompt": "What is the Pythagorean theorem and why does it matter?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0039",
+      "max_new_tokens": 100,
+      "prompt": "What is a race condition?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0009",
+      "max_new_tokens": 100,
+      "prompt": "Explain how a transistor amplifies a signal.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0060",
+      "max_new_tokens": 100,
+      "prompt": "Describe a sunset over the ocean in vivid detail.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0052",
+      "max_new_tokens": 100,
+      "prompt": "How do you wash a wool sweater without ruining it?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0099",
+      "max_new_tokens": 100,
+      "prompt": "What day comes after Wednesday?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0067",
+      "max_new_tokens": 100,
+      "prompt": "Describe a bustling open-air market.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0074",
+      "max_new_tokens": 100,
+      "prompt": "What is the highest mountain in Africa?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0066",
+      "max_new_tokens": 100,
+      "prompt": "Write a short poem about an old lighthouse.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0045",
+      "max_new_tokens": 100,
+      "prompt": "Who painted the Mona Lisa?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0004",
+      "max_new_tokens": 100,
+      "prompt": "Explain how vaccines train the immune system.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0033",
+      "max_new_tokens": 100,
+      "prompt": "Describe the difference between TCP and UDP.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0012",
+      "max_new_tokens": 100,
+      "prompt": "List five interesting facts about the Roman Empire.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0023",
+      "max_new_tokens": 100,
+      "prompt": "How do you compute the area of a circle?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0075",
+      "max_new_tokens": 100,
+      "prompt": "What language is spoken in Brazil?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0083",
+      "max_new_tokens": 100,
+      "prompt": "Tell me about the life cycle of a butterfly.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0051",
+      "max_new_tokens": 100,
+      "prompt": "Describe the steps to brew a perfect cup of coffee.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0094",
+      "max_new_tokens": 100,
+      "prompt": "What is the speed of light?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0010",
+      "max_new_tokens": 100,
+      "prompt": "Summarize the causes of World War I in three sentences.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0073",
+      "max_new_tokens": 100,
+      "prompt": "Name three countries that border Switzerland.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0058",
+      "max_new_tokens": 100,
+      "prompt": "Describe how to make a simple omelette.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0036",
+      "max_new_tokens": 100,
+      "prompt": "What is the difference between a stack and a queue?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0063",
+      "max_new_tokens": 100,
+      "prompt": "Write a short poem about a cat watching rain.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0064",
+      "max_new_tokens": 100,
+      "prompt": "Describe the smell of freshly baked bread.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0007",
+      "max_new_tokens": 100,
+      "prompt": "Describe the life cycle of a star like our sun.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0059",
+      "max_new_tokens": 100,
+      "prompt": "How do you sharpen a kitchen knife?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0087",
+      "max_new_tokens": 100,
+      "prompt": "What is gluten and why does it matter for bread?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0061",
+      "max_new_tokens": 100,
+      "prompt": "Describe the taste of a perfectly ripe mango.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0062",
+      "max_new_tokens": 100,
+      "prompt": "Write a haiku about winter mornings.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0019",
+      "max_new_tokens": 100,
+      "prompt": "Why did the Roman Empire fall?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0096",
+      "max_new_tokens": 100,
+      "prompt": "What is the boiling point of water?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0055",
+      "max_new_tokens": 100,
+      "prompt": "How do you boil an egg perfectly?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0092",
+      "max_new_tokens": 100,
+      "prompt": "Name three colors.",
+      "temperature": 0
+    }
+  ],
+  "run_id": "d6-dbrx-tp4-medium-shuffled",
+  "runtime": {
+    "batch_invariance": {
+      "enabled": true,
+      "enforce_eager": true
+    },
+    "deterministic_knobs": {
+      "cublas_workspace_config": ":4096:8",
+      "cuda_launch_blocking": true,
+      "pythonhashseed": "0",
+      "seed": 42,
+      "torch_deterministic": true
+    },
+    "serving_engine": {
+      "attention_backend": "FLASH_ATTN",
+      "disable_custom_all_reduce": true,
+      "distributed_executor_backend": "ray",
+      "dtype": "auto",
+      "gpu_memory_utilization": 0.9,
+      "max_model_len": 4096,
+      "max_num_seqs": 64,
+      "pipeline_parallel_size": 1,
+      "tensor_parallel_size": 4
+    },
+    "strict_hardware": false
+  }
+}
