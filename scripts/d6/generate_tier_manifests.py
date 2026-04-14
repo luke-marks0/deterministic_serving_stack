@@ -58,6 +58,7 @@ def main() -> int:
         ("dbrx-tp4-multinode", "large", "dbrx-tp4-large"),
         ("mistral-large2-tp4-multinode", "smoke", "mistral-large2-tp4-smoke"),
         ("mistral-large2-tp4-multinode", "medium", "mistral-large2-tp4-medium"),
+        ("mistral-large2-tp4-multinode", "large", "mistral-large2-tp4-large"),
     ]
     manifests_dir = REPO / "manifests"
     for base_name, tier, out_name in targets:
