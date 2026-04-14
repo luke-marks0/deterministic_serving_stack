@@ -1,4 +1,4 @@
-.PHONY: lint schema test-fast test-full test-nightly test-release ci-pr ci-main ci-nightly ci-release
+.PHONY: lint schema test-fast test-full test-nightly test-release ci-pr ci-main ci-nightly ci-release build-libnetdet
 
 lint:
 	bash scripts/ci/lint.sh
@@ -25,3 +25,6 @@ ci-main: lint schema test-full
 ci-nightly: lint schema test-nightly
 
 ci-release: lint schema test-release
+
+build-libnetdet:
+	cd native/libnetdet && make
