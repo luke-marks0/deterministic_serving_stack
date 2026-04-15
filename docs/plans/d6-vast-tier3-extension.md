@@ -13,15 +13,34 @@
 
 ## Why vast.ai and why a different image
 
-Lambda gives you a real Linux VM per instance; `--network host` in Docker shares the VM's network namespace, and NCCL/gloo see the VM's eno1 addresses directly. **Vast.ai is fundamentally different**: each instance is a Docker container on a marketplace host you don't control, fronted by a vast-managed proxy that tunnels SSH through the host to the container. For that proxy to work, the container **must run an SSH daemon inside itself** — which our Lambda image (`ghcr.io/derpyplops/deterministic-serving:multinode`, Nix-built) does not.
+Lambda gives you a real Linux VM per instance; `--network host` in Docker shares the VM's network namespace, and NCCL/gloo see the VM's eno1 addresses directly. **Vast.ai is fundamentally different**: each instance is a Docker container on a marketplace host you don't control, fronted by a vast-managed proxy that maps container ports to the host's public IP on some high port (e.g. `32768`), not to port 22 directly. For SSH to work end-to-end, the container **must run an sshd of its own** — the Nix-built `:multinode` image we used on Lambda does not.
 
-The vast-targeted image `ghcr.io/derpyplops/deterministic-serving:vast-test` is the variant the user built specifically for this — presumed to bundle an sshd alongside the same vLLM 0.17.1 / Ray 2.54 / PyTorch 2.10 stack as the multinode image, so vast's ingress proxy has something to connect to on the container's port 22.
+The `ghcr.io/derpyplops/deterministic-serving:vast-test` tag is the variant with sshd baked into the Nix closure. Same vLLM 0.17.1 / Ray 2.54 / PyTorch 2.10 stack, plus:
+
+- `openssh`, `/etc/nsswitch.conf`, unlocked `/etc/shadow`, an `sshd` user, and `/var/{empty,log,run}` baked in (Nix-only rootfs is normally missing these bits).
+- An entrypoint at `/nix/store/<hash>-entrypoint/bin/entrypoint` which:
+  1. Appends a pubkey to `/root/.ssh/authorized_keys` from env (preferring `PUBKEY_B64`, falling back to `SSH_PUBLIC_KEY` or `PUBLIC_KEY`).
+  2. If `SKIP_SERVER` is set, runs `sshd -D -e` in foreground only (no vLLM server) — use for debugging / smoke tests.
+  3. Otherwise backgrounds sshd and `exec`s `python3 cmd/server/main.py "$@"`. `main.py` requires `--manifest <path>` or it exits and vast restarts the container, so for this experiment we pass `SKIP_SERVER=1` and drive everything via `docker exec` like we did on Lambda.
+
+**Critical:** the entrypoint's full store path (`/nix/store/<hash>-entrypoint/bin/entrypoint`) is **not stable** — it changes on every Nix rebuild of the image. You must discover it from the published image manifest **at launch time**; hard-coding yesterday's hash is a guaranteed break.
+
+```bash
+TOK=$(gh auth token)
+DIGEST=$(curl -sL -H "Authorization: Bearer $(echo -n $TOK | base64)" \
+  -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
+  "https://ghcr.io/v2/derpyplops/deterministic-serving/manifests/vast-test" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['config']['digest'])")
+ENTRY=$(curl -sL -H "Authorization: Bearer $(echo -n $TOK | base64)" \
+  "https://ghcr.io/v2/derpyplops/deterministic-serving/blobs/$DIGEST" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['config']['Cmd'][0])")
+# ENTRY now holds the correct /nix/store/<hash>-entrypoint/bin/entrypoint
+```
 
 **Unknowns we must validate before spending big:**
 
-1. Does `vast-test` contain the same Python environment (vLLM 0.17.1, Ray 2.54.0, torch 2.10, FlashAttention v3, hf_hub 1.5.0, tiktoken 0.12.0) that we relied on on Lambda? If it's a fresh Nix build, the sha256s will differ and the lockfile `manifest_digest` checks still hold because they pin manifest→sha, not container→sha. But the runner code under `/nix/store/.../deterministic-serving-stack-0.1.0/` must exist at the same path (or the harness call sites need the new path).
-2. Does `vast-test` start sshd correctly under vast's "start container and then attach" lifecycle? Most vast-compatible images use `sshd` as the foreground command and rely on `onstart` / `onstart_cmd` to bring up the workload. Check the image's `ENTRYPOINT` / `CMD` and the Dockerfile before launching.
-3. Cross-host NCCL/gloo — **the main risk**. See "Networking reality check" below.
+1. Does `vast-test` contain the same Python environment (vLLM 0.17.1, Ray 2.54.0, torch 2.10, FlashAttention v3, hf_hub 1.5.0, tiktoken 0.12.0) that we relied on on Lambda? If it's a fresh Nix build, the sha256s will differ. Lockfile `manifest_digest` checks still hold because they pin manifest→sha not container→sha, but the runner's Python-level call sites must match (they should, same flake). **The runner's Nix store path — `/nix/store/chlbq1wd9fbsia3lrsxhj2qcw9z30823-deterministic-serving-stack-0.1.0` from the Lambda session — will almost certainly differ on vast-test**; discover the real path before copy-pasting any `cd /nix/store/...` commands from the Lambda runbook.
+2. Cross-host NCCL/gloo — **the main risk**. See "Networking reality check" below.
 
 ---
 
@@ -121,29 +140,56 @@ The `direct_port_count` filter is the important one for our networking model —
 
 Pick 4 offers, prefer similar hardware and reasonable prices. Record their `id` values.
 
+**Must use `--args` mode, NOT `--ssh` mode.** Vast's `--ssh` flag injects a `/.launch` wrapper that assumes a Ubuntu-style rootfs (`apt-get`, `grep`, `/usr/sbin/sshd`) and crash-loops on the Nix-only image. `--args` mode runs the container's real entrypoint unmodified and lets vast map the ports you request via `-p` in the env bundle.
+
 ```bash
-# Create 4 instances
+PUBKEY_B64=$(cat ~/.ssh/id_ed25519.pub | base64 -w0)
+# $ENTRY was discovered from the image manifest in "Why vast.ai..." above.
+
 for OFFER in $OFFER_1 $OFFER_2 $OFFER_3 $OFFER_4; do
   vastai create instance $OFFER \
     --image ghcr.io/derpyplops/deterministic-serving:vast-test \
     --disk 800 \
-    --ssh \
-    --env '-e VLLM_MULTI_NODE=1 -e HF_TOKEN=... -e NCCL_ALGO=Ring -e NCCL_PROTO=Simple -e NCCL_NET=Socket -e NCCL_P2P_DISABLE=1 -e NCCL_SHM_DISABLE=1 -e NCCL_BUFFSIZE=8388608 -e NCCL_DEBUG=WARN -e NCCL_SOCKET_IFNAME=eth0 -e GLOO_SOCKET_IFNAME=eth0 -e VLLM_USE_RAY_WRAPPED_PP_COMM=0 -e VLLM_RAY_EXTRA_ENV_VAR_PREFIXES_TO_COPY=GLOO_,TP_' \
-    --args '' \
-    --onstart-cmd 'bash -c "sleep infinity"'
+    --entrypoint $ENTRY \
+    --env "-p 22:22 -p 6379:6379 -p 29500:29500 -p 29501:29501 -p 29502:29502 -p 29503:29503 -e PUBKEY_B64=$PUBKEY_B64 -e SKIP_SERVER=1" \
+    --args
 done
 ```
 
 Notes on the `create instance` flags:
 
-- `--image` uses the vast-test tag. Vast pulls this from ghcr — no auth needed for public tags.
-- `--disk 800` budgets 800 GB — tune after the image actually pulls to something realistic.
-- `--ssh` enables vast's SSH proxy; the proxy forwards `ssh root@<host>.vast.ai -p <proxied_port>` to container:22.
-- `--env` is the vast-style env-var bundle; the values will become docker `-e` flags when vast creates the container. **`NCCL_SOCKET_IFNAME=eth0` is the most likely correct value inside a vast container** — vast's host-mode puts the container's NIC at eth0. Verify by running `ip -br link show` inside the first running instance before assuming.
-- `VLLM_HOST_IP` is **not set at create time** because each node's value is different — we'll set it at exec time per node using the address vast reports.
-- `--onstart-cmd` is the vast lifecycle hook; some vast images ignore `CMD` and use this instead. `sleep infinity` keeps the container alive so we can docker-exec into it later. If the vast-test image's own `CMD` is sshd and we don't want to override it, drop `--onstart-cmd`.
+- `--args` (not `--ssh`) — gives vast a stub `CMD` and lets our `--entrypoint` run the real sshd.
+- `--image` is the vast-test tag. Vast pulls this from ghcr — public tag, no auth needed.
+- `--disk 800` budgets 800 GB for DBRX (246 GB) + Mistral Large 2 (456 GB with both consolidated and sharded formats) + HF metadata + headroom.
+- `--entrypoint $ENTRY` forces vast to use the real Nix-store entrypoint we discovered from the image manifest. Must be recomputed per-day because it changes every rebuild.
+- `--env` is a vast-style blob that becomes `docker run ...` flags on the host:
+  - `-p 22:22` — sshd (required for any interaction).
+  - `-p 6379:6379` — Ray GCS (head port).
+  - `-p 29500:29500` through `29503:29503` — NCCL + gloo ephemeral band. Vast cannot map all of NCCL's random high ports, so we need vLLM to pick from a known range. **This is not something vLLM configures by default**; see "NCCL port range" below.
+  - `-e PUBKEY_B64=$PUBKEY_B64` — the entrypoint decodes this into `/root/.ssh/authorized_keys`. `SSH_PUBLIC_KEY` with raw spaces breaks vast's env parser, so always use the base64 form.
+  - `-e SKIP_SERVER=1` — entrypoint runs sshd only, does NOT `exec python3 cmd/server/main.py`. We don't want the vLLM HTTP server; we're driving the runner via `docker exec`.
+- **No NCCL/VLLM env vars are set at create time.** They all get injected per `docker exec` call at runtime, because (a) some values are per-node (`VLLM_HOST_IP`), (b) we need to override them between runs for diagnostics, and (c) the Lambda session proved that baking them into a long-lived container doesn't help — they have to be on the actual Python process that loads vLLM anyway.
 
-Wait for all 4 to show `Running` in `vastai show instances`. Note each instance's `ssh_host` and `ssh_port` — that's the vast proxy endpoint, not the container's internal IP.
+### NCCL port range — new wrinkle that Lambda didn't have
+
+On Lambda with `--network host`, NCCL allocates any high port it wants and peers just connect. On vast with `-p`, we can only forward ports that are explicitly mapped. NCCL has a `NCCL_PORT` and (relevantly for our TCP config) `NCCL_SOCKET_IFNAME` + an implicit dynamic port pool. The knobs that exist:
+
+- `NCCL_PORT_RANGE="29500-29520"` — pins the TCP port pool. vLLM's worker processes pass this to NCCL's rendezvous / p2p setup. **Set this alongside the existing NCCL pinning.**
+- `NCCL_NET=Socket` + `NCCL_SOCKET_NTHREADS=1` — already set from the Lambda session.
+- **Gloo does NOT respect `NCCL_PORT_RANGE`** — gloo picks its own ephemeral ports from the kernel. We need to pin gloo separately via `GLOO_DEVICE_TRANSPORT` and/or rely on host-mode networking to route all container ports transparently. If host-mode works via a `direct_port_count` offer, gloo's random ports go through; if not, gloo will fail on vast's `-p` restricted mapping.
+
+**This is a real unknown.** Lambda sidestepped it because `--network host` gave NCCL and gloo the host's full port space. On vast, the only clean escape is host-mode offers (same as the "Networking reality check" bail-out). **If host-mode isn't available, the `-p 29500:29500 ... 29503:29503` approach is best-effort — NCCL might allocate outside the range, gloo definitely will, and the cluster may fail to form even after the Tier 1 smoke.**
+
+Wait for all 4 instances to show `Running` in `vastai show instances`. **Do not rely on `ssh_host` / `ssh_port` fields** — vast doesn't populate them for `--args` launches. Get the real SSH target from the raw JSON:
+
+```bash
+ID=<instance id>
+IP=$(vastai show instance $ID --raw | python3 -c "import sys,re; m=re.search(r'\"public_ipaddr\"\s*:\s*\"([^\"]*)\"',sys.stdin.read()); print(m.group(1))")
+PORT=$(vastai show instance $ID --raw | python3 -c "import sys,re; m=re.search(r'\"22/tcp\"\s*:\s*\[\s*\{[^}]*\"HostPort\"\s*:\s*\"([0-9]+)\"',sys.stdin.read()); print(m.group(1))")
+ssh -i ~/.ssh/id_ed25519 -p $PORT root@$IP
+```
+
+Same regex applies per port: replace `22/tcp` with `6379/tcp`, `29500/tcp`, etc. to discover the host-mapped external ports for Ray + NCCL.
 
 ### Get the actual networking facts for each node
 
@@ -318,12 +364,16 @@ vastai show instances
 
 ## Known unknowns
 
-- **Does `vast-test` run sshd as PID 1 and let us docker-exec into a shell?** If PID 1 is sshd and it forks shells per SSH connection, `docker exec` may not work the way we assume. Test on one instance before provisioning four.
-- **Does the `vast-test` image have the same `/nix/store/.../deterministic-serving-stack-0.1.0/cmd/` layout as `multinode`?** If the path hashes differ, our hardcoded `cd /nix/store/chlbq1wd9fbsia3lrsxhj2qcw9z30823-deterministic-serving-stack-0.1.0` lines from the Lambda plan won't work. Discover the correct path with `find / -name runner -type d 2>/dev/null` inside the container and adapt.
-- **Does `vast-test` include `tiktoken`?** We need it for the DBRX tokenizer even with `trust_remote_code=true`. Assume yes — same Nix environment — but verify with `docker exec <cont> python3 -c 'import tiktoken; print(tiktoken.__version__)'`.
-- **Does vast's ephemeral disk survive container restarts?** The Lambda pattern of "if ray-head dies, just `docker run` it again and the HF cache is still there" assumes the `-v /home/ubuntu/.cache/huggingface:/root/.cache/huggingface` mount is persistent. On vast, the host-side of that mount is typically the provider's ephemeral container storage, which does survive `docker rm -f` but NOT instance termination. Plan accordingly: if the instance gets evicted, weights are gone and you re-download.
-- **Does vast's `create instance` actually honor `--env` the way `docker run -e` does?** Run `docker exec ray-head env | grep VLLM_` on the first instance immediately after it's created and confirm the env vars are actually there. Vast has historically rewritten some env vars silently.
-- **Does the vast-test image's `cmd/runner/main.py` speak the same manifest-schema version as the ones we have committed?** If the schema file has a newer `$ref` or field, our manifests may validate differently. The `dbrx-tp4-large-shuffled` manifest in particular has shuffled `requests` — the schema doesn't care about ordering, but confirm.
+- **Does `vast-test`'s single container give us a shell via `docker exec`?** Unlike the Lambda multinode plan, on vast we SSH **directly into the container** — there's no host-side shell to issue `docker exec` from. Everything we did on Lambda via `ssh ubuntu@<ip> "sudo docker exec ray-head ..."` becomes plain `ssh -p $PORT root@$IP "..."` on vast. The cluster setup / Ray / runner calls all happen inside the SSH'd container directly, not via docker-in-docker.
+- **Does `vast-test`'s `/nix/store/.../deterministic-serving-stack-0.1.0/cmd/runner/main.py` exist at a predictable path?** Every Nix rebuild gets a new store hash, so the `cd /nix/store/chlbq1wd9fbsia3lrsxhj2qcw9z30823-deterministic-serving-stack-0.1.0` line hardcoded in Lambda commands will break. Discover the live path once from any instance:
+  ```bash
+  ssh root@$IP -p $PORT 'ls -d /nix/store/*-deterministic-serving-stack-*'
+  ```
+  and substitute it everywhere.
+- **Does `vast-test` include `tiktoken` + `huggingface_hub` 1.5.0?** We need both (tiktoken for the DBRX tokenizer, hf_hub for Xet-backed LFS downloads). Assume yes — same flake — but verify with `python3 -c 'import tiktoken, huggingface_hub; print(tiktoken.__version__, huggingface_hub.__version__)'`.
+- **Does the instance's rootfs survive `docker rm -f`?** The Lambda pattern of "kill ray-head, re-launch, HF cache still there" relied on a bind-mounted host dir. On vast, everything is inside the single container we SSH into — if that container dies or vast restarts it, **we lose the HF cache entirely** and re-download both models (~700 GB per node). This is the biggest operational risk vs Lambda. Mitigation: don't restart the container mid-experiment; keep sshd running + drive everything from within.
+- **Can we even bind gloo's listener to a routable IP inside a vast container?** The `sitecustomize.py` patch calls `create_device(hostname=VLLM_HOST_IP)`. On Lambda, `VLLM_HOST_IP` was the VM's public IP that peers could reach. On vast with `-p 29500:29500`, the container's `VLLM_HOST_IP` must be **the container's own local address** (not the vast host's public IP) — gloo binds inside the container, vast's docker-proxy forwards from host:29500 to container:29500. What peers actually connect to is `<vast_host_public_ip>:<vast_mapped_port>`, which is **not** what `VLLM_HOST_IP` sets. **This mismatch likely breaks gloo's full-mesh bootstrap** in exactly the same way as the Lambda cross-region bug did — the advertised address won't match the bind/reachable address. If so, host-mode offers are the only escape.
+- **Does the vast-test image's `cmd/runner/main.py` speak the same manifest-schema version as the ones we have committed?** Same flake, so almost certainly yes, but the `dbrx-tp4-large-shuffled` manifest has a shuffled `requests` list and a different `manifest_digest` that the runner recomputes from canonical JSON. Schema doesn't care about ordering; confirm by running the smoke manifest first.
 
 ---
 
