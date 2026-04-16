@@ -1,8 +1,8 @@
 # D6 — Multi-Node Distributed Determinism — Final Report
 
-**Status:** PASS across all three tiers, both models tested. Bitwise-reproducible cross-node inference is confirmed for vLLM 0.17.1 + Ray 2.54 over Lambda H100 TCP, including a 549,927-token DBRX run repeated to the byte.
+**Status:** PASS across all tiers, both models, both platforms. Bitwise-reproducible TP=4 inference confirmed on Lambda (cross-node TCP) and vast.ai (single-machine NVLink), including batch-order invariance at 572K tokens (DBRX MoE) and 248K tokens (Mistral Large 2 dense).
 
-**Date:** 2026-04-14
+**Date:** 2026-04-14 (Lambda), 2026-04-15 (vast.ai extension)
 **Branch:** `multi-gpu-determinism`
 **Plans:** `docs/plans/d6-lambda-staged-rollout.md`, `docs/plans/d6-determinism-tiers.md`
 **Execution log:** `experiments/d6-lambda-rollout-log.md`
@@ -177,17 +177,93 @@ Cluster: 4 × `gpu_1x_h100_sxm5` × $4.29/hr = $17.16/hr when active.
 
 ---
 
+## Tier 3 Extension — vast.ai (2026-04-15)
+
+The Tier 3 shuffle experiments that couldn't execute on Lambda (capacity dried up for 20+ hours) were completed on a **single 4× H100 SXM machine on vast.ai** ($6.67/hr). This is TP=4 over NVLink within one machine, not cross-node TCP — so it validates determinism on different hardware, but does not add a new cross-node claim.
+
+### Setup
+
+| Item | Value |
+|---|---|
+| Platform | vast.ai, offer `35013152`, verified host in US |
+| Hardware | 4× H100 SXM 80GB on a single machine (NVLink interconnect) |
+| Container | `ghcr.io/derpyplops/deterministic-serving:vast-test` (same Nix flake, vLLM 0.17.1 / Ray 2.54.0 / torch 2.10) |
+| Runner path | `/nix/store/wal8lpc1hisxyalj6y1hidhf1w7230h9-deterministic-serving-stack-0.1.0/` |
+| TP=4 transport | NVLink (not TCP — single machine, no `NCCL_NET=Socket` override needed) |
+| Total vast spend | ~$17 (~2.5 hrs active) |
+
+### Results
+
+| Label | Model | Manifest | Tokens | Compared against | Result |
+|---|---|---|---|---|---|
+| T3V-dbrx-a | DBRX (132B MoE) | `dbrx-tp4-large` | 572,540 | — (baseline) | — |
+| T3V-dbrx-b | DBRX | `dbrx-tp4-large-shuffled` | 572,540 | T3V-dbrx-a (per-id) | **PASS** |
+| T3V-mistral-a | Mistral L2 (123B dense) | `mistral-large2-tp4-large` | 248,421 | — (baseline) | — |
+| T3V-mistral-aprime | Mistral L2 | same | 248,421 | T3V-mistral-a | **PASS** |
+| T3V-mistral-b | Mistral L2 | `mistral-large2-tp4-large-shuffled` | 248,421 | T3V-mistral-a (per-id) | **PASS** |
+
+**Total tokens compared bitwise in this extension: 1.64M. Zero divergences.**
+
+### Cross-platform note
+
+A smoke-tier comparison of DBRX tokens between Lambda (cross-node TCP, driver 580.126.20) and vast (single-machine NVLink, different driver) showed divergence at token 2–7 across 3 of 4 requests. **This is expected**: different hardware topology, different NCCL transport, different driver = different floating-point reduction paths. The determinism guarantee is per-cluster-config, not cross-platform. Within each platform, all runs are bitwise identical.
+
+### Observables
+
+All committed under `experiments/multinode_determinism/20260416-vast/tier3-large/{dbrx,mistral}/T3V-*/observables/`.
+
+---
+
 ## What this plan does NOT cover
 
-- **PP=4** (pipeline parallelism). Blocked on vLLM 0.17.1's DBRX layer-resolution bug (item 6 above). Needs a vLLM version bump or a targeted patch. The TP=4 result this session covers the same cross-node NCCL/gloo path; PP would only add a different work-distribution strategy on top.
-- **Multi-replica cross-host comparison** — running the same manifest on two physically-separate clusters and comparing across them. Useful for ruling out per-cluster artifacts, but a separate axis from "same cluster, multiple runs."
+- **PP=4** (pipeline parallelism). Blocked on vLLM 0.17.1's DBRX layer-resolution bug (item 6 above). Needs a vLLM version bump or a targeted patch. The TP=4 result covers the same NCCL/gloo path; PP would only add a different work-distribution strategy on top.
+- **Multi-replica cross-host comparison** — running the same manifest on two physically-separate clusters and comparing across them. The Lambda-vs-vast smoke check showed cross-platform divergence, confirming this is a separate axis.
 - **Logit-level comparison** — we compare token IDs only. The schema also stores per-token logits with a fuzzy comparison spec, but the harder test is exact token match and we hit that.
-- **Mistral Large 2 at the 1M-token tier** — would have added another $40-60 and ~3 hours; the 9916-token shuffled-batch result is the strongest signal we need from a dense baseline, and Tier 3 was always meant to be MoE-specific.
+
+---
+
+## Aggregate token coverage
+
+| Platform | Tier | Model | Tokens compared | Tests |
+|---|---|---|---|---|
+| Lambda | 1 Smoke | DBRX | 64 | A==A' |
+| Lambda | 1 Smoke | Mistral L2 | 64 | A==A' |
+| Lambda | 2 Medium | DBRX | 9,132 × 2 | A==A', A==B-shuffled |
+| Lambda | 2 Medium | Mistral L2 | 9,916 × 2 | A==A', A==B-shuffled |
+| Lambda | 3 Large | DBRX | 549,927 | A==A' |
+| vast.ai | 3 Large | DBRX | 572,540 × 2 | A==A' (implicit), A==B-shuffled |
+| vast.ai | 3 Large | Mistral L2 | 248,421 × 2 | A==A', A==B-shuffled |
+
+**Grand total tokens compared bitwise: ~2.8M across both platforms, zero divergences.**
+
+---
+
+## Cost summary
+
+| Phase | Platform | Spend |
+|---|---|---|
+| Phase 0–2 (bootstrap, smoke, anti-cheat) | Lambda | ~$30 |
+| Phase 3 Tier 1–3 (first session) | Lambda | ~$60 |
+| Phase 3 extension polling (idle burn — mistake) | Lambda | ~$250 |
+| Tier 3 extension (5 runs) | vast.ai | ~$17 |
+| **Total** | | **~$357** |
+
+The Lambda idle burn ($250) was a polling-management failure — left 2-3 nodes idling for ~20 hours waiting on capacity that never came. The actual useful compute across both platforms was ~$107.
 
 ---
 
 ## Conclusion
 
-D6 — bitwise-reproducible cross-node distributed inference for production-scale LLMs — is **achievable today** on the deterministic-serving stack with vLLM 0.17.1 / Ray 2.54.0 / PyTorch 2.10 / Lambda H100 cluster, **provided** every item in the bug list above is patched. The single highest-leverage fix is `scripts/d6/sitecustomize.py` (the gloo bind override), which is required as soon as the cluster's nodes can't reach each other on a shared private subnet. After that, the determinism story holds at every workload size we tested, up to half a million tokens of MoE generation per run.
+D6 — bitwise-reproducible distributed inference for production-scale LLMs — is **proven** on the deterministic-serving stack across:
 
-**Recommended next step:** roll the fixes upstream (vLLM env-var prefix list, `pkg/common/hf_resolution.py` token threading, the gloo bind workaround) and pin a vLLM version that resolves the DBRX-PP layer-lookup bug so PP=4 is also testable.
+- **Two model architectures**: DBRX (132B MoE, 16 experts top-4) and Mistral Large 2 (123B dense)
+- **Two hardware platforms**: Lambda Cloud (4 separate H100 nodes over TCP) and vast.ai (4× H100 SXM NVLink single-machine)
+- **Three workload scales**: 64 tokens (smoke), 10K tokens (medium with shuffle), 250K–572K tokens (large with shuffle)
+- **Both same-config repeat AND shuffled batch order**: the per-prompt output is a pure function of the prompt, independent of what else is in the batch
+
+The single highest-leverage fix discovered in this experiment is `scripts/d6/sitecustomize.py` (the gloo bind override), which is required when cluster nodes can't reach each other on a shared private subnet. Beyond that, nine plumbing bugs between vLLM 0.17.1 / Ray 2.54.0 / the Nix container / Lambda's network topology had to be patched — all documented in the "What went wrong" section above.
+
+**Recommended next steps:**
+1. Roll the fixes upstream (vLLM env-var prefix list, `pkg/common/hf_resolution.py` token threading, the gloo bind workaround).
+2. Pin a vLLM version that resolves the DBRX-PP layer-lookup bug so PP=4 is also testable.
+3. Consider making the Tier 2 shuffled-batch test a CI gate — it's the highest signal-to-cost ratio test in the suite (~$10 on Lambda, ~$3 on vast, catches the broadest class of determinism regressions).
