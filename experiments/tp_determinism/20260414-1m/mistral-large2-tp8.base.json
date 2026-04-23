@@ -1,0 +1,46 @@
+{
+  "manifest_version": "v1",
+  "run_id": "mistral-large2-tp8-1m",
+  "created_at": "2026-04-14T00:00:00Z",
+  "model": {
+    "source": "hf://mistralai/Mistral-Large-Instruct-2407",
+    "tokenizer_revision": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+    "weights_revision": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+    "trust_remote_code": false
+  },
+  "hardware_profile": {
+    "gpu": {
+      "count": 8,
+      "model": "NVIDIA H100 80GB HBM3",
+      "driver_version": "535.288.01",
+      "cuda_driver_version": "12.2"
+    }
+  },
+  "comparison": {
+    "logits": {"atol": 1e-06, "mode": "absrel", "rtol": 0.0001},
+    "network_egress": {"algorithm": "sha256", "mode": "hash"},
+    "tokens": {"mode": "exact"}
+  },
+  "runtime": {
+    "strict_hardware": false,
+    "batch_invariance": {"enabled": true, "enforce_eager": true},
+    "deterministic_knobs": {
+      "cublas_workspace_config": ":4096:8",
+      "cuda_launch_blocking": true,
+      "pythonhashseed": "0",
+      "seed": 42,
+      "torch_deterministic": true
+    },
+    "serving_engine": {
+      "attention_backend": "FLASH_ATTN",
+      "disable_custom_all_reduce": true,
+      "dtype": "auto",
+      "gpu_memory_utilization": 0.9,
+      "max_model_len": 8192,
+      "max_num_seqs": 64,
+      "tensor_parallel_size": 8
+    }
+  },
+  "artifact_inputs": [],
+  "requests": []
+}

@@ -885,9 +885,147 @@
   },
   "requests": [
     {
-      "id": "req-placeholder",
-      "max_new_tokens": 4,
-      "prompt": "Hello",
+      "id": "req-000",
+      "prompt": "Explain how photosynthesis works in one paragraph.",
+      "max_new_tokens": 64,
+      "temperature": 0
+    },
+    {
+      "id": "req-001",
+      "prompt": "What is the capital of Australia and why is it not Sydney?",
+      "max_new_tokens": 64,
+      "temperature": 0
+    },
+    {
+      "id": "req-002",
+      "prompt": "List five interesting facts about the Roman Empire.",
+      "max_new_tokens": 64,
+      "temperature": 0
+    },
+    {
+      "id": "req-003",
+      "prompt": "Describe a sunset over the ocean in vivid detail.",
+      "max_new_tokens": 64,
+      "temperature": 0
+    },
+    {
+      "id": "req-004",
+      "prompt": "What is the difference between a virus and a bacterium?",
+      "max_new_tokens": 64,
+      "temperature": 0
+    },
+    {
+      "id": "req-005",
+      "prompt": "Write a haiku about winter mornings.",
+      "max_new_tokens": 64,
+      "temperature": 0
+    },
+    {
+      "id": "req-006",
+      "prompt": "Explain the concept of gravity to a curious child.",
+      "max_new_tokens": 64,
+      "temperature": 0
+    },
+    {
+      "id": "req-007",
+      "prompt": "What are the main causes of climate change?",
+      "max_new_tokens": 64,
+      "temperature": 0
+    },
+    {
+      "id": "req-008",
+      "prompt": "Describe how to make a simple loaf of sourdough bread.",
+      "max_new_tokens": 64,
+      "temperature": 0
+    },
+    {
+      "id": "req-009",
+      "prompt": "Summarize the plot of Hamlet in three sentences.",
+      "max_new_tokens": 64,
+      "temperature": 0
+    },
+    {
+      "id": "req-010",
+      "prompt": "Why is the sky blue during the day and red at sunset?",
+      "max_new_tokens": 64,
+      "temperature": 0
+    },
+    {
+      "id": "req-011",
+      "prompt": "What is quantum entanglement in plain English?",
+      "max_new_tokens": 64,
+      "temperature": 0
+    },
+    {
+      "id": "req-012",
+      "prompt": "List the planets of the solar system in order.",
+      "max_new_tokens": 64,
+      "temperature": 0
+    },
+    {
+      "id": "req-013",
+      "prompt": "Describe the taste of a perfectly ripe mango.",
+      "max_new_tokens": 64,
+      "temperature": 0
+    },
+    {
+      "id": "req-014",
+      "prompt": "Explain how a transistor amplifies a signal.",
+      "max_new_tokens": 64,
+      "temperature": 0
+    },
+    {
+      "id": "req-015",
+      "prompt": "What is the Pythagorean theorem and why does it matter?",
+      "max_new_tokens": 64,
+      "temperature": 0
+    },
+    {
+      "id": "req-016",
+      "prompt": "Write a short poem about a cat watching rain.",
+      "max_new_tokens": 64,
+      "temperature": 0
+    },
+    {
+      "id": "req-017",
+      "prompt": "Describe the structure of a typical neuron.",
+      "max_new_tokens": 64,
+      "temperature": 0
+    },
+    {
+      "id": "req-018",
+      "prompt": "What is the difference between machine learning and AI?",
+      "max_new_tokens": 64,
+      "temperature": 0
+    },
+    {
+      "id": "req-019",
+      "prompt": "Explain how vaccines train the immune system.",
+      "max_new_tokens": 64,
+      "temperature": 0
+    },
+    {
+      "id": "req-020",
+      "prompt": "Tell me about the life cycle of a butterfly.",
+      "max_new_tokens": 64,
+      "temperature": 0
+    },
+    {
+      "id": "req-021",
+      "prompt": "What is the longest river in the world and where does it flow?",
+      "max_new_tokens": 64,
+      "temperature": 0
+    },
+    {
+      "id": "req-022",
+      "prompt": "Describe the steps to brew a perfect cup of coffee.",
+      "max_new_tokens": 64,
+      "temperature": 0
+    },
+    {
+      "id": "req-023",
+      "prompt": "Why do leaves change color in autumn?",
+      "max_new_tokens": 64,
       "temperature": 0
     }
   ],

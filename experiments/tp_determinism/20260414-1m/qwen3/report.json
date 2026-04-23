@@ -1,0 +1,10 @@
+{
+  "model": "qwen3-235b-a22b-tp8",
+  "test": "batch_order_invariance_1m",
+  "total_requests": 1000,
+  "token_matches": 1000,
+  "token_mismatches": 0,
+  "total_tokens_compared": 1003412,
+  "status": "PASS",
+  "mismatch_details": []
+}

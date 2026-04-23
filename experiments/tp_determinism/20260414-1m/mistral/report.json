@@ -1,0 +1,10 @@
+{
+  "model": "mistral-large2-tp8",
+  "test": "batch_order_invariance_1m",
+  "total_requests": 1000,
+  "token_matches": 1000,
+  "token_mismatches": 0,
+  "total_tokens_compared": 724269,
+  "status": "PASS",
+  "mismatch_details": []
+}
