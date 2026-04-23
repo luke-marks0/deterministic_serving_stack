@@ -9,9 +9,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-ROOT = pathlib.Path(__file__).resolve().parents[2]
-DATA = ROOT / "results" / "overhead.jsonl"
-OUT = ROOT / "results" / "figures"
+EXPERIMENT = pathlib.Path(__file__).resolve().parents[1]
+DATA = EXPERIMENT / "data" / "overhead.jsonl"
+OUT = EXPERIMENT / "figures"
 OUT.mkdir(exist_ok=True)
 
 # ── Load data ────────────────────────────────────────────────────────────
