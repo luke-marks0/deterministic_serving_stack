@@ -1,0 +1,5 @@
+Determinism Verification Summary
+Status: conformant
+Baseline Run: qwen2.5-32b-tp4-det-001
+Candidate Run: qwen2.5-32b-tp4-det-001
+Summary: status=conformant; outputs_equal=True; runtime_equal=True; hardware_equal=True
