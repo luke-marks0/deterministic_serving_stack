@@ -129,6 +129,40 @@ def select_challenge(
     return req_id, token_position
 
 
+def parse_challenge_spec(
+    spec: str,
+    commitments: dict[str, list[str]],
+) -> tuple[str, int]:
+    """Parse a forced-challenge string of the form 'request_id:position'.
+
+    Position is 1-indexed. Raises ValueError with a clear message if the
+    spec is malformed, the request ID is unknown, or the position is out
+    of range for that request's commitment list.
+    """
+    if ":" not in spec:
+        raise ValueError(
+            f"--challenge must be 'request_id:position', got {spec!r}"
+        )
+    req_id, _, pos_str = spec.partition(":")
+    if req_id not in commitments:
+        known = ", ".join(sorted(commitments.keys()))
+        raise ValueError(
+            f"unknown request id {req_id!r}; known ids: {known}"
+        )
+    try:
+        position = int(pos_str)
+    except ValueError:
+        raise ValueError(
+            f"position must be an integer, got {pos_str!r}"
+        ) from None
+    n = len(commitments[req_id])
+    if position < 1 or position > n:
+        raise ValueError(
+            f"position {position} out of range for {req_id} (have {n} tokens)"
+        )
+    return req_id, position
+
+
 def verify_challenge(
     request_id: str,
     token_position: int,
@@ -171,6 +205,17 @@ def main() -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("--model", default="Qwen/Qwen2.5-1.5B-Instruct")
     p.add_argument("--seed", type=int, default=42)
+    p.add_argument(
+        "--challenge",
+        default=None,
+        help="Force a specific challenge, e.g. 'req-2:3' (1-indexed). "
+             "If omitted, the challenge is chosen uniformly at random.",
+    )
+    p.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Print plaintext token IDs alongside commitments.",
+    )
     args = p.parse_args()
 
     setup_deterministic_env()
@@ -196,15 +241,27 @@ def main() -> int:
         commitments[req_id] = commits
         total_tokens += len(toks)
         print(f"  {req_id}: {len(toks)} tokens, commitment[0]={commits[0][:8]}...")
+        if args.verbose:
+            print(f"    token_ids: {toks}")
 
     print(f"  Total: {total_tokens} tokens committed")
     print()
 
     print("Phase 2: Challenge selection")
-    req_id, token_position = select_challenge(commitments)
+    if args.challenge is not None:
+        try:
+            req_id, token_position = parse_challenge_spec(args.challenge, commitments)
+        except ValueError as exc:
+            print(f"  error: {exc}", file=sys.stderr)
+            return 1
+    else:
+        req_id, token_position = select_challenge(commitments)
     expected = commitments[req_id][token_position - 1]
     n_total = len(commitments[req_id])
     print(f"  Challenging {req_id}, token position {token_position} of {n_total}")
+    if args.verbose:
+        primary_token = tokens_by_req[req_id][token_position - 1]
+        print(f"  primary token_id at position {token_position}: {primary_token}")
     print()
 
     print("Phase 3: Verification run")
