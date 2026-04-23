@@ -321,11 +321,11 @@ def _vllm_observables(
     """Run real vLLM inference and return observables + env_info."""
     import importlib.util
 
-    vllm_runner_path = Path(__file__).resolve().parent / "vllm_runner.py"
-    spec = importlib.util.spec_from_file_location("vllm_runner", vllm_runner_path)
-    vllm_runner = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(vllm_runner)
-    run_vllm = vllm_runner.run_vllm
+    _vllm_runner_path = Path(__file__).resolve().parent / "vllm_runner.py"
+    _spec = importlib.util.spec_from_file_location("vllm_runner", _vllm_runner_path)
+    _mod = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(_mod)
+    run_vllm = _mod.run_vllm
 
     result = run_vllm(manifest_dict, lockfile)
 

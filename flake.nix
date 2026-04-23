@@ -255,8 +255,8 @@
           env = {
             CUDA_HOME = "${pkgs.cudaPackages.cuda_nvcc}";
             TORCH_CUDA_ARCH_LIST = "9.0";
-            MAX_JOBS = "2";
-            NVCC_THREADS = "1";
+            MAX_JOBS = "16";
+            NVCC_THREADS = "2";
             SETUPTOOLS_SCM_PRETEND_VERSION = version;
             VLLM_PYTHON_EXECUTABLE = "${python}/bin/python3";
             # Pre-fetched sources for cmake FetchContent (no network in sandbox)
@@ -345,17 +345,105 @@
             pkgs.coreutils
             pkgs.cacert
             pkgs.gcc                # Triton JIT-compiles kernels at runtime
+            pkgs.openssh            # vast.ai requires sshd inside the container
           ];
         };
+
+        # sshd config: key-only root login on port 22.
+        sshdConfig = pkgs.writeTextDir "etc/ssh/sshd_config" ''
+          Port 22
+          PermitRootLogin prohibit-password
+          PasswordAuthentication no
+          UsePAM no
+          ChallengeResponseAuthentication no
+          HostKey /etc/ssh/ssh_host_ed25519_key
+          AuthorizedKeysFile /root/.ssh/authorized_keys
+          PidFile /run/sshd.pid
+          Subsystem sftp ${pkgs.openssh}/libexec/sftp-server
+        '';
+
+        # Entrypoint: generate host keys, seed authorized_keys from env/vast,
+        # start sshd in foreground as supervisor, run the server as a child.
+        # sshd-as-supervisor means the container stays reachable for debugging
+        # even if main.py crashes — critical for --manifest misconfigurations etc.
+        # Accepts SSH_PUBLIC_KEY (raw) or PUBKEY_B64 (base64); vast.ai's -e env
+        # parsing breaks on spaces, so base64 is the reliable channel.
+        entrypoint = pkgs.writeShellScriptBin "entrypoint" ''
+          set -eu
+          export PATH=${pkgs.openssh}/bin:${pkgs.coreutils}/bin:${pythonEnv}/bin:$PATH
+
+          mkdir -p /root/.ssh /run/sshd /etc/ssh /var/empty /var/log
+          chmod 700 /root/.ssh
+
+          if [ -n "''${SSH_PUBLIC_KEY:-}" ]; then
+            echo "$SSH_PUBLIC_KEY" >> /root/.ssh/authorized_keys
+          fi
+          if [ -n "''${PUBLIC_KEY:-}" ]; then
+            echo "$PUBLIC_KEY" >> /root/.ssh/authorized_keys
+          fi
+          if [ -n "''${PUBKEY_B64:-}" ]; then
+            echo "$PUBKEY_B64" | ${pkgs.coreutils}/bin/base64 -d >> /root/.ssh/authorized_keys
+          fi
+          touch /root/.ssh/authorized_keys
+          chmod 600 /root/.ssh/authorized_keys
+
+          if [ ! -f /etc/ssh/ssh_host_ed25519_key ]; then
+            ssh-keygen -t ed25519 -f /etc/ssh/ssh_host_ed25519_key -N "" >/dev/null
+          fi
+
+          if [ -n "''${SKIP_SERVER:-}" ]; then
+            echo "[entrypoint] SKIP_SERVER set, sshd only"
+            exec ${pkgs.openssh}/bin/sshd -D -e -f /etc/ssh/sshd_config
+          fi
+
+          ${pkgs.openssh}/bin/sshd -f /etc/ssh/sshd_config
+          echo "[entrypoint] sshd started on :22"
+
+          exec ${pythonEnv}/bin/python3 ${appSrc}/cmd/server/main.py "$@"
+        '';
 
         # ── OCI image ──────────────────────────────────────────────────────
         ociImage = pkgs.dockerTools.buildLayeredImage {
           name = "deterministic-serving-runtime";
           tag = self.rev or "dev";
-          contents = [ runtimeClosure (pkgs.writeTextDir "etc/passwd" "root:x:0:0:root:/tmp:/bin/bash\n") (pkgs.writeTextDir "etc/group" "root:x:0:\n") ];
+          contents = [
+            runtimeClosure
+            entrypoint
+            sshdConfig
+            # Minimal FHS to make sshd + NSS happy on a Nix-only rootfs.
+            # - nsswitch.conf: glibc needs this to resolve root via files db;
+            #   without it sshd logs "invalid user root" on login attempts.
+            # - shadow: must NOT be "root:!" (locked account); "*" means no
+            #   password set which still permits pubkey auth.
+            # - passwd has sshd:74 for privilege separation; group likewise.
+            (pkgs.writeTextDir "etc/nsswitch.conf" ''
+              passwd: files
+              group: files
+              shadow: files
+              hosts: files dns
+            '')
+            (pkgs.writeTextDir "etc/passwd" ''
+              root:x:0:0:root:/root:/bin/bash
+              sshd:x:74:74:sshd:/var/empty:/bin/false
+            '')
+            (pkgs.writeTextDir "etc/group" ''
+              root:x:0:
+              sshd:x:74:
+            '')
+            (pkgs.writeTextDir "etc/shadow" ''
+              root:*:19000:0:99999:7:::
+              sshd:*:19000:0:99999:7:::
+            '')
+          ];
+          extraCommands = ''
+            mkdir -p root/.ssh run/sshd tmp var/empty var/log var/run
+            chmod 700 root/.ssh
+            chmod 1777 tmp
+          '';
           config = {
-            Cmd = [ "${pythonEnv}/bin/python3" "${appSrc}/cmd/server/main.py" ];
+            Cmd = [ "${entrypoint}/bin/entrypoint" ];
             WorkingDir = "/workspace";
+            ExposedPorts = { "22/tcp" = {}; "8000/tcp" = {}; };
             Env = [
               "PYTHONPATH=${appSrc}:${pythonEnv}/${python.sitePackages}"
               "VLLM_BATCH_INVARIANT=1"
@@ -364,7 +452,7 @@
               "NVIDIA_VISIBLE_DEVICES=all"
               "NVIDIA_DRIVER_CAPABILITIES=compute,utility"
               "LD_LIBRARY_PATH=/usr/lib64:/usr/lib/aarch64-linux-gnu:/usr/lib/x86_64-linux-gnu"
-              "HOME=/tmp"
+              "HOME=/root"
               "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
               "NIX_SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
               "CLOSURE_HASH=${builtins.hashString "sha256" (builtins.toString runtimeClosure.outPath)}"

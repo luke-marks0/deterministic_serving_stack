@@ -1,0 +1,72 @@
+{
+  "model": "qwen3-30b-moe",
+  "test": "batch_order_invariance",
+  "total_requests": 100,
+  "token_matches": 13,
+  "token_mismatches": 87,
+  "logit_mismatches": 100,
+  "total_tokens_compared": 12800,
+  "status": "FAIL",
+  "mismatch_details": [
+    {
+      "id": "req-000",
+      "first_diff_pos": 95,
+      "len_a": 128,
+      "len_b": 128
+    },
+    {
+      "id": "req-001",
+      "first_diff_pos": 66,
+      "len_a": 128,
+      "len_b": 128
+    },
+    {
+      "id": "req-002",
+      "first_diff_pos": 54,
+      "len_a": 128,
+      "len_b": 128
+    },
+    {
+      "id": "req-003",
+      "first_diff_pos": 26,
+      "len_a": 128,
+      "len_b": 128
+    },
+    {
+      "id": "req-004",
+      "first_diff_pos": 25,
+      "len_a": 128,
+      "len_b": 128
+    },
+    {
+      "id": "req-006",
+      "first_diff_pos": 93,
+      "len_a": 128,
+      "len_b": 128
+    },
+    {
+      "id": "req-007",
+      "first_diff_pos": 72,
+      "len_a": 128,
+      "len_b": 128
+    },
+    {
+      "id": "req-008",
+      "first_diff_pos": 52,
+      "len_a": 128,
+      "len_b": 128
+    },
+    {
+      "id": "req-009",
+      "first_diff_pos": 12,
+      "len_a": 128,
+      "len_b": 128
+    },
+    {
+      "id": "req-010",
+      "first_diff_pos": 65,
+      "len_a": 128,
+      "len_b": 128
+    }
+  ]
+}

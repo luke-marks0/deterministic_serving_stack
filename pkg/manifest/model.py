@@ -141,6 +141,7 @@ class ServingEngine(BaseModel):
     tensor_parallel_size: int | None = Field(default=None, ge=1)
     pipeline_parallel_size: int | None = Field(default=None, ge=1)
     disable_custom_all_reduce: bool | None = None
+    distributed_executor_backend: str | None = None
 
 
 class BatchInvariance(BaseModel):

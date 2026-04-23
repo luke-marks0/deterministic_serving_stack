@@ -1,0 +1,11 @@
+{
+  "model": "mistral-large2-tp4",
+  "test": "batch_order_invariance",
+  "total_requests": 100,
+  "token_matches": 100,
+  "token_mismatches": 0,
+  "logit_mismatches": 0,
+  "total_tokens_compared": 12800,
+  "status": "PASS",
+  "mismatch_details": []
+}

@@ -244,6 +244,9 @@ def _build_vllm_cmd(manifest: Manifest, host: str, port: int) -> list[str]:
     elif engine.disable_custom_all_reduce is False:
         cmd.append("--no-disable-custom-all-reduce")
 
+    if engine.distributed_executor_backend:
+        cmd.extend(["--distributed-executor-backend", engine.distributed_executor_backend])
+
     # Trust remote code
     if model.trust_remote_code:
         cmd.append("--trust-remote-code")

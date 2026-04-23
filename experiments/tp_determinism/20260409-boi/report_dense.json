@@ -1,0 +1,72 @@
+{
+  "model": "qwen2.5-32b-dense",
+  "test": "batch_order_invariance",
+  "total_requests": 100,
+  "token_matches": 22,
+  "token_mismatches": 78,
+  "logit_mismatches": 100,
+  "total_tokens_compared": 12800,
+  "status": "FAIL",
+  "mismatch_details": [
+    {
+      "id": "req-000",
+      "first_diff_pos": 63,
+      "len_a": 128,
+      "len_b": 128
+    },
+    {
+      "id": "req-002",
+      "first_diff_pos": 57,
+      "len_a": 128,
+      "len_b": 128
+    },
+    {
+      "id": "req-003",
+      "first_diff_pos": 47,
+      "len_a": 128,
+      "len_b": 128
+    },
+    {
+      "id": "req-004",
+      "first_diff_pos": 58,
+      "len_a": 128,
+      "len_b": 128
+    },
+    {
+      "id": "req-005",
+      "first_diff_pos": 21,
+      "len_a": 128,
+      "len_b": 128
+    },
+    {
+      "id": "req-006",
+      "first_diff_pos": 72,
+      "len_a": 128,
+      "len_b": 128
+    },
+    {
+      "id": "req-007",
+      "first_diff_pos": 73,
+      "len_a": 128,
+      "len_b": 128
+    },
+    {
+      "id": "req-010",
+      "first_diff_pos": 13,
+      "len_a": 128,
+      "len_b": 128
+    },
+    {
+      "id": "req-011",
+      "first_diff_pos": 103,
+      "len_a": 128,
+      "len_b": 128
+    },
+    {
+      "id": "req-012",
+      "first_diff_pos": 60,
+      "len_a": 128,
+      "len_b": 128
+    }
+  ]
+}
