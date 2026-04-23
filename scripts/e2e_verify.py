@@ -36,6 +36,7 @@ from __future__ import annotations
 import argparse
 import gc
 import os
+import random
 import sys
 import time
 from pathlib import Path
@@ -111,6 +112,61 @@ def run_inference(
     return result
 
 
+def select_challenge(
+    commitments: dict[str, list[str]],
+) -> tuple[str, int]:
+    """Pick a random (request_id, token_position) to challenge.
+
+    Returns:
+        (request_id, token_position) where token_position is 1-indexed
+        (i.e. the number of tokens the verifier must generate to reach
+        this position).
+    """
+    rng = random.Random(None)
+    req_id = rng.choice(list(commitments.keys()))
+    n = len(commitments[req_id])
+    token_position = rng.randint(1, n)
+    return req_id, token_position
+
+
+def verify_challenge(
+    request_id: str,
+    token_position: int,
+    expected_commitment: str,
+    prompts: list[dict],
+    *,
+    model: str,
+    seed: int,
+) -> dict:
+    """Reproduce inference for one request and verify the challenged token.
+
+    Args:
+        token_position: 1-indexed position of the challenged token.
+
+    Returns a dict with keys:
+        - "pass": bool
+        - "request_id": str
+        - "token_position": int (1-indexed)
+        - "expected": str (commitment from primary run)
+        - "actual": str (commitment from verification run)
+    """
+    original = next(p for p in prompts if p["id"] == request_id)
+    challenge_prompt = {**original, "max_new_tokens": token_position}
+
+    tokens_by_req = run_inference([challenge_prompt], model=model, seed=seed)
+    verification_tokens = tokens_by_req[request_id]
+    actual_token = verification_tokens[-1]
+    actual = commit_token(actual_token)
+
+    return {
+        "pass": actual == expected_commitment,
+        "request_id": request_id,
+        "token_position": token_position,
+        "expected": expected_commitment,
+        "actual": actual,
+    }
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("--model", default="Qwen/Qwen2.5-1.5B-Instruct")
@@ -142,8 +198,37 @@ def main() -> int:
         print(f"  {req_id}: {len(toks)} tokens, commitment[0]={commits[0][:8]}...")
 
     print(f"  Total: {total_tokens} tokens committed")
+    print()
 
-    return 0
+    print("Phase 2: Challenge selection")
+    req_id, token_position = select_challenge(commitments)
+    expected = commitments[req_id][token_position - 1]
+    n_total = len(commitments[req_id])
+    print(f"  Challenging {req_id}, token position {token_position} of {n_total}")
+    print()
+
+    print("Phase 3: Verification run")
+    print(f"  Replaying {req_id} with max_new_tokens={token_position}")
+    t0 = time.perf_counter()
+    result = verify_challenge(
+        req_id,
+        token_position,
+        expected,
+        PROMPTS,
+        model=args.model,
+        seed=args.seed,
+    )
+    t1 = time.perf_counter()
+    print(f"  Inference complete ({t1 - t0:.1f}s)")
+    print(f"  Expected: {result['expected'][:16]}...")
+    print(f"  Actual:   {result['actual'][:16]}...")
+    print()
+
+    if result["pass"]:
+        print("PASS")
+        return 0
+    print("FAIL")
+    return 1
 
 
 if __name__ == "__main__":
