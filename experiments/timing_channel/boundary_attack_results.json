@@ -1,0 +1,74 @@
+{
+  "config": {
+    "tok_rate": 50.0,
+    "secret": "EXFIL: db_pass=hunter2 api_key=sk-abc123",
+    "stall": "unlimited"
+  },
+  "results": [
+    {
+      "bucket_ms": 20,
+      "calc_bps": 50.0,
+      "measured_bps": 42.4,
+      "decoded": false,
+      "decoded_msg": "",
+      "tokens": 385,
+      "buckets": 326,
+      "symbols": 325,
+      "wall_s": 7.669,
+      "levels": 2,
+      "bits_per_sym": 1
+    },
+    {
+      "bucket_ms": 50,
+      "calc_bps": 20.0,
+      "measured_bps": 19.8,
+      "decoded": false,
+      "decoded_msg": "",
+      "tokens": 770,
+      "buckets": 381,
+      "symbols": 380,
+      "wall_s": 19.215,
+      "levels": 2,
+      "bits_per_sym": 1
+    },
+    {
+      "bucket_ms": 100,
+      "calc_bps": 20.0,
+      "measured_bps": 19.9,
+      "decoded": false,
+      "decoded_msg": "",
+      "tokens": 965,
+      "buckets": 192,
+      "symbols": 191,
+      "wall_s": 19.227,
+      "levels": 4,
+      "bits_per_sym": 2
+    },
+    {
+      "bucket_ms": 200,
+      "calc_bps": 15.0,
+      "measured_bps": 15.0,
+      "decoded": false,
+      "decoded_msg": "",
+      "tokens": 1290,
+      "buckets": 129,
+      "symbols": 128,
+      "wall_s": 25.661,
+      "levels": 8,
+      "bits_per_sym": 3
+    },
+    {
+      "bucket_ms": 500,
+      "calc_bps": 8.0,
+      "measured_bps": 8.0,
+      "decoded": false,
+      "decoded_msg": "\ufffdX\ufffdi\ufffd\u02a2ff_\ufffdfww=\ufffdw]\ufffdTf!\u0010fwi\ufffd\ufffd\ufffdi\ufffd\ufffdZ\ufffd\ufffdUR !\"",
+      "tokens": 2425,
+      "buckets": 98,
+      "symbols": 97,
+      "wall_s": 48.561,
+      "levels": 16,
+      "bits_per_sym": 4
+    }
+  ]
+}

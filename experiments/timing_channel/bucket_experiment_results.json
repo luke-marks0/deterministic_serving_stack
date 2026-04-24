@@ -1,0 +1,89 @@
+{
+  "config": {
+    "levels": 16,
+    "base_delay_s": 0.005,
+    "step_s": 0.002,
+    "repetitions": 9,
+    "secret": "EXFIL: db_pass=hunter2 api_key=sk-abc123",
+    "token_rate_approx": 50
+  },
+  "results": [
+    {
+      "bucket_ms": null,
+      "measured_bps": 216.4,
+      "effective_bps": 150.2,
+      "calc_bps": 200.0,
+      "decoded": true,
+      "ser": 0.0625,
+      "cal_error_rate": 0.0625,
+      "tokens": 1440,
+      "wall_s": 25.42
+    },
+    {
+      "bucket_ms": 10,
+      "measured_bps": 216.4,
+      "effective_bps": 16.2,
+      "calc_bps": 0,
+      "decoded": false,
+      "ser": 0.3438,
+      "cal_error_rate": 0.3438,
+      "tokens": 1440,
+      "wall_s": 25.42
+    },
+    {
+      "bucket_ms": 20,
+      "measured_bps": 216.5,
+      "effective_bps": 0.0,
+      "calc_bps": 50.0,
+      "decoded": false,
+      "ser": 0.5,
+      "cal_error_rate": 0.5,
+      "tokens": 1440,
+      "wall_s": 25.405
+    },
+    {
+      "bucket_ms": 50,
+      "measured_bps": 216.6,
+      "effective_bps": 27.8,
+      "calc_bps": 31.69925001442312,
+      "decoded": false,
+      "ser": 0.2969,
+      "cal_error_rate": 0.2969,
+      "tokens": 1440,
+      "wall_s": 25.397
+    },
+    {
+      "bucket_ms": 100,
+      "measured_bps": 216.6,
+      "effective_bps": 0.0,
+      "calc_bps": 25.84962500721156,
+      "decoded": false,
+      "ser": 0.5,
+      "cal_error_rate": 0.5,
+      "tokens": 1440,
+      "wall_s": 25.389
+    },
+    {
+      "bucket_ms": 200,
+      "measured_bps": 217.6,
+      "effective_bps": 0.2,
+      "calc_bps": 17.297158093186486,
+      "decoded": false,
+      "ser": 0.4844,
+      "cal_error_rate": 0.4844,
+      "tokens": 1440,
+      "wall_s": 25.276
+    },
+    {
+      "bucket_ms": 500,
+      "measured_bps": 219.7,
+      "effective_bps": 0.0,
+      "calc_bps": 9.400879436282183,
+      "decoded": false,
+      "ser": 0.5,
+      "cal_error_rate": 0.5,
+      "tokens": 1440,
+      "wall_s": 25.037
+    }
+  ]
+}
