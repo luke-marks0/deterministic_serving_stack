@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Timing Covert Channel Calculator</title>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --border: #30363d;
+    --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff;
+    --danger: #f85149; --warn: #d29922; --ok: #3fb950;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.5;
+    padding: 24px; max-width: 1100px; margin: 0 auto;
+  }
+  h1 { font-size: 24px; margin-bottom: 4px; }
+  h2 { font-size: 15px; color: var(--accent); margin: 20px 0 12px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+  .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  .field .hint { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  input[type="number"], input[type="range"], select {
+    width: 100%; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text); padding: 8px 10px;
+    font-size: 14px; font-family: 'SF Mono', 'Fira Code', monospace;
+  }
+  input[type="range"] { padding: 4px 0; border: none; background: none; accent-color: var(--accent); }
+  input[type="number"]:focus, select:focus { outline: none; border-color: var(--accent); }
+  .row { display: flex; gap: 12px; }
+  .row .field { flex: 1; }
+  .result-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 12px; }
+  .result-box {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 12px; text-align: center;
+  }
+  .result-box .value { font-size: 26px; font-weight: 700; font-family: 'SF Mono', 'Fira Code', monospace; }
+  .result-box .label { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .severity-critical .value { color: var(--danger); }
+  .severity-warn .value { color: var(--warn); }
+  .severity-ok .value { color: var(--ok); }
+  .severity-none .value { color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+  th, td { padding: 6px 10px; text-align: right; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; }
+  th:first-child, td:first-child { text-align: left; }
+  .tag { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 4px; font-weight: 600; }
+  .tag-danger { background: rgba(248,81,73,0.15); color: var(--danger); }
+  .tag-warn { background: rgba(210,153,34,0.15); color: var(--warn); }
+  .tag-ok { background: rgba(63,185,80,0.15); color: var(--ok); }
+  .tag-none { background: rgba(139,148,158,0.15); color: var(--muted); }
+  .formula-box {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    padding: 14px 16px; font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 14px; margin: 8px 0; line-height: 2;
+  }
+  .formula-box .c { color: var(--muted); }
+  .formula-box .h { color: var(--accent); font-weight: 600; }
+  .formula-box .d { color: var(--danger); font-weight: 600; }
+  .divider { border-top: 1px solid var(--border); margin: 16px 0; }
+  .diagram {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    padding: 16px; font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px; line-height: 1.6; overflow-x: auto; white-space: pre;
+    color: var(--muted); margin: 8px 0;
+  }
+  .diagram .tok { color: var(--accent); }
+  .diagram .boundary { color: var(--warn); }
+  .diagram .shifted { color: var(--danger); }
+  .mode-switch {
+    display: flex; gap: 0; margin-bottom: 16px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden;
+  }
+  .mode-btn {
+    flex: 1; padding: 10px; text-align: center; cursor: pointer;
+    background: var(--bg); color: var(--muted); font-size: 13px; font-weight: 600;
+    border: none; border-right: 1px solid var(--border); transition: all 0.15s;
+  }
+  .mode-btn:last-child { border-right: none; }
+  .mode-btn.active { background: var(--surface); color: var(--accent); }
+  .mode-btn:hover { color: var(--text); }
+  .hidden { display: none; }
+  .slider-row { display: flex; align-items: center; gap: 10px; }
+  .slider-row input[type="range"] { flex: 1; }
+  .slider-val {
+    min-width: 70px; text-align: right; font-family: 'SF Mono', monospace;
+    font-size: 14px; color: var(--accent);
+  }
+</style>
+</head>
+<body>
+
+<h1>Timing Covert Channel Calculator</h1>
+<p class="subtitle">How much data can a malicious inference server exfiltrate through token timing?</p>
+
+<!-- Mode switch -->
+<div class="mode-switch">
+  <button class="mode-btn active" data-mode="undefended">No Defense</button>
+  <button class="mode-btn" data-mode="bucketed">Bucket Pacing</button>
+</div>
+
+<div class="grid">
+  <!-- LEFT: Inputs -->
+  <div>
+    <div class="card">
+      <h2>Inference Server</h2>
+      <div class="row">
+        <div class="field">
+          <label>Token rate (tok/s)</label>
+          <input type="number" id="tokRate" value="50" min="1" max="1000">
+          <div class="hint">How fast the server generates tokens</div>
+        </div>
+        <div class="field">
+          <label>Response length (tokens)</label>
+          <input type="number" id="respLen" value="2048" min="1" max="100000">
+          <div class="hint">Tokens per streaming response</div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Token payload size (bytes)</label>
+        <input type="number" id="tokenBytes" value="80" min="10" max="1000">
+        <div class="hint">Size of each SSE event on the wire (~80 for JSON)</div>
+      </div>
+    </div>
+
+    <!-- Undefended mode inputs -->
+    <div class="card" style="margin-top:16px" id="undefendedInputs">
+      <h2>Attacker Capability (No Defense)</h2>
+      <div class="field">
+        <label>Modulation range</label>
+        <div class="slider-row">
+          <input type="range" id="modRangeSlider" min="1" max="100" value="30">
+          <span class="slider-val" id="modRangeVal">30ms</span>
+        </div>
+        <div class="hint">How much delay the server adds per token (typical inference jitter: 5-30ms)</div>
+      </div>
+      <div class="field">
+        <label>Observer precision</label>
+        <div class="slider-row">
+          <input type="range" id="precisionSlider" min="0" max="4" value="1">
+          <span class="slider-val" id="precisionVal">100&micro;s</span>
+        </div>
+        <div class="hint">How precisely the receiver can measure packet timing</div>
+      </div>
+      <div class="field">
+        <label>Error correction repetitions</label>
+        <input type="number" id="reps" value="1" min="1" max="20">
+        <div class="hint">Message repeated N times (majority vote corrects errors, but N&times; slower)</div>
+      </div>
+    </div>
+
+    <!-- Bucketed mode inputs -->
+    <div class="card hidden" style="margin-top:16px" id="bucketedInputs">
+      <h2>Defense: Bucket Pacing</h2>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:14px;">
+        Hold all tokens and release them at fixed intervals. The server loses control over inter-token timing.
+        The only remaining channel: pushing tokens across bucket boundaries.
+      </p>
+      <div class="field">
+        <label>Bucket interval</label>
+        <div class="slider-row">
+          <input type="range" id="bucketSlider" min="5" max="1000" value="20">
+          <span class="slider-val" id="bucketVal">20ms</span>
+        </div>
+        <div class="hint">How often the gate opens and releases accumulated tokens</div>
+      </div>
+      <div class="field">
+        <label>Attacker stall budget</label>
+        <div class="slider-row">
+          <input type="range" id="stallSlider" min="1" max="200" value="20">
+          <span class="slider-val" id="stallVal">20ms</span>
+        </div>
+        <div class="hint">How much the server can delay a single token without looking suspicious (typical: 10-20ms)</div>
+      </div>
+      <div class="field" style="margin-top:16px">
+        <label style="color:var(--text);font-weight:600">Fix token count per bucket?</label>
+        <div style="display:flex;gap:12px;margin-top:6px">
+          <label style="cursor:pointer;font-size:13px">
+            <input type="radio" name="fixCount" value="no" checked> No (boundary channel open)
+          </label>
+          <label style="cursor:pointer;font-size:13px">
+            <input type="radio" name="fixCount" value="yes"> Yes, pad with dummies (channel = 0)
+          </label>
+        </div>
+        <div class="hint" style="margin-top:4px">Padding each bucket to a fixed token count eliminates the boundary channel entirely</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Results -->
+  <div>
+    <div class="card">
+      <h2>Channel Capacity</h2>
+
+      <!-- Undefended formula -->
+      <div id="undefendedFormula" class="formula-box">
+        <span class="c">// distinguishable delay levels</span><br>
+        N = modulation / precision = <span id="f_mod">30ms</span> / <span id="f_prec">100&micro;s</span> = <span class="h" id="f_N">300</span><br><br>
+        <span class="c">// bits encoded per token gap</span><br>
+        bits/token = log<sub>2</sub>(<span id="f_N2">300</span>) = <span class="h" id="f_bpt">8.23</span><br><br>
+        <span class="c">// total channel</span><br>
+        C = <span id="f_bpt2">8.23</span> &times; <span id="f_R">50</span> tok/s = <span class="d" id="f_C">412</span> bits/sec
+      </div>
+
+      <!-- Bucketed formula -->
+      <div id="bucketedFormula" class="formula-box hidden">
+        <span class="c">// tokens shiftable across a boundary</span><br>
+        m = R &times; &delta; = <span id="b_R">50</span> &times; <span id="b_delta">20ms</span> = <span class="h" id="b_m">1</span> token<br><br>
+        <span class="c">// bits per boundary (m+1 possible token counts)</span><br>
+        bits/boundary = log<sub>2</sub>(<span id="b_mp1">2</span>) = <span class="h" id="b_bpb">1.00</span><br><br>
+        <span class="c">// boundaries per second</span><br>
+        C = <span id="b_bpb2">1.00</span> &times; 1/<span id="b_B">20ms</span> = <span class="d" id="b_C">50</span> bits/sec
+      </div>
+
+      <!-- Killed formula -->
+      <div id="killedFormula" class="formula-box hidden" style="text-align:center;padding:24px">
+        <span style="font-size:18px;color:var(--ok);font-weight:700">C = 0 bits/sec</span><br>
+        <span class="c">Fixed token count per bucket &rarr; no boundary signal</span>
+      </div>
+
+      <div class="result-grid">
+        <div class="result-box" id="bpsBox">
+          <div class="value" id="bpsValue">412</div>
+          <div class="label">bits / sec</div>
+        </div>
+        <div class="result-box" id="bptBox">
+          <div class="value" id="bptValue">8.2</div>
+          <div class="label" id="bptLabel">bits / token</div>
+        </div>
+        <div class="result-box" id="levelsBox">
+          <div class="value" id="levelsValue">300</div>
+          <div class="label" id="levelsLabel">PAM levels</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <h2>Exfiltration Per Response</h2>
+      <div class="result-grid" style="grid-template-columns: 1fr 1fr;">
+        <div class="result-box">
+          <div class="value" id="exfilBytes">2109</div>
+          <div class="label">covert bytes / response</div>
+        </div>
+        <div class="result-box">
+          <div class="value" id="exfilRatio">1.29%</div>
+          <div class="label">covert / legitimate ratio</div>
+        </div>
+      </div>
+      <table>
+        <thead><tr><th style="text-align:left">Secret to steal</th><th>Size</th><th>Responses</th><th>Time</th></tr></thead>
+        <tbody id="exfilBody"></tbody>
+      </table>
+    </div>
+
+    <!-- Bucket comparison (only in bucketed mode) -->
+    <div class="card hidden" style="margin-top:16px" id="bucketCompare">
+      <h2>Bucket Size Comparison</h2>
+      <table>
+        <thead><tr>
+          <th style="text-align:left">Bucket</th><th>Tok/bucket</th><th>Boundaries/s</th>
+          <th>Shiftable</th><th>bits/s</th><th>Latency</th><th>UX</th>
+        </tr></thead>
+        <tbody id="bucketBody"></tbody>
+      </table>
+    </div>
+
+    <!-- Diagram -->
+    <div class="card" style="margin-top:16px">
+      <h2 id="diagramTitle">How It Works</h2>
+      <div class="diagram" id="diagram"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let mode = 'undefended';
+
+const precisionLevels = [
+  { label: '1ms', value: 0.001 },
+  { label: '100\u00b5s', value: 0.0001 },
+  { label: '10\u00b5s', value: 0.00001 },
+  { label: '1\u00b5s', value: 0.000001 },
+  { label: '100ns', value: 0.0000001 },
+];
+
+function calc() {
+  const R = parseFloat($('tokRate').value) || 50;
+  const respLen = parseFloat($('respLen').value) || 2048;
+  const tokenBytes = parseFloat($('tokenBytes').value) || 80;
+  const reps = parseFloat($('reps').value) || 1;
+  const modRangeMs = parseFloat($('modRangeSlider').value) || 30;
+  const precIdx = parseInt($('precisionSlider').value) || 1;
+  const precision = precisionLevels[precIdx].value;
+  const bucketMs = parseFloat($('bucketSlider').value) || 20;
+  const stallMs = parseFloat($('stallSlider').value) || 20;
+  const fixCount = document.querySelector('input[name="fixCount"]:checked').value === 'yes';
+
+  // Update slider displays
+  $('modRangeVal').textContent = modRangeMs + 'ms';
+  $('precisionVal').innerHTML = precisionLevels[precIdx].label;
+  $('bucketVal').textContent = bucketMs + 'ms';
+  $('stallVal').textContent = stallMs + 'ms';
+
+  let C, bitsPerUnit, levels;
+  const respTime = respLen / R;
+  const legitimateBytes = respLen * tokenBytes;
+
+  if (mode === 'undefended') {
+    const modRange = modRangeMs / 1000;
+    levels = Math.max(1, Math.floor(modRange / precision));
+    bitsPerUnit = Math.log2(levels);
+    C = bitsPerUnit * R;
+
+    $('f_mod').textContent = modRangeMs + 'ms';
+    $('f_prec').innerHTML = precisionLevels[precIdx].label;
+    $('f_N').textContent = levels.toLocaleString();
+    $('f_N2').textContent = levels.toLocaleString();
+    $('f_bpt').textContent = bitsPerUnit.toFixed(2);
+    $('f_bpt2').textContent = bitsPerUnit.toFixed(2);
+    $('f_R').textContent = R;
+    $('f_C').textContent = C.toFixed(0);
+
+    $('bptLabel').textContent = 'bits / token';
+    $('levelsLabel').textContent = 'PAM levels';
+
+    $('undefendedFormula').classList.remove('hidden');
+    $('bucketedFormula').classList.add('hidden');
+    $('killedFormula').classList.add('hidden');
+
+    // Diagram
+    $('diagramTitle').textContent = 'How It Works: Delay Modulation';
+    const lines = [];
+    lines.push('Server delays each token to encode a symbol:\n');
+    lines.push('  Token 1  ──<span class="tok">15ms</span>──  Token 2  ──<span class="tok">25ms</span>──  Token 3  ──<span class="tok">10ms</span>──  Token 4');
+    lines.push('              <span class="tok">sym=1</span>              <span class="tok">sym=3</span>              <span class="tok">sym=0</span>');
+    lines.push('');
+    lines.push('  Each gap encodes log\u2082(' + levels.toLocaleString() + ') = ' + bitsPerUnit.toFixed(1) + ' bits');
+    lines.push('  At ' + R + ' tok/s: <span class="shifted">' + C.toFixed(0) + ' covert bits/sec</span>');
+    lines.push('');
+    lines.push('  Observer sees normal inference streaming.');
+    lines.push('  The information is in the gaps, not the tokens.');
+    $('diagram').innerHTML = lines.join('\n');
+
+  } else {
+    // Bucketed
+    const B = bucketMs / 1000;
+    const stall = stallMs / 1000;
+    const m = Math.floor(R * stall);
+    const tokPerBucket = R * B;
+    const boundariesPerSec = 1 / B;
+
+    if (fixCount) {
+      C = 0;
+      bitsPerUnit = 0;
+      levels = 1;
+
+      $('undefendedFormula').classList.add('hidden');
+      $('bucketedFormula').classList.add('hidden');
+      $('killedFormula').classList.remove('hidden');
+    } else {
+      levels = m + 1;
+      bitsPerUnit = Math.log2(levels);
+      C = bitsPerUnit * boundariesPerSec;
+
+      $('b_R').textContent = R;
+      $('b_delta').textContent = stallMs + 'ms';
+      $('b_m').textContent = m;
+      $('b_mp1').textContent = levels;
+      $('b_bpb').textContent = bitsPerUnit.toFixed(2);
+      $('b_bpb2').textContent = bitsPerUnit.toFixed(2);
+      $('b_B').textContent = bucketMs + 'ms';
+      $('b_C').textContent = C >= 1 ? C.toFixed(0) : C.toFixed(2);
+
+      $('undefendedFormula').classList.add('hidden');
+      $('bucketedFormula').classList.remove('hidden');
+      $('killedFormula').classList.add('hidden');
+    }
+
+    $('bptLabel').textContent = 'bits / boundary';
+    $('levelsLabel').textContent = 'token counts';
+
+    // Bucket comparison table
+    const buckets = [10, 20, 50, 100, 200, 500, 1000];
+    let btHTML = '';
+    for (const bms of buckets) {
+      const bSec = bms / 1000;
+      const tpb = R * bSec;
+      const bps2 = 1 / bSec;
+      const m2 = Math.floor(R * stall);
+      const lev2 = m2 + 1;
+      const bpb2 = Math.log2(lev2);
+      const c2 = fixCount ? 0 : bpb2 * bps2;
+      const latency = bms / 2;
+      let ux;
+      if (bms <= 20) ux = 'Imperceptible';
+      else if (bms <= 100) ux = 'Slightly chunky';
+      else if (bms <= 500) ux = 'Bursty';
+      else ux = 'Laggy';
+      const active = bms === bucketMs ? ' style="background:rgba(88,166,255,0.08)"' : '';
+      btHTML += `<tr${active}>
+        <td>${bms}ms</td><td>${tpb.toFixed(0)}</td><td>${bps2.toFixed(0)}</td>
+        <td>${fixCount ? '—' : m2}</td>
+        <td>${c2 >= 1 ? c2.toFixed(0) : c2.toFixed(1)}</td>
+        <td>${latency}ms</td><td>${ux}</td>
+      </tr>`;
+    }
+    $('bucketBody').innerHTML = btHTML;
+
+    // Diagram
+    $('diagramTitle').textContent = fixCount ? 'How It Works: Fixed Token Count' : 'How It Works: Boundary Shifting';
+    const lines = [];
+    if (fixCount) {
+      lines.push('Every bucket releases exactly ' + Math.round(tokPerBucket) + ' tokens:\n');
+      lines.push('  <span class="boundary">|</span> <span class="tok">\u25CF\u25CF\u25CF\u25CF\u25CF</span> <span class="boundary">|</span> <span class="tok">\u25CF\u25CF\u25CF\u25CF\u25CF</span> <span class="boundary">|</span> <span class="tok">\u25CF\u25CF\u25CF\u25CF\u25CF</span> <span class="boundary">|</span>');
+      lines.push('  <span class="boundary">\u2502</span>  always ' + Math.round(tokPerBucket) + '  <span class="boundary">\u2502</span>  always ' + Math.round(tokPerBucket) + '  <span class="boundary">\u2502</span>  always ' + Math.round(tokPerBucket) + '  <span class="boundary">\u2502</span>');
+      lines.push('');
+      lines.push('  Dummy padding fills any gap. Attacker cannot');
+      lines.push('  shift tokens across boundaries.');
+      lines.push('  <span style="color:var(--ok)">Channel = 0 bits/sec</span>');
+    } else {
+      lines.push('Server stalls a token to shift it across a boundary:\n');
+      lines.push('  Normal:   <span class="boundary">|</span> <span class="tok">\u25CF\u25CF\u25CF\u25CF\u25CF</span> <span class="boundary">|</span> <span class="tok">\u25CF\u25CF\u25CF\u25CF\u25CF</span> <span class="boundary">|</span>   (5, 5)');
+      lines.push('  Shifted:  <span class="boundary">|</span> <span class="tok">\u25CF\u25CF\u25CF\u25CF</span><span class="shifted">\u25CB</span> <span class="boundary">|</span> <span class="shifted">\u25CF</span><span class="tok">\u25CF\u25CF\u25CF\u25CF\u25CF</span> <span class="boundary">|</span>   (4, 6) = <span class="shifted">"1"</span>');
+      lines.push('');
+      lines.push('  Stall budget ' + stallMs + 'ms \u2192 can shift ' + m + ' token(s)');
+      lines.push('  ' + levels + ' possible counts \u2192 ' + bitsPerUnit.toFixed(1) + ' bits per boundary');
+      lines.push('  ' + boundariesPerSec.toFixed(0) + ' boundaries/sec \u2192 <span class="shifted">' + (C >= 1 ? C.toFixed(0) : C.toFixed(2)) + ' covert bits/sec</span>');
+    }
+    $('diagram').innerHTML = lines.join('\n');
+  }
+
+  // Severity
+  const severity = C > 100 ? 'critical' : C > 10 ? 'warn' : C > 0.1 ? 'ok' : 'none';
+  $('bpsBox').className = 'result-box severity-' + severity;
+  $('bpsValue').textContent = C >= 1 ? C.toFixed(0) : C >= 0.01 ? C.toFixed(2) : C > 0 ? C.toFixed(4) : '0';
+  $('bptValue').textContent = bitsPerUnit >= 0.01 ? bitsPerUnit.toFixed(2) : bitsPerUnit > 0 ? bitsPerUnit.toFixed(4) : '0';
+  $('levelsValue').textContent = levels.toLocaleString();
+
+  // Exfiltration
+  const covertBitsPerResp = C * respTime / reps;
+  const covertBytesPerResp = covertBitsPerResp / 8;
+  const ratio = legitimateBytes > 0 ? (covertBytesPerResp / legitimateBytes) * 100 : 0;
+  $('exfilBytes').textContent = covertBytesPerResp >= 1 ? Math.floor(covertBytesPerResp).toLocaleString() : covertBytesPerResp > 0 ? covertBytesPerResp.toFixed(2) : '0';
+  $('exfilRatio').textContent = ratio >= 0.01 ? ratio.toFixed(2) + '%' : ratio > 0 ? ratio.toFixed(4) + '%' : '0%';
+
+  const secrets = [
+    ['AES-256 key', 32],
+    ['API key (sk-...)', 51],
+    ['DB connection string', 80],
+    ['User prompt (short)', 200],
+    ['User prompt (long)', 2000],
+    ['RSA-2048 private key', 1700],
+    ['1 page of text', 4000],
+  ];
+  let exfilHTML = '';
+  for (const [name, size] of secrets) {
+    let resps, timeStr;
+    if (covertBytesPerResp > 0) {
+      resps = Math.ceil(size / covertBytesPerResp);
+      const totalTime = resps * respTime;
+      timeStr = totalTime < 60 ? totalTime.toFixed(0) + 's' : totalTime < 3600 ? (totalTime / 60).toFixed(1) + 'min' : (totalTime / 3600).toFixed(1) + 'hr';
+    } else {
+      resps = '\u221e';
+      timeStr = 'never';
+    }
+    exfilHTML += `<tr><td>${name}</td><td>${size} B</td><td>${resps}</td><td>${timeStr}</td></tr>`;
+  }
+  $('exfilBody').innerHTML = exfilHTML;
+
+  // Show/hide mode-specific sections
+  $('undefendedInputs').classList.toggle('hidden', mode !== 'undefended');
+  $('bucketedInputs').classList.toggle('hidden', mode !== 'bucketed');
+  $('bucketCompare').classList.toggle('hidden', mode !== 'bucketed');
+}
+
+// Mode switch
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    mode = btn.dataset.mode;
+    calc();
+  });
+});
+
+// Input bindings
+['tokRate', 'respLen', 'tokenBytes', 'reps'].forEach(id => $(id).addEventListener('input', calc));
+$('modRangeSlider').addEventListener('input', calc);
+$('precisionSlider').addEventListener('input', calc);
+$('bucketSlider').addEventListener('input', calc);
+$('stallSlider').addEventListener('input', calc);
+document.querySelectorAll('input[name="fixCount"]').forEach(r => r.addEventListener('change', calc));
+
+calc();
+</script>
+</body>
+</html>
