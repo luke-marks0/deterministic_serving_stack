@@ -374,7 +374,7 @@ lsmod | grep mlx5
 ls /sys/bus/pci/drivers/mlx5_core/
 ```
 
-**Record:** Save the output in `docs/recon/gh200-nic-info.txt`. We need:
+**Record:** Save the output in `.internal/recon/gh200-nic-info.txt`. We need:
 - NIC model (e.g., ConnectX-7, BlueField-3)
 - PCI address (e.g., `0000:01:00.0`)
 - Current kernel driver (e.g., `mlx5_core`)
