@@ -59,7 +59,7 @@ Each chunk is 30,000 tokens of greedy decoding (temperature=0). Same container i
 
 ## Quick Start (reviewers)
 
-On a fresh GPU node with NVIDIA driver + CUDA 12.8 (Lambda Cloud's H100 or GH200 AMIs work out of the box):
+Bring up an NVIDIA H100 instance with the standard CUDA 12.8 AMI (Lambda Cloud's `gpu_1x_h100_sxm5` and `gpu_1x_h100_pcie` work as-is; GH200 also works), then:
 
 ```bash
 git clone https://github.com/luke-marks0/deterministic_serving_stack
@@ -67,13 +67,13 @@ cd deterministic_serving_stack
 ./scripts/demo.sh
 ```
 
-`scripts/demo.sh` builds a venv (cu128 torch + vLLM 0.17.1), resolves the audit-enabled smoke manifest, starts the deterministic server, and runs the audit replay loop:
+`scripts/demo.sh` builds a venv (cu128 torch + vLLM 0.17.1), resolves the audit-enabled smoke manifest at `experiments/e2e-audit/scripts/smoke.manifest.json` (declares H100 hardware, Qwen3-1.7B, 2 short prompts), starts the deterministic server, and runs the audit replay loop:
 
 1. `POST /run` — server runs the manifest's requests and returns per-output-token HMAC commitments
 2. `POST /replay` at random token positions — server re-runs each request truncated to the challenged position and recomputes the commitment
 3. Negative test — a forged commitment must not match
 
-Expected output ends with `ALL PASS` (~2 min on a GH200, longer on first model download). Total wall time from `git clone` to `ALL PASS`: ~3 minutes.
+Expected output ends with `ALL PASS`. Total wall time from `git clone` to `ALL PASS`: ~3 minutes (~90s pip install, <5s resolver/builder, ~30s vLLM model load, ~10s audit).
 
 Requirements:
 - NVIDIA GPU with compute capability ≥ 9.0 (H100, GH200, etc.) — batch invariance kernels need this
