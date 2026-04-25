@@ -1,0 +1,26 @@
+name: Nightly Gate
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  nightly-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Python dependencies
+        run: pip install pydantic
+      - name: Install ripgrep
+        run: |
+          if ! command -v rg >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y ripgrep
+          fi
+      - name: Lint
+        run: bash scripts/ci/lint.sh
+      - name: Schema Gate
+        run: bash scripts/ci/schema_gate.sh
+      - name: Nightly Suite
+        run: bash scripts/ci/test_nightly.sh

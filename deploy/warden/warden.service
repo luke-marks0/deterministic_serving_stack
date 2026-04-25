@@ -1,0 +1,31 @@
+[Unit]
+Description=Active Warden - Inline MRF Packet Normalizer
+Documentation=https://github.com/anonymous/deterministic_serving_stack
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+ExecStartPre=/usr/local/bin/warden-setup.sh start
+ExecStart=/usr/bin/python3 -m cmd.warden.main --config /etc/warden/warden.yaml
+ExecStopPost=/usr/local/bin/warden-setup.sh stop
+WorkingDirectory=/opt/deterministic_serving_stack
+Restart=on-failure
+RestartSec=5
+
+# Security hardening
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/warden
+NoNewPrivileges=false
+# Needs CAP_NET_ADMIN for NFQUEUE access
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=warden
+
+[Install]
+WantedBy=multi-user.target

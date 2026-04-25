@@ -1,0 +1,2289 @@
+{
+  "artifact_inputs": [
+    {
+      "artifact_id": "hf-weights_shard-model-00001-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:4e7ae4f80d98fee3853e4aa97703771e288b3875027e4f941ca1394663d7acab",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00001-of-00051.safetensors",
+      "path": "model-00001-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4932552432,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00001-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00002-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:d7fa22193fc9b07d011aa09e58eaf473deae28dcc82d9d23129dc3641f2cbb5f",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00002-of-00051.safetensors",
+      "path": "model-00002-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831938528,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00002-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00003-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:c25791a61c7f47a3ea233fd785ab0e4dfa78eb5262fd8aacfd75256d9ebf841d",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00003-of-00051.safetensors",
+      "path": "model-00003-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4882269816,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00003-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00004-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:ba8dd22410bd4e9351315fca56e17bcab886e69fa4ef9e602002190c6eaba67d",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00004-of-00051.safetensors",
+      "path": "model-00004-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831889136,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00004-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00005-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:af5c6685da590695594201739ab05777232fdf8a3923e1c2d7edc273ff1fdad2",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00005-of-00051.safetensors",
+      "path": "model-00005-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831938520,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00005-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00006-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:08f9cb62647d4199d2484b44803ee41889dc60d89f7318d50917a4d25ed30e1d",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00006-of-00051.safetensors",
+      "path": "model-00006-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831938528,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00006-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00007-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:e7b8b29746144331549b79616cd43a67a22b40178f22c99bc32cdcb8f6162cd2",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00007-of-00051.safetensors",
+      "path": "model-00007-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4882269832,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00007-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00008-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:97d2d0a8d4d7dee285fd765ee71652a9dda7438eaa42ffc769eb3532ae2154ac",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00008-of-00051.safetensors",
+      "path": "model-00008-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831889152,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00008-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00009-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:819a5129635291d2d4c97eef89cc90347e2312ed8459673d97657e1e8f96cd07",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00009-of-00051.safetensors",
+      "path": "model-00009-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831938536,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00009-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00010-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:daeace127c093d7330556924758e009f7a1dcefd05188ca17021a80493156d8c",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00010-of-00051.safetensors",
+      "path": "model-00010-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831938544,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00010-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00011-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:71a4344bc37e0260833daa6c9f6a8970728c3de4673435e7c368eae71f17837a",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00011-of-00051.safetensors",
+      "path": "model-00011-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4882269832,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00011-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00012-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:5cdb240187f0f56813e96d0e90df41b3e047ab0a059797081456c33767b685e8",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00012-of-00051.safetensors",
+      "path": "model-00012-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831889152,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00012-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00013-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:cebc5f03be9619c9be0239dc7360a51d0bdb3f2bfb2aea3edfc694cf8766b3c9",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00013-of-00051.safetensors",
+      "path": "model-00013-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831938536,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00013-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00014-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:d97c5f54fb43d6da04fa0551d56bf5d21e1cc85f2e3cabd95d922f9dc1d0b2bd",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00014-of-00051.safetensors",
+      "path": "model-00014-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831938544,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00014-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00015-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:54abd92056250ba822fa1a82c4b64c3ad4facb6c2c74a95ce089d3d068003b80",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00015-of-00051.safetensors",
+      "path": "model-00015-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4882269832,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00015-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00016-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:66229796164c93793afc506e0e6a857702d9f5b4c7842b11045feae57235b69e",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00016-of-00051.safetensors",
+      "path": "model-00016-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831889152,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00016-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00017-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:c2fb05b0bde9afb2f420681fdf4975caaa54c9b46c0bcc294b1b422dce71bd69",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00017-of-00051.safetensors",
+      "path": "model-00017-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831938536,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00017-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00018-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:e113f09b37e7399f1cb194b2a8703326ba3c68409edfc14495dc5fadfca02017",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00018-of-00051.safetensors",
+      "path": "model-00018-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831938544,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00018-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00019-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:b62b08cc35f08be9f4acba2fc3f127aa8dec091df600a478e4aea954297e8031",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00019-of-00051.safetensors",
+      "path": "model-00019-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4882269832,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00019-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00020-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:dff36ac752ec0b96e166207aa8722a6c93918fbeb0f3a2d8355fdef61e46a888",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00020-of-00051.safetensors",
+      "path": "model-00020-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831889152,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00020-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00021-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:c41e274b2aace89dc2004939d7f688dbdb29a4e97d6feffb48438081547a5f31",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00021-of-00051.safetensors",
+      "path": "model-00021-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831938536,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00021-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00022-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:004200400c917acc7ccb30cc5a2edae072f7dd251184b2507830e700fc0811e4",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00022-of-00051.safetensors",
+      "path": "model-00022-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831938544,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00022-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00023-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:7e109d3745af56c0fc99ab4c2e6c025b7178c841b90d37d71ff5824065f9c5b1",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00023-of-00051.safetensors",
+      "path": "model-00023-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4882269832,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00023-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00024-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:ad2c294a25d9236b719112177e0e9bb6e2461e686e33db460d44a856f48012a4",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00024-of-00051.safetensors",
+      "path": "model-00024-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831889152,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00024-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00025-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:14cdf6758419d60e9dcb47a926744dd9113284aeab577d898b89081eeb86fd29",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00025-of-00051.safetensors",
+      "path": "model-00025-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831938536,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00025-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00026-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:3850da393839950c8dcef30dad380217eefc86091c965822a75504c7e5e66c8c",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00026-of-00051.safetensors",
+      "path": "model-00026-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831938544,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00026-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00027-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:98298b5b1026cebed53c66a8cb50825681590cd89c1dac67acf20073bd675628",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00027-of-00051.safetensors",
+      "path": "model-00027-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4882269832,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00027-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00028-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:066c04245a67ce66dbcdf13631f81b93b27e99844588ebf44f03ae7f826b564b",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00028-of-00051.safetensors",
+      "path": "model-00028-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831889152,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00028-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00029-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:cfd8f92e83601a0c863567cba0405843eb23cfbb86751289862f6db120690f61",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00029-of-00051.safetensors",
+      "path": "model-00029-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831938536,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00029-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00030-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:9251dce03465c8e0fb55f22ba918c7e7f590f17ef8a020be188dbab72fc542f3",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00030-of-00051.safetensors",
+      "path": "model-00030-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831938544,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00030-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00031-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:26f24f62c52af884445e3d33e2f0d33fe68eddfacde1fa6cae067c8992c2e2ad",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00031-of-00051.safetensors",
+      "path": "model-00031-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4882269832,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00031-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00032-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:16a9e2de48da955a8f774bfa1d433dda49f35b22f3d6822910a03024229c6551",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00032-of-00051.safetensors",
+      "path": "model-00032-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831889152,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00032-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00033-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:15f9ac8c529f5d398f3168f0a20fb88a5d9ad97b17a119a66113d929876db618",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00033-of-00051.safetensors",
+      "path": "model-00033-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831938536,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00033-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00034-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:31e66332ff209b06f9b0cd0b4ff37f7886fa6201fb83fd7df7a1ff38526cff62",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00034-of-00051.safetensors",
+      "path": "model-00034-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831938544,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00034-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00035-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:7483f1ddd3a79b7b0e97f14f6cae24c227d6d6de44ad5cf0d56cbc78e51b2d9a",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00035-of-00051.safetensors",
+      "path": "model-00035-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4882269832,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00035-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00036-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:c0f5f430da8ada8fc3c4c73c929cbb55076097c550768e3553044450759460c7",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00036-of-00051.safetensors",
+      "path": "model-00036-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831889152,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00036-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00037-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:da296e3e555e3104f1460dd5619fc6c4bcb6fe66be6b67d476b93b4413075bcc",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00037-of-00051.safetensors",
+      "path": "model-00037-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831938536,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00037-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00038-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:222dcd13fad9fa5732e0ade10b6702d85c68a87f2c1faf771fa23113b4b2873c",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00038-of-00051.safetensors",
+      "path": "model-00038-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831938544,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00038-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00039-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:a8bd77901f73ca014678d0830e4705b8761f843a848e29e2d0a75c6083a44f3f",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00039-of-00051.safetensors",
+      "path": "model-00039-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4882269832,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00039-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00040-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:fcd1d34cb26b55ae93ddab10ed97f12bbd989fbc43799a3eb926a5e3f342bf9b",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00040-of-00051.safetensors",
+      "path": "model-00040-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831889152,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00040-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00041-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:c4b97ea268adabd1ae303e23e708eb5a808a46f763bdc0bf75e4bd15547a7826",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00041-of-00051.safetensors",
+      "path": "model-00041-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831938536,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00041-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00042-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:e5a26bd6d9f0a518001e7bcbaeb573731a3d9f8dc2d9b688eb42e6208ca3d214",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00042-of-00051.safetensors",
+      "path": "model-00042-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831938544,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00042-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00043-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:8aa7e21c6ce4d41f92d8fcbc75338139751ea2bc82386594de5b77e553c9e7ab",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00043-of-00051.safetensors",
+      "path": "model-00043-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4882269832,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00043-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00044-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:528de6c7e5b20be451ef80e555a1fcec0ba0a0015587f082b0afff9c1344fb48",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00044-of-00051.safetensors",
+      "path": "model-00044-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831889152,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00044-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00045-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:6d174b8eaee6f0bc35cfcde444d209730fea54c750a4364cc42b8a0ac3e47ddc",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00045-of-00051.safetensors",
+      "path": "model-00045-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831938536,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00045-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00046-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:39aa10eefc80ce9d2aa7b509d9a0485511f6d586ec358c7438dab3460d260940",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00046-of-00051.safetensors",
+      "path": "model-00046-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831938544,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00046-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00047-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:812cdd2b88f2366bb54cb179b25d6d4f29380dcb8350ee284359281b9355498f",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00047-of-00051.safetensors",
+      "path": "model-00047-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4882269832,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00047-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00048-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:acc72c2a1cdf7f14789195b85fbc7e12af6a44a2666e6a9b86af8ed4496b36f9",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00048-of-00051.safetensors",
+      "path": "model-00048-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831889152,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00048-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00049-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:8b8df3df7cbb1f193a15ef96131a571b4e57086ba88134cd3673c18deceab4aa",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00049-of-00051.safetensors",
+      "path": "model-00049-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831938536,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00049-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00050-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:038c0e70424393039ec9f0ad6c89f216c941231f165f64f4ef068322c5edc9a5",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00050-of-00051.safetensors",
+      "path": "model-00050-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 4831938544,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00050-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-weights_shard-model-00051-of-00051.safetensors",
+      "artifact_type": "model_weights",
+      "expected_digest": "sha256:663553d85cc0aa429663861e08fa1c0c15416c016926975e3d989fba3b97eb19",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "model-00051-of-00051.safetensors",
+      "path": "model-00051-of-00051.safetensors",
+      "role": "weights_shard",
+      "size_bytes": 2919310112,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/model-00051-of-00051.safetensors"
+    },
+    {
+      "artifact_id": "hf-config-config.json",
+      "artifact_type": "model_config",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "config.json",
+      "path": "config.json",
+      "role": "config",
+      "size_bytes": 598,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/config.json"
+    },
+    {
+      "artifact_id": "hf-generation_config-generation_config.json",
+      "artifact_type": "generation_config",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "generation_config.json",
+      "path": "generation_config.json",
+      "role": "generation_config",
+      "size_bytes": 111,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/generation_config.json"
+    },
+    {
+      "artifact_id": "hf-tokenizer-tokenizer.json",
+      "artifact_type": "tokenizer",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "tokenizer.json",
+      "path": "tokenizer.json",
+      "role": "tokenizer",
+      "size_bytes": 1962424,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/tokenizer.json"
+    },
+    {
+      "artifact_id": "hf-chat_template-tokenizer_config.json",
+      "artifact_type": "chat_template",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "tokenizer_config.json",
+      "path": "tokenizer_config.json",
+      "role": "chat_template",
+      "size_bytes": 141710,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/tokenizer_config.json"
+    },
+    {
+      "artifact_id": "hf-prompt_formatter-tokenizer_config.json",
+      "artifact_type": "prompt_formatter",
+      "immutable_ref": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+      "name": "tokenizer_config.json",
+      "path": "tokenizer_config.json",
+      "role": "prompt_formatter",
+      "size_bytes": 141710,
+      "source_kind": "hf",
+      "source_uri": "hf://mistralai/Mistral-Large-Instruct-2407/tokenizer_config.json"
+    },
+    {
+      "artifact_id": "serving-stack",
+      "artifact_type": "serving_stack",
+      "expected_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "immutable_ref": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "name": "vllm-stack",
+      "size_bytes": 2000,
+      "source_kind": "oci",
+      "source_uri": "oci://registry.example/vllm@sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    {
+      "artifact_id": "cuda-lib",
+      "artifact_type": "cuda_lib",
+      "expected_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "immutable_ref": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "name": "cuda-user-space",
+      "size_bytes": 3000,
+      "source_kind": "oci",
+      "source_uri": "oci://registry.example/cuda@sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    {
+      "artifact_id": "kernel-lib",
+      "artifact_type": "kernel_library",
+      "expected_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "immutable_ref": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "name": "flash-attn",
+      "size_bytes": 400,
+      "source_kind": "s3",
+      "source_uri": "s3://mirror/flash-attn.whl"
+    },
+    {
+      "artifact_id": "runtime-knobs",
+      "artifact_type": "runtime_knob_set",
+      "expected_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "immutable_ref": "v1",
+      "name": "runtime-knobs",
+      "size_bytes": 64,
+      "source_kind": "inline",
+      "source_uri": "inline://runtime-knobs"
+    },
+    {
+      "artifact_id": "request-set",
+      "artifact_type": "request_set",
+      "expected_digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+      "immutable_ref": "v1",
+      "name": "requests",
+      "size_bytes": 64,
+      "source_kind": "inline",
+      "source_uri": "inline://requests"
+    },
+    {
+      "artifact_id": "compiled-ext",
+      "artifact_type": "compiled_extension",
+      "expected_digest": "sha256:abababababababababababababababababababababababababababababababab",
+      "immutable_ref": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "name": "xformers",
+      "size_bytes": 700,
+      "source_kind": "s3",
+      "source_uri": "s3://mirror/xformers.whl"
+    }
+  ],
+  "comparison": {
+    "logits": {
+      "atol": 1e-06,
+      "mode": "absrel",
+      "rtol": 0.0001
+    },
+    "network_egress": {
+      "algorithm": "sha256",
+      "mode": "hash"
+    },
+    "tokens": {
+      "mode": "exact"
+    }
+  },
+  "created_at": "2026-04-11T00:00:00Z",
+  "hardware_profile": {
+    "gpu": {
+      "count": 4,
+      "cuda_driver_version": "12.8",
+      "driver_version": "580.126.20",
+      "model": "NVIDIA H100 80GB HBM3"
+    }
+  },
+  "manifest_version": "v1",
+  "model": {
+    "source": "hf://mistralai/Mistral-Large-Instruct-2407",
+    "tokenizer_revision": "a286006d554cb37a61d13c7ae61bc90cc1d372fc",
+    "trust_remote_code": false,
+    "weights_revision": "a286006d554cb37a61d13c7ae61bc90cc1d372fc"
+  },
+  "requests": [
+    {
+      "id": "req-0000",
+      "max_new_tokens": 4000,
+      "prompt": "Explain how photosynthesis works in one paragraph.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0001",
+      "max_new_tokens": 4000,
+      "prompt": "What is the difference between a virus and a bacterium?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0002",
+      "max_new_tokens": 4000,
+      "prompt": "Why is the sky blue during the day and red at sunset?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0003",
+      "max_new_tokens": 4000,
+      "prompt": "Describe the structure of a typical neuron.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0004",
+      "max_new_tokens": 4000,
+      "prompt": "Explain how vaccines train the immune system.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0005",
+      "max_new_tokens": 4000,
+      "prompt": "What is quantum entanglement in plain English?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0006",
+      "max_new_tokens": 4000,
+      "prompt": "Why do leaves change color in autumn?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0007",
+      "max_new_tokens": 4000,
+      "prompt": "Describe the life cycle of a star like our sun.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0008",
+      "max_new_tokens": 4000,
+      "prompt": "How does a refrigerator keep food cold?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0009",
+      "max_new_tokens": 4000,
+      "prompt": "Explain how a transistor amplifies a signal.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0010",
+      "max_new_tokens": 4000,
+      "prompt": "Summarize the causes of World War I in three sentences.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0011",
+      "max_new_tokens": 4000,
+      "prompt": "Who built the Great Wall of China and when?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0012",
+      "max_new_tokens": 4000,
+      "prompt": "List five interesting facts about the Roman Empire.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0013",
+      "max_new_tokens": 4000,
+      "prompt": "What was the Industrial Revolution and where did it start?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0014",
+      "max_new_tokens": 4000,
+      "prompt": "Who was Cleopatra and what made her famous?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0015",
+      "max_new_tokens": 4000,
+      "prompt": "Describe the impact of the printing press on Europe.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0016",
+      "max_new_tokens": 4000,
+      "prompt": "What ended the cold war?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0017",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me about the silk road in two paragraphs.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0018",
+      "max_new_tokens": 4000,
+      "prompt": "Who was Genghis Khan?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0019",
+      "max_new_tokens": 4000,
+      "prompt": "Why did the Roman Empire fall?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0020",
+      "max_new_tokens": 4000,
+      "prompt": "What is the Pythagorean theorem and why does it matter?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0021",
+      "max_new_tokens": 4000,
+      "prompt": "Explain the difference between mean and median.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0022",
+      "max_new_tokens": 4000,
+      "prompt": "What is a derivative in calculus?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0023",
+      "max_new_tokens": 4000,
+      "prompt": "How do you compute the area of a circle?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0024",
+      "max_new_tokens": 4000,
+      "prompt": "What is a prime number? Give five examples.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0025",
+      "max_new_tokens": 4000,
+      "prompt": "Explain Bayes' theorem with a simple example.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0026",
+      "max_new_tokens": 4000,
+      "prompt": "What is the Fibonacci sequence?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0027",
+      "max_new_tokens": 4000,
+      "prompt": "Why is zero a special number?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0028",
+      "max_new_tokens": 4000,
+      "prompt": "What is the difference between an integer and a real number?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0029",
+      "max_new_tokens": 4000,
+      "prompt": "Explain the concept of infinity.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0030",
+      "max_new_tokens": 4000,
+      "prompt": "What is the difference between a list and a tuple in Python?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0031",
+      "max_new_tokens": 4000,
+      "prompt": "Explain recursion using a simple example.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0032",
+      "max_new_tokens": 4000,
+      "prompt": "What is a hash table and when would you use one?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0033",
+      "max_new_tokens": 4000,
+      "prompt": "Describe the difference between TCP and UDP.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0034",
+      "max_new_tokens": 4000,
+      "prompt": "What does the word 'compiler' mean?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0035",
+      "max_new_tokens": 4000,
+      "prompt": "Explain what a Git merge conflict is.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0036",
+      "max_new_tokens": 4000,
+      "prompt": "What is the difference between a stack and a queue?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0037",
+      "max_new_tokens": 4000,
+      "prompt": "What is Big O notation?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0038",
+      "max_new_tokens": 4000,
+      "prompt": "Describe how DNS resolves a domain name.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0039",
+      "max_new_tokens": 4000,
+      "prompt": "What is a race condition?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0040",
+      "max_new_tokens": 4000,
+      "prompt": "Summarize the plot of Hamlet in three sentences.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0041",
+      "max_new_tokens": 4000,
+      "prompt": "Who wrote Pride and Prejudice and when?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0042",
+      "max_new_tokens": 4000,
+      "prompt": "Describe the style of Vincent van Gogh's paintings.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0043",
+      "max_new_tokens": 4000,
+      "prompt": "What is iambic pentameter?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0044",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me about the Beat Generation writers.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0045",
+      "max_new_tokens": 4000,
+      "prompt": "Who painted the Mona Lisa?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0046",
+      "max_new_tokens": 4000,
+      "prompt": "What is magical realism?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0047",
+      "max_new_tokens": 4000,
+      "prompt": "Describe the plot of The Great Gatsby in two sentences.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0048",
+      "max_new_tokens": 4000,
+      "prompt": "Who composed The Four Seasons?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0049",
+      "max_new_tokens": 4000,
+      "prompt": "What was the Harlem Renaissance?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0050",
+      "max_new_tokens": 4000,
+      "prompt": "Describe how to make a simple loaf of sourdough bread.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0051",
+      "max_new_tokens": 4000,
+      "prompt": "Describe the steps to brew a perfect cup of coffee.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0052",
+      "max_new_tokens": 4000,
+      "prompt": "How do you wash a wool sweater without ruining it?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0053",
+      "max_new_tokens": 4000,
+      "prompt": "How do you change a bicycle tire?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0054",
+      "max_new_tokens": 4000,
+      "prompt": "Give me three tips for sleeping better.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0055",
+      "max_new_tokens": 4000,
+      "prompt": "How do you boil an egg perfectly?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0056",
+      "max_new_tokens": 4000,
+      "prompt": "What is the best way to remove a wine stain?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0057",
+      "max_new_tokens": 4000,
+      "prompt": "How do you fold a fitted sheet?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0058",
+      "max_new_tokens": 4000,
+      "prompt": "Describe how to make a simple omelette.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0059",
+      "max_new_tokens": 4000,
+      "prompt": "How do you sharpen a kitchen knife?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0060",
+      "max_new_tokens": 4000,
+      "prompt": "Describe a sunset over the ocean in vivid detail.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0061",
+      "max_new_tokens": 4000,
+      "prompt": "Describe the taste of a perfectly ripe mango.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0062",
+      "max_new_tokens": 4000,
+      "prompt": "Write a haiku about winter mornings.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0063",
+      "max_new_tokens": 4000,
+      "prompt": "Write a short poem about a cat watching rain.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0064",
+      "max_new_tokens": 4000,
+      "prompt": "Describe the smell of freshly baked bread.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0065",
+      "max_new_tokens": 4000,
+      "prompt": "Describe a thunderstorm at midnight.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0066",
+      "max_new_tokens": 4000,
+      "prompt": "Write a short poem about an old lighthouse.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0067",
+      "max_new_tokens": 4000,
+      "prompt": "Describe a bustling open-air market.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0068",
+      "max_new_tokens": 4000,
+      "prompt": "Write a haiku about autumn leaves.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0069",
+      "max_new_tokens": 4000,
+      "prompt": "Describe the feeling of stepping into the ocean for the first time.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0070",
+      "max_new_tokens": 4000,
+      "prompt": "What is the capital of Australia and why is it not Sydney?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0071",
+      "max_new_tokens": 4000,
+      "prompt": "List the planets of the solar system in order.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0072",
+      "max_new_tokens": 4000,
+      "prompt": "What is the longest river in the world and where does it flow?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0073",
+      "max_new_tokens": 4000,
+      "prompt": "Name three countries that border Switzerland.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0074",
+      "max_new_tokens": 4000,
+      "prompt": "What is the highest mountain in Africa?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0075",
+      "max_new_tokens": 4000,
+      "prompt": "What language is spoken in Brazil?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0076",
+      "max_new_tokens": 4000,
+      "prompt": "Where is the Amazon rainforest?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0077",
+      "max_new_tokens": 4000,
+      "prompt": "What is the smallest country in the world?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0078",
+      "max_new_tokens": 4000,
+      "prompt": "What ocean separates the Americas from Europe and Africa?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0079",
+      "max_new_tokens": 4000,
+      "prompt": "What is the deepest known point in the ocean?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0080",
+      "max_new_tokens": 4000,
+      "prompt": "Explain the concept of gravity to a curious child.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0081",
+      "max_new_tokens": 4000,
+      "prompt": "What are the main causes of climate change?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0082",
+      "max_new_tokens": 4000,
+      "prompt": "What is the difference between machine learning and AI?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0083",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me about the life cycle of a butterfly.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0084",
+      "max_new_tokens": 4000,
+      "prompt": "How do birds know where to fly during migration?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0085",
+      "max_new_tokens": 4000,
+      "prompt": "What is photosynthesis in one sentence?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0086",
+      "max_new_tokens": 4000,
+      "prompt": "Describe how a microwave oven heats food.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0087",
+      "max_new_tokens": 4000,
+      "prompt": "What is gluten and why does it matter for bread?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0088",
+      "max_new_tokens": 4000,
+      "prompt": "Explain in plain words what a black hole is.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0089",
+      "max_new_tokens": 4000,
+      "prompt": "What does it mean for a number to be 'irrational'?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0090",
+      "max_new_tokens": 4000,
+      "prompt": "Hello.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0091",
+      "max_new_tokens": 4000,
+      "prompt": "What is 2 + 2?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0092",
+      "max_new_tokens": 4000,
+      "prompt": "Name three colors.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0093",
+      "max_new_tokens": 4000,
+      "prompt": "Say 'good morning' in five languages.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0094",
+      "max_new_tokens": 4000,
+      "prompt": "What is the speed of light?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0095",
+      "max_new_tokens": 4000,
+      "prompt": "Translate 'thank you' to French.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0096",
+      "max_new_tokens": 4000,
+      "prompt": "What is the boiling point of water?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0097",
+      "max_new_tokens": 4000,
+      "prompt": "Spell 'serendipity'.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0098",
+      "max_new_tokens": 4000,
+      "prompt": "Count from one to ten.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0099",
+      "max_new_tokens": 4000,
+      "prompt": "What day comes after Wednesday?",
+      "temperature": 0
+    },
+    {
+      "id": "req-0100",
+      "max_new_tokens": 4000,
+      "prompt": "Write a detailed essay about the development of human civilization from the agricultural revolution to the modern era. Cover at least three major turning points and explain their lasting consequences.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0101",
+      "max_new_tokens": 4000,
+      "prompt": "Explain in detail how a modern operating system manages memory. Cover paging, virtual memory, address translation, and what happens when a process exceeds its allocation.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0102",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about an explorer who discovers an underground city. Include vivid descriptions, dialogue with the city's inhabitants, and a meaningful ending.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0103",
+      "max_new_tokens": 4000,
+      "prompt": "Write a step-by-step guide to building a simple house from scratch, starting with site preparation and ending with the roof. Be specific about materials and order of operations.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0104",
+      "max_new_tokens": 4000,
+      "prompt": "Describe in great detail the life of a honeybee from birth to death, including its role in the hive, communication via waggle dance, and contribution to pollination.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0105",
+      "max_new_tokens": 4000,
+      "prompt": "Explain the entire process by which a photon emitted in the sun's core eventually reaches Earth. Cover the mechanisms inside the sun and the journey through space.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0106",
+      "max_new_tokens": 4000,
+      "prompt": "Write a long poem in free verse about the changing of the seasons in a small mountain village.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0107",
+      "max_new_tokens": 4000,
+      "prompt": "Describe in extensive detail how the human heart pumps blood, including the role of each chamber, valve, and the electrical conduction system.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0108",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long fable about a clever fox and a generous bear, with a clear moral lesson.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0109",
+      "max_new_tokens": 4000,
+      "prompt": "Walk me through the entire process of brewing a traditional Belgian-style beer at home, step by step, from grain selection to bottle conditioning.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0110",
+      "max_new_tokens": 4000,
+      "prompt": "Write a detailed history of the development of mathematics, from ancient counting systems through the invention of calculus to modern mathematics.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0111",
+      "max_new_tokens": 4000,
+      "prompt": "Explain how a modern jet engine works, in detail, including the intake, compressor, combustion chamber, turbine, and exhaust stages.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0112",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about a child who finds a magical map. Include adventure, discovery, friendship, and a satisfying conclusion.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0113",
+      "max_new_tokens": 4000,
+      "prompt": "Describe the entire process of how a Hollywood movie is made, from the initial idea through script, financing, production, and distribution.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0114",
+      "max_new_tokens": 4000,
+      "prompt": "Write a long monologue from the perspective of a 200-year-old oak tree reflecting on everything it has witnessed.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0115",
+      "max_new_tokens": 4000,
+      "prompt": "Explain in great detail how a vaccine is developed, from initial research to clinical trials to manufacturing and distribution.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0116",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about a young scientist who invents something unexpected and must decide what to do with it.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0117",
+      "max_new_tokens": 4000,
+      "prompt": "Describe in detail how a coral reef forms, grows, and supports its ecosystem.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0118",
+      "max_new_tokens": 4000,
+      "prompt": "Write a long story about a postal worker in a remote village who delivers letters that change people's lives.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0119",
+      "max_new_tokens": 4000,
+      "prompt": "Explain step by step how to write a compiler for a simple programming language. Cover lexing, parsing, AST, and code generation.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0120",
+      "max_new_tokens": 4000,
+      "prompt": "Describe in detail how a typical small farm operates over the course of one full year, season by season.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0121",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me an extended story about a librarian who discovers a book that writes itself.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0122",
+      "max_new_tokens": 4000,
+      "prompt": "Walk me through the steps a master sushi chef takes when preparing a multi-course omakase meal.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0123",
+      "max_new_tokens": 4000,
+      "prompt": "Write a long persuasive essay about why public libraries matter in the 21st century.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0124",
+      "max_new_tokens": 4000,
+      "prompt": "Describe in great detail how to build a wooden boat by hand, from selecting timber to launching.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0125",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long bedtime story for children about a friendly dragon who is afraid of the dark.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0126",
+      "max_new_tokens": 4000,
+      "prompt": "Explain how the modern global financial system works, from central banks to retail consumers, in detail.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0127",
+      "max_new_tokens": 4000,
+      "prompt": "Describe a year in the life of a sled dog living and racing in Alaska.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0128",
+      "max_new_tokens": 4000,
+      "prompt": "Write a long historical narrative about the construction of the Brooklyn Bridge.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0129",
+      "max_new_tokens": 4000,
+      "prompt": "Walk me through the complete process of restoring an old vintage car to running condition.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0130",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long, layered story about three generations of a family who run the same bakery.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0131",
+      "max_new_tokens": 4000,
+      "prompt": "Explain in detail how a DNA molecule is replicated inside a cell.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0132",
+      "max_new_tokens": 4000,
+      "prompt": "Describe step by step how to grow a vegetable garden from seed to harvest, for a beginner.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0133",
+      "max_new_tokens": 4000,
+      "prompt": "Write a long, descriptive piece about walking through a redwood forest in early morning fog.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0134",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me an extended story about a deep-sea diver who finds an ancient shipwreck and what they decide to do.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0135",
+      "max_new_tokens": 4000,
+      "prompt": "Explain in detail how a modern car engine converts fuel into motion, covering every major subsystem.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0136",
+      "max_new_tokens": 4000,
+      "prompt": "Describe how a cathedral was built in medieval Europe, from foundation to spire, step by step.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0137",
+      "max_new_tokens": 4000,
+      "prompt": "Write a long poem about the night sky and humanity's relationship with the stars across history.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0138",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about a clockmaker whose creations begin to behave strangely.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0139",
+      "max_new_tokens": 4000,
+      "prompt": "Walk me through how a modern smartphone is manufactured, from raw materials to retail box.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0140",
+      "max_new_tokens": 4000,
+      "prompt": "Explain in detail how the immune system fights a viral infection, from initial detection to memory formation.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0141",
+      "max_new_tokens": 4000,
+      "prompt": "Describe a year in the life of a lighthouse keeper on a remote island.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0142",
+      "max_new_tokens": 4000,
+      "prompt": "Write a long story about an astronaut who returns to Earth after twenty years away.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0143",
+      "max_new_tokens": 4000,
+      "prompt": "Explain how a printing press worked in Gutenberg's day, in step-by-step detail.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0144",
+      "max_new_tokens": 4000,
+      "prompt": "Describe in detail how a glacier forms, moves, and shapes the landscape over millennia.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0145",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about a young apprentice blacksmith who makes a mistake that changes their life.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0146",
+      "max_new_tokens": 4000,
+      "prompt": "Walk me through the process by which an idea becomes a published book, in detail.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0147",
+      "max_new_tokens": 4000,
+      "prompt": "Describe how the human brain processes language, from hearing a word to understanding meaning.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0148",
+      "max_new_tokens": 4000,
+      "prompt": "Write an extended story about a gardener who plants a tree that becomes legendary.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0149",
+      "max_new_tokens": 4000,
+      "prompt": "Explain in detail how a typical municipal water treatment plant works, step by step.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0150",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about a violinist preparing for the most important performance of their life.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0151",
+      "max_new_tokens": 4000,
+      "prompt": "Walk me through how a typical commercial airliner is designed, built, and certified.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0152",
+      "max_new_tokens": 4000,
+      "prompt": "Describe in great detail the journey of a single drop of rain from cloud to ocean.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0153",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me an extended story about a chef who travels the world learning regional dishes.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0154",
+      "max_new_tokens": 4000,
+      "prompt": "Explain how the global postal system delivers a letter from one continent to another.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0155",
+      "max_new_tokens": 4000,
+      "prompt": "Describe step by step how a master watchmaker assembles a mechanical wristwatch.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0156",
+      "max_new_tokens": 4000,
+      "prompt": "Write a long story about a mountain climber attempting an unclimbed peak.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0157",
+      "max_new_tokens": 4000,
+      "prompt": "Explain how electricity is generated, transmitted, and delivered to a home.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0158",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about a fisherman who catches something he cannot quite explain.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0159",
+      "max_new_tokens": 4000,
+      "prompt": "Walk me through how a piece of orchestral music is composed, rehearsed, and performed.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0160",
+      "max_new_tokens": 4000,
+      "prompt": "Describe in great detail how a modern subway system is planned, built, and operated.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0161",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about an old woman who keeps a journal of her village over fifty years.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0162",
+      "max_new_tokens": 4000,
+      "prompt": "Explain how a typical software product goes from idea to launch, step by step.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0163",
+      "max_new_tokens": 4000,
+      "prompt": "Describe in detail how an iceberg breaks off a glacier and drifts across the ocean.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0164",
+      "max_new_tokens": 4000,
+      "prompt": "Write a long poem about the ocean told from the perspective of a single wave.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0165",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me an extended story about an inventor who builds something truly useful and faces an ethical choice.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0166",
+      "max_new_tokens": 4000,
+      "prompt": "Walk me through the process of producing a single bottle of fine wine from vine to cellar.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0167",
+      "max_new_tokens": 4000,
+      "prompt": "Explain in detail how the ancient Egyptians built the pyramids, with current best-guess methods.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0168",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about a librarian, a child, and an unread book.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0169",
+      "max_new_tokens": 4000,
+      "prompt": "Describe how a typical modern hospital handles a patient from arrival in the emergency room to discharge.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0170",
+      "max_new_tokens": 4000,
+      "prompt": "Write a long persuasive essay arguing for a four-day work week.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0171",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about a young pilot's first solo flight across an ocean.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0172",
+      "max_new_tokens": 4000,
+      "prompt": "Walk me through how a master cheesemaker produces an aged hard cheese, from milk to wheel.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0173",
+      "max_new_tokens": 4000,
+      "prompt": "Explain in detail how a search engine indexes the web and ranks results for a query.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0174",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about a quiet street that has one extraordinary night each year.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0175",
+      "max_new_tokens": 4000,
+      "prompt": "Describe how a single vote travels through an election system from voter to certified result.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0176",
+      "max_new_tokens": 4000,
+      "prompt": "Write an extended story about a craftsman who makes the world's last typewriter.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0177",
+      "max_new_tokens": 4000,
+      "prompt": "Explain how a modern container shipping operation works, from factory to retail shelf.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0178",
+      "max_new_tokens": 4000,
+      "prompt": "Describe step by step how a master gardener plans a four-season ornamental garden.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0179",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about two strangers who meet on a long train journey across a continent.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0180",
+      "max_new_tokens": 4000,
+      "prompt": "Walk me through the entire workflow of a documentary film, from research to release.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0181",
+      "max_new_tokens": 4000,
+      "prompt": "Explain in detail how a beehive is harvested for honey without harming the colony.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0182",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about a clockmaker's apprentice who sees something impossible.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0183",
+      "max_new_tokens": 4000,
+      "prompt": "Describe how a national park manages wildlife, visitors, and conservation in tension with each other.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0184",
+      "max_new_tokens": 4000,
+      "prompt": "Write a long poem about a river told from its source to its mouth.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0185",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me an extended story about a baker whose bread tastes like memories.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0186",
+      "max_new_tokens": 4000,
+      "prompt": "Explain how the international space station was built and is maintained.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0187",
+      "max_new_tokens": 4000,
+      "prompt": "Describe in detail how a typical wind turbine generates electricity from breeze to grid.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0188",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about a young dancer auditioning for a famous troupe.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0189",
+      "max_new_tokens": 4000,
+      "prompt": "Walk me through how a modern semiconductor chip is designed and fabricated.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0190",
+      "max_new_tokens": 4000,
+      "prompt": "Describe a year in the life of a vineyard, season by season.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0191",
+      "max_new_tokens": 4000,
+      "prompt": "Write a long story about a quiet hero in a small town who never sought attention.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0192",
+      "max_new_tokens": 4000,
+      "prompt": "Explain in detail how the human eye captures light and the brain assembles it into vision.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0193",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about a translator who falls in love with a poem.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0194",
+      "max_new_tokens": 4000,
+      "prompt": "Walk me through how a typical municipal recycling program works, end to end.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0195",
+      "max_new_tokens": 4000,
+      "prompt": "Describe in detail how a single tree provides shelter and food for dozens of species.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0196",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about a small bookstore that survives against the odds.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0197",
+      "max_new_tokens": 4000,
+      "prompt": "Explain how a modern car safety crash test is designed, conducted, and analyzed.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0198",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about a quiet musician who discovers an old, broken instrument.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0199",
+      "max_new_tokens": 4000,
+      "prompt": "Describe in detail how a sourdough starter is created, fed, and used over months.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0200",
+      "max_new_tokens": 4000,
+      "prompt": "Walk me through how a typical municipal fire department responds to a structure fire.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0201",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about a child who befriends an old dog at a busy harbor.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0202",
+      "max_new_tokens": 4000,
+      "prompt": "Explain how an aircraft carrier launches and recovers fighter jets at sea.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0203",
+      "max_new_tokens": 4000,
+      "prompt": "Describe step by step how a master tailor makes a bespoke suit for a customer.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0204",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about a quiet person who discovers they have a remarkable talent.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0205",
+      "max_new_tokens": 4000,
+      "prompt": "Walk me through how a modern nuclear power plant generates electricity safely.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0206",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about an old fisherman teaching a young apprentice the trade.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0207",
+      "max_new_tokens": 4000,
+      "prompt": "Describe in detail how a single seed grows into a mature oak tree over decades.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0208",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about a baker, a cat, and a stormy night.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0209",
+      "max_new_tokens": 4000,
+      "prompt": "Walk me through how a modern smartphone factory assembles a device, station by station.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0210",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about a stargazer who spots something no one has seen before.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0211",
+      "max_new_tokens": 4000,
+      "prompt": "Describe in detail how a great cathedral choir prepares for a major performance.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0212",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about a barber who has cut hair for forty years in the same chair.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0213",
+      "max_new_tokens": 4000,
+      "prompt": "Walk me through how a master ceramicist creates a single perfect bowl, from clay to glaze.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0214",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about a quiet engineer who designs a bridge that lasts a hundred years.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0215",
+      "max_new_tokens": 4000,
+      "prompt": "Describe in detail how a pearl forms inside an oyster, from grain of sand to gem.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0216",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about a young chef who travels to learn one dish from a master.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0217",
+      "max_new_tokens": 4000,
+      "prompt": "Walk me through how a typical orchestra prepares a new symphony for its premiere.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0218",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about a candlemaker whose candles never quite burn out.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0219",
+      "max_new_tokens": 4000,
+      "prompt": "Describe in detail how a coral polyp grows and contributes to a reef over years.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0220",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about an old soldier who returns to his birthplace after decades.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0221",
+      "max_new_tokens": 4000,
+      "prompt": "Walk me through the complete journey of a piece of mail in a national postal system.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0222",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about a young watchmaker who fixes a clock that has been broken for a century.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0223",
+      "max_new_tokens": 4000,
+      "prompt": "Describe in detail how a classic Italian pasta dish is made from scratch by a nonna.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0224",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about a quiet librarian who is also a secret historian.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0225",
+      "max_new_tokens": 4000,
+      "prompt": "Walk me through how a modern wind farm is sited, built, and connected to the grid.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0226",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about a desert nomad who finds an unexpected oasis.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0227",
+      "max_new_tokens": 4000,
+      "prompt": "Describe in detail how the global undersea cable network was built and is maintained.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0228",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about an old bookbinder who restores a damaged ancient text.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0229",
+      "max_new_tokens": 4000,
+      "prompt": "Walk me through how a master glassblower creates a delicate vase.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0230",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about a young gardener who inherits a neglected estate's grounds.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0231",
+      "max_new_tokens": 4000,
+      "prompt": "Describe in detail how a typical orchestra is seated and why each section is where it is.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0232",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about a quiet mapmaker who discovers an unmapped island.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0233",
+      "max_new_tokens": 4000,
+      "prompt": "Walk me through how a typical public transit bus route is planned and operated.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0234",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about a small village that hosts an extraordinary festival once a decade.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0235",
+      "max_new_tokens": 4000,
+      "prompt": "Describe in detail how a championship-level chess player prepares for a major tournament.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0236",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about an old painter who finishes his final masterpiece.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0237",
+      "max_new_tokens": 4000,
+      "prompt": "Walk me through how a master cobbler makes a pair of shoes by hand.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0238",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about a young teacher in a one-room schoolhouse a hundred years ago.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0239",
+      "max_new_tokens": 4000,
+      "prompt": "Describe in detail how a great library is organized, cataloged, and preserved over centuries.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0240",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about a quiet pilot who flies medical supplies to remote villages.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0241",
+      "max_new_tokens": 4000,
+      "prompt": "Walk me through how a master perfumer composes a new fragrance.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0242",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about a traveler who keeps a journal of every stranger who shows them kindness.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0243",
+      "max_new_tokens": 4000,
+      "prompt": "Describe in detail how a single beehive year unfolds, from spring buildup to winter cluster.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0244",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about a quiet astronomer who patiently watches one star for thirty years.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0245",
+      "max_new_tokens": 4000,
+      "prompt": "Walk me through how a master luthier builds a violin from raw wood to finished instrument.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0246",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about a young apprentice who learns the family craft with reluctance and then love.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0247",
+      "max_new_tokens": 4000,
+      "prompt": "Describe in detail how a typical opera production is staged, from libretto to opening night.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0248",
+      "max_new_tokens": 4000,
+      "prompt": "Tell me a long story about a quiet harbor town that hides one extraordinary secret.",
+      "temperature": 0
+    },
+    {
+      "id": "req-0249",
+      "max_new_tokens": 4000,
+      "prompt": "Walk me through how a master baker creates a wedding cake for two hundred guests.",
+      "temperature": 0
+    }
+  ],
+  "run_id": "d6-mistral-large2-tp4-large.manifest",
+  "runtime": {
+    "batch_invariance": {
+      "enabled": true,
+      "enforce_eager": true
+    },
+    "deterministic_knobs": {
+      "cublas_workspace_config": ":4096:8",
+      "cuda_launch_blocking": true,
+      "pythonhashseed": "0",
+      "seed": 42,
+      "torch_deterministic": true
+    },
+    "serving_engine": {
+      "attention_backend": "FLASH_ATTN",
+      "disable_custom_all_reduce": true,
+      "dtype": "auto",
+      "gpu_memory_utilization": 0.9,
+      "max_model_len": 4096,
+      "max_num_seqs": 64,
+      "tensor_parallel_size": 4,
+      "pipeline_parallel_size": 1,
+      "distributed_executor_backend": "ray"
+    },
+    "strict_hardware": false
+  }
+}

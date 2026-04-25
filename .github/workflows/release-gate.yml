@@ -1,0 +1,27 @@
+name: Release Gate
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  release-matrix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ripgrep
+        run: |
+          if ! command -v rg >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y ripgrep
+          fi
+      - name: Lint
+        run: bash scripts/ci/lint.sh
+      - name: Schema Gate
+        run: bash scripts/ci/schema_gate.sh
+      - name: Install Python dependencies
+        run: pip install pydantic
+      - name: Determinism Matrix (D0-D5)
+        run: bash scripts/ci/test_release.sh

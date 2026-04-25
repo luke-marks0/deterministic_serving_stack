@@ -1,0 +1,35 @@
+name: PR Gate
+
+on:
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ripgrep
+        run: |
+          if ! command -v rg >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y ripgrep
+          fi
+      - name: Lint
+        run: bash scripts/ci/lint.sh
+
+  schema:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Schema Gate
+        run: bash scripts/ci/schema_gate.sh
+
+  fast-tests:
+    runs-on: ubuntu-latest
+    needs: [lint, schema]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Python dependencies
+        run: pip install pydantic
+      - name: Fast Tests
+        run: bash scripts/ci/test_fast.sh

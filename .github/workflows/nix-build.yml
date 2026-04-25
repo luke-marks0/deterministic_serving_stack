@@ -1,0 +1,84 @@
+name: Nix Build & OCI Push
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'flake.nix'
+      - 'flake.lock'
+      - 'nix/**'
+      - 'cmd/**'
+      - 'pkg/**'
+      - 'schemas/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-closure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: cachix/install-nix-action@v27
+        with:
+          nix_path: nixpkgs=channel:nixos-24.11
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - uses: cachix/cachix-action@v15
+        with:
+          name: deterministic-serving
+          skipPush: true
+        continue-on-error: true
+
+      - name: Build runtime closure
+        run: |
+          CLOSURE_PATH=$(nix build .#closure --print-out-paths --no-link)
+          echo "CLOSURE_PATH=${CLOSURE_PATH}" >> $GITHUB_ENV
+          echo "Closure: ${CLOSURE_PATH}"
+
+      - name: Compute runtime_closure_digest
+        run: |
+          DIGEST=$(nix path-info --json --recursive "$CLOSURE_PATH" | python3 -c "
+          import json, sys, hashlib
+          data = json.load(sys.stdin)
+          if isinstance(data, dict):
+              canonical = json.dumps(dict(sorted(data.items())), sort_keys=True, separators=(',',':'))
+          else:
+              canonical = json.dumps(sorted(data, key=lambda x: x.get('path','')), sort_keys=True, separators=(',',':'))
+          print('sha256:' + hashlib.sha256(canonical.encode()).hexdigest())
+          ")
+          echo "RUNTIME_CLOSURE_DIGEST=${DIGEST}" >> $GITHUB_ENV
+          echo "runtime_closure_digest=${DIGEST}"
+
+      - name: Build OCI image
+        run: |
+          OCI_PATH=$(nix build .#oci --print-out-paths --no-link)
+          echo "OCI_PATH=${OCI_PATH}" >> $GITHUB_ENV
+
+      - name: Push to GHCR
+        if: github.ref == 'refs/heads/main'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | skopeo login ghcr.io -u ${{ github.actor }} --password-stdin
+          TAG="ghcr.io/${{ github.repository_owner }}/deterministic-serving:$(git rev-parse --short HEAD)"
+          skopeo copy "docker-archive:${OCI_PATH}" "docker://${TAG}"
+          echo "Pushed: ${TAG}"
+
+      - name: Write build attestation
+        run: |
+          cat > /tmp/build-attestation.json <<EOF
+          {
+            "runtime_closure_digest": "${RUNTIME_CLOSURE_DIGEST}",
+            "closure_path": "${CLOSURE_PATH}",
+            "git_sha": "${{ github.sha }}",
+            "builder": "github-actions"
+          }
+          EOF
+          cat /tmp/build-attestation.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-attestation
+          path: /tmp/build-attestation.json

@@ -1,0 +1,16 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+
+# CI artifacts
+.ci-results/
+
+# Editor temp files
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+
+.claude/skills/
+.claude/worktrees/

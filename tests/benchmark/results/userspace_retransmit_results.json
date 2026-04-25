@@ -1,0 +1,78 @@
+{
+  "small": {
+    "requests": 7402,
+    "payload_size": 200,
+    "wall_time_s": 14.106,
+    "errors": 0,
+    "correct_bodies": 7402,
+    "bytes_received": 1480400,
+    "throughput_mbps": 0.84,
+    "requests_per_sec": 524.8,
+    "latency_ms": {
+      "min": 0.93,
+      "max": 42.28,
+      "mean": 1.9,
+      "median": 1.52,
+      "p95": 4.24,
+      "p99": 7.79,
+      "stdev": 1.7
+    }
+  },
+  "medium": {
+    "requests": 3602,
+    "payload_size": 5000,
+    "wall_time_s": 12.957,
+    "errors": 0,
+    "correct_bodies": 3602,
+    "bytes_received": 18010000,
+    "throughput_mbps": 11.12,
+    "requests_per_sec": 278.0,
+    "latency_ms": {
+      "min": 1.78,
+      "max": 56.76,
+      "mean": 3.59,
+      "median": 2.54,
+      "p95": 8.89,
+      "p99": 11.59,
+      "stdev": 2.8
+    }
+  },
+  "large": {
+    "requests": 1304,
+    "payload_size": 40000,
+    "wall_time_s": 14.453,
+    "errors": 0,
+    "correct_bodies": 1304,
+    "bytes_received": 52160000,
+    "throughput_mbps": 28.87,
+    "requests_per_sec": 90.2,
+    "latency_ms": {
+      "min": 6.45,
+      "max": 61.09,
+      "mean": 11.07,
+      "median": 11.49,
+      "p95": 19.12,
+      "p99": 22.54,
+      "stdev": 4.72
+    }
+  },
+  "xlarge": {
+    "requests": 142,
+    "payload_size": 150000,
+    "wall_time_s": 20.913,
+    "errors": 0,
+    "correct_bodies": 142,
+    "bytes_received": 21300000,
+    "throughput_mbps": 8.15,
+    "requests_per_sec": 6.8,
+    "latency_ms": {
+      "min": 22.46,
+      "max": 505.67,
+      "mean": 147.24,
+      "median": 52.82,
+      "p95": 280.73,
+      "p99": 478.03,
+      "stdev": 126.39
+    }
+  }
+}
