@@ -49,7 +49,13 @@ def main() -> int:
     if status != 200:
         print(f"FAIL /run returned {status}: {bundle}")
         return 1
-    commitments = bundle.get("token_commitments")
+    raw = bundle.get("token_commitments") or {}
+    # Server returns {rid: {"input": [...], "output": [...]}}. /replay challenges
+    # output-token positions, so we audit against the output stream.
+    commitments = {
+        rid: (v["output"] if isinstance(v, dict) and "output" in v else v)
+        for rid, v in raw.items()
+    }
     if not commitments:
         print("FAIL /run bundle missing token_commitments")
         print(json.dumps(bundle, indent=2))

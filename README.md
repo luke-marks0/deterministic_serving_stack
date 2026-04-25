@@ -57,67 +57,30 @@ Each chunk is 30,000 tokens of greedy decoding (temperature=0). Same container i
  └──────────────────────────────────────────────────────────────────────┘
 ```
 
-## Quick Start
+## Quick Start (reviewers)
 
-### 1. Pull and run the container
-
-```bash
-# One-time Docker setup (see "Running the Container" below for details)
-sudo nvidia-ctk runtime configure --runtime=docker
-sudo tee /etc/docker/daemon.json <<'EOF'
-{"runtimes":{"nvidia":{"args":[],"path":"nvidia-container-runtime"}},"default-runtime":"nvidia"}
-EOF
-sudo systemctl restart docker
-
-# Pull the image
-docker pull ghcr.io/derpyplops/deterministic-serving-runtime:latest
-
-# Start the server
-docker run -d --name vllm-server \
-  --gpus all --privileged \
-  -e NVIDIA_DRIVER_CAPABILITIES=all \
-  -e VLLM_BATCH_INVARIANT=1 \
-  -e CUBLAS_WORKSPACE_CONFIG=:4096:8 \
-  -e HOME=/tmp \
-  -p 8000:8000 \
-  ghcr.io/derpyplops/deterministic-serving-runtime:latest \
-  python3 -m vllm.entrypoints.openai.api_server \
-    --model Qwen/Qwen3-1.7B \
-    --host 0.0.0.0 --port 8000 --seed 42 \
-    --enforce-eager --attention-backend TRITON_ATTN \
-    --max-model-len 4096
-
-# Wait for it
-until curl -s http://localhost:8000/health > /dev/null 2>&1; do sleep 3; done
-```
-
-### 2. Send a request
+Bring up an NVIDIA H100 instance with the standard CUDA 12.8 AMI (Lambda Cloud's `gpu_1x_h100_sxm5` and `gpu_1x_h100_pcie` work as-is; GH200 also works), then:
 
 ```bash
-curl http://localhost:8000/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "Qwen/Qwen3-1.7B",
-    "messages": [{"role": "user", "content": "What is deterministic computation?"}],
-    "max_tokens": 100,
-    "temperature": 0,
-    "seed": 42
-  }'
+git clone https://github.com/luke-marks0/deterministic_serving_stack
+cd deterministic_serving_stack
+./scripts/demo.sh
 ```
 
-### 3. Verify determinism (run the same request twice)
+`scripts/demo.sh` builds a venv (cu128 torch + vLLM 0.17.1), resolves the audit-enabled smoke manifest at `experiments/e2e-audit/scripts/smoke.manifest.json` (declares H100 hardware, Qwen3-1.7B, 2 short prompts), starts the deterministic server, and runs the audit replay loop:
 
-```bash
-for i in 1 2; do
-  curl -s http://localhost:8000/v1/chat/completions \
-    -H "Content-Type: application/json" \
-    -d '{"model":"Qwen/Qwen3-1.7B","messages":[{"role":"user","content":"Hello"}],"max_tokens":50,"temperature":0,"seed":42}' \
-    | python3 -c "import sys,json,hashlib; c=json.load(sys.stdin)['choices'][0]['message']['content']; print(f'Run {'"$i"'}: {hashlib.sha256(c.encode()).hexdigest()[:16]}')"
-done
-# Both hashes will be identical
-```
+1. `POST /run` — server runs the manifest's requests and returns per-output-token HMAC commitments
+2. `POST /replay` at random token positions — server re-runs each request truncated to the challenged position and recomputes the commitment
+3. Negative test — a forged commitment must not match
 
-### 4. Run the synthetic pipeline (no GPU needed)
+Expected output ends with `ALL PASS`. Total wall time from `git clone` to `ALL PASS`: ~3 minutes (~90s pip install, <5s resolver/builder, ~30s vLLM model load, ~10s audit).
+
+Requirements:
+- NVIDIA GPU with compute capability ≥ 9.0 (H100, GH200, etc.) — batch invariance kernels need this
+- ~5 GB free GPU memory (Qwen3-1.7B in bf16)
+- Outbound internet for the Hugging Face download
+
+### No GPU? Run the synthetic pipeline
 
 ```bash
 tmp=$(mktemp -d)
@@ -175,56 +138,35 @@ experiments/      Determinism experiment scripts (tiered: smoke/medium/full)
 docs/             Architecture diagrams, field reports, memos
 ```
 
-## Running the Container
+## Container image (out of date)
 
-### Prerequisites
-- NVIDIA GPU with compute capability >= 9.0 (H100, GH200, etc.)
-- Docker with [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
-- The NVIDIA runtime must be the **default Docker runtime**
-
-### Docker + NVIDIA setup
+The published image at `ghcr.io/derpyplops/deterministic-serving-runtime:latest` predates the `/run` and `/replay` endpoints used by the audit demo and is currently private. Use `scripts/demo.sh` (above) for the reviewer flow. To run from a container, rebuild from this checkout (`nix build .#oci`) and load into Docker:
 
 ```bash
-sudo nvidia-ctk runtime configure --runtime=docker
-sudo tee /etc/docker/daemon.json <<'EOF'
-{"runtimes":{"nvidia":{"args":[],"path":"nvidia-container-runtime"}},"default-runtime":"nvidia"}
-EOF
+nix build .#oci
+docker load < result
+docker run -d --name vllm-server --gpus all --privileged \
+  -e NVIDIA_DRIVER_CAPABILITIES=all \
+  -v "$PWD:/workspace" -p 8000:8000 \
+  deterministic-serving-runtime:dev \
+  --manifest /workspace/experiments/e2e-audit/scripts/smoke.manifest.json \
+  --skip-boot-validation
+```
+
+The NVIDIA Container Toolkit must be installed and configured as Docker's default runtime:
+
+```bash
+sudo nvidia-ctk runtime configure --runtime=docker --set-as-default
 sudo systemctl restart docker
 ```
 
-### Start the server
-
-```bash
-docker run -d --name vllm-server \
-  --gpus all --privileged \
-  -e NVIDIA_DRIVER_CAPABILITIES=all \
-  -e VLLM_BATCH_INVARIANT=1 \
-  -e CUBLAS_WORKSPACE_CONFIG=:4096:8 \
-  -e HOME=/tmp \
-  -p 8000:8000 \
-  ghcr.io/derpyplops/deterministic-serving-runtime:latest \
-  python3 -m vllm.entrypoints.openai.api_server \
-    --model Qwen/Qwen3-1.7B \
-    --host 0.0.0.0 --port 8000 --seed 42 \
-    --enforce-eager --attention-backend TRITON_ATTN \
-    --max-model-len 4096
-```
-
-### Notes
-- Replace `Qwen/Qwen3-1.7B` with any supported model
-- Set `-e HF_TOKEN=<token>` for gated models
-- `--privileged` is required on Lambda Cloud GH200 instances
-- `NVIDIA_DRIVER_CAPABILITIES=all` triggers driver lib injection
-- Podman 3.x doesn't work — use Docker
-
-### Troubleshooting
+Troubleshooting:
 
 | Symptom | Fix |
 |---------|-----|
 | `Failed to infer device type` | Add `--privileged -e NVIDIA_DRIVER_CAPABILITIES=all` |
 | `No CUDA GPUs are available` | Add `--privileged` |
 | `Can't initialize NVML` | Set `"default-runtime": "nvidia"` in daemon.json |
-| `Failed to find C compiler` | Container must include gcc (current image does) |
 | `GLIBC_2.38 not found` | Don't set `LD_LIBRARY_PATH` to host system paths |
 
 ## Building from Source
