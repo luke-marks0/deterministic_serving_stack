@@ -7,6 +7,7 @@ from pkg.common.contracts import ValidationError, validate_with_schema
 GRAPH_SCHEMA = "prover_graph.v1.schema.json"
 REPLAY_REQUEST_SCHEMA = "replay_request.v1.schema.json"
 REPLAY_EVIDENCE_SCHEMA = "replay_evidence.v1.schema.json"
+TRANSCRIPT_ENTRY_SCHEMA = "verifier_transcript_entry.v1.schema.json"
 
 
 def _minimal_graph() -> dict:
@@ -269,6 +270,63 @@ class TestReplayEvidenceSchema(unittest.TestCase):
         ev = _minimal_replay_evidence()
         ev["errors"] = ["something went wrong"]
         validate_with_schema(REPLAY_EVIDENCE_SCHEMA, ev)
+
+
+def _minimal_transcript_entry() -> dict:
+    return {
+        "seq": 1,
+        "direction": "sent",
+        "endpoint": "/graph",
+        "timestamp": "2026-05-04T12:00:00Z",
+        "payload_digest": "sha256:" + "0" * 64,
+    }
+
+
+class TestTranscriptEntrySchema(unittest.TestCase):
+    def test_minimal_entry_validates(self) -> None:
+        validate_with_schema(TRANSCRIPT_ENTRY_SCHEMA, _minimal_transcript_entry())
+
+    def test_with_status_code_and_payload_path_validates(self) -> None:
+        entry = _minimal_transcript_entry()
+        entry["status_code"] = 200
+        entry["payload_path"] = "graph/seq-1.json"
+        validate_with_schema(TRANSCRIPT_ENTRY_SCHEMA, entry)
+
+    def test_entry_rejects_unknown_field(self) -> None:
+        bad = _minimal_transcript_entry()
+        bad["spurious"] = 1
+        with self.assertRaises(ValidationError):
+            validate_with_schema(TRANSCRIPT_ENTRY_SCHEMA, bad)
+
+    def test_payload_digest_must_be_sha256_prefixed(self) -> None:
+        bad = _minimal_transcript_entry()
+        bad["payload_digest"] = "deadbeef"
+        with self.assertRaises(ValidationError):
+            validate_with_schema(TRANSCRIPT_ENTRY_SCHEMA, bad)
+
+    def test_direction_must_be_sent_or_received(self) -> None:
+        bad = _minimal_transcript_entry()
+        bad["direction"] = "internal"
+        with self.assertRaises(ValidationError):
+            validate_with_schema(TRANSCRIPT_ENTRY_SCHEMA, bad)
+
+    def test_seq_must_be_int(self) -> None:
+        bad = _minimal_transcript_entry()
+        bad["seq"] = "1"
+        with self.assertRaises(ValidationError):
+            validate_with_schema(TRANSCRIPT_ENTRY_SCHEMA, bad)
+
+    def test_seq_must_be_non_negative(self) -> None:
+        bad = _minimal_transcript_entry()
+        bad["seq"] = -1
+        with self.assertRaises(ValidationError):
+            validate_with_schema(TRANSCRIPT_ENTRY_SCHEMA, bad)
+
+    def test_entry_requires_endpoint(self) -> None:
+        bad = _minimal_transcript_entry()
+        del bad["endpoint"]
+        with self.assertRaises(ValidationError):
+            validate_with_schema(TRANSCRIPT_ENTRY_SCHEMA, bad)
 
 
 if __name__ == "__main__":
