@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from pkg.proverdet.verdict import SignalResult, replay_correctness
+from pkg.proverdet.verdict import SignalResult, compute_budget, replay_correctness
 
 
 def _entry(
@@ -54,6 +54,59 @@ class TestReplayCorrectness(unittest.TestCase):
         entries = [_entry(1, direction="sent", endpoint="/graph")]
         result = replay_correctness(entries)
         self.assertTrue(result.passed)
+
+
+class TestComputeBudget(unittest.TestCase):
+    def _summaries(
+        self, *, claimed: int, observed: int, replay_id: str = "r-1"
+    ) -> list[dict[str, object]]:
+        return [
+            {"kind": "graph", "claimed_flops_total": claimed, "task_count": 1},
+            {
+                "kind": "replay_evidence",
+                "replay_id": replay_id,
+                "observed_flops": observed,
+                "rounds": 1,
+                "matmul_dim": 8,
+            },
+        ]
+
+    def test_observed_below_claimed_passes(self) -> None:
+        s = self._summaries(claimed=1000, observed=500)
+        result = compute_budget(s, tolerance=0.10)
+        self.assertTrue(result.passed)
+        self.assertEqual(result.reasons, [])
+
+    def test_observed_well_above_claimed_fails(self) -> None:
+        s = self._summaries(claimed=1000, observed=2000)
+        result = compute_budget(s, tolerance=0.10)
+        self.assertFalse(result.passed)
+        # Reason should mention the gap.
+        self.assertTrue(any("compute" in r.lower() or "flop" in r.lower() for r in result.reasons))
+
+    def test_observed_equal_to_tolerance_passes(self) -> None:
+        # Predicate uses `>`, so equality at the boundary passes.
+        s = self._summaries(claimed=1000, observed=1100)  # 1.10 * 1000
+        result = compute_budget(s, tolerance=0.10)
+        self.assertTrue(result.passed, result.reasons)
+
+    def test_observed_one_above_tolerance_fails(self) -> None:
+        s = self._summaries(claimed=1000, observed=1101)
+        result = compute_budget(s, tolerance=0.10)
+        self.assertFalse(result.passed)
+
+    def test_no_graph_or_evidence_passes(self) -> None:
+        # Nothing to check; compute_budget returns passed=True. Phase 8.3
+        # combiner can flip the final verdict to "unknown" on thin input.
+        result = compute_budget([], tolerance=0.10)
+        self.assertTrue(result.passed)
+
+    def test_zero_claimed_flops_with_observed_fails(self) -> None:
+        # If the graph claimed nothing but the prover did real work, that
+        # IS the cheating signature (any positive observed beats 1.10 * 0).
+        s = self._summaries(claimed=0, observed=1)
+        result = compute_budget(s, tolerance=0.10)
+        self.assertFalse(result.passed)
 
 
 if __name__ == "__main__":

@@ -92,6 +92,7 @@ class VerifierScheduler:
         replay_period_ms: int = 2000,
         clock: Clock | None = None,
         backend: FreivaldsBackend | None = None,
+        summaries_path: str | None = None,
     ) -> None:
         self.client = client
         self.transcript = transcript
@@ -104,12 +105,31 @@ class VerifierScheduler:
         # received pow attestation. Stdlib is enough on CPU; tests inject
         # the same.
         self.backend: FreivaldsBackend = backend or StdlibBackend()
+        # Sidecar of pre-computed signal data (claimed_flops per graph,
+        # observed_flops per replay evidence). Phase 8.2's compute_budget
+        # signal reads this — the transcript only stores payload digests.
+        # Defaults to <transcript_dir>/summaries.jsonl.
+        from pathlib import Path
+
+        self._summaries_path = Path(
+            summaries_path
+            if summaries_path is not None
+            else transcript.path.parent / "summaries.jsonl"
+        )
+        self._summaries_path.parent.mkdir(parents=True, exist_ok=True)
+        self._summaries_path.write_text("", encoding="utf-8")
+        self._summaries_lock = threading.Lock()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._next_graph_due = 0
         self._next_replay_due = 0
         self._tick = 0
         self._replay_counter = 0
+
+    def _record_summary(self, summary: dict[str, object]) -> None:
+        line = canonical_json_text(summary)
+        with self._summaries_lock, self._summaries_path.open("a", encoding="utf-8") as f:
+            f.write(line)
 
     def _tick_once(self) -> None:
         if self._tick * self.tick_ms >= self._next_graph_due:
@@ -170,6 +190,24 @@ class VerifierScheduler:
         body_bytes = canonical_json_text(body).encode("utf-8")
         self._record_received("/graph", body_bytes, status)
 
+        # Sidecar summary: total claimed_flops + task count, for Phase 8.2.
+        if status == 200:
+            tasks = body.get("tasks", [])
+            if isinstance(tasks, list):
+                claimed_total = 0
+                for t in tasks:
+                    if isinstance(t, dict):
+                        claim = t.get("claimed_flops", 0)
+                        if isinstance(claim, int):
+                            claimed_total += claim
+                self._record_summary(
+                    {
+                        "kind": "graph",
+                        "claimed_flops_total": claimed_total,
+                        "task_count": len(tasks),
+                    }
+                )
+
     def _do_replay(self) -> None:
         self._replay_counter += 1
         replay_id = f"r-{self._replay_counter:06d}-{self._rng.getrandbits(32):08x}"
@@ -223,6 +261,21 @@ class VerifierScheduler:
             f"/replay/verdict/{ev.replay_id}",
             verdict_bytes,
             200 if verdict.passed else 422,
+        )
+
+        # Sidecar summary: derived observed FLOPs from pow_stream entries
+        # for Phase 8.2's compute_budget signal. observed = sum(2*dim^3*rounds).
+        observed = 0
+        for entry in ev.pow_stream:
+            observed += 2 * (entry.matmul_dim**3) * entry.rounds
+        self._record_summary(
+            {
+                "kind": "replay_evidence",
+                "replay_id": ev.replay_id,
+                "observed_flops": observed,
+                "rounds": len(ev.pow_stream),
+                "matmul_dim": (ev.pow_stream[0].matmul_dim if ev.pow_stream else 0),
+            }
         )
 
 
