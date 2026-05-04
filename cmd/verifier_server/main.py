@@ -15,6 +15,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import signal
@@ -52,6 +53,14 @@ class VerifierState:
         self._traffic_seq = 0
         self._traffic_lock = threading.Lock()
 
+        # Single concatenated traffic file + running sha256.
+        self.traffic_path = out_dir / "traffic.bin"
+        self.traffic_digest_path = out_dir / "traffic.digest"
+        self.traffic_path.write_bytes(b"")  # truncate
+        self._hasher = hashlib.sha256()
+        self._traffic_size = 0
+        self._finalized: dict[str, object] | None = None  # cached on first finalize
+
         # Scheduler is started by main() after the prover URL is known
         # reachable. Tests with autostart_scheduler=False can drive
         # `run_for_ticks` from the test thread instead.
@@ -68,6 +77,35 @@ class VerifierState:
         with self._traffic_lock:
             self._traffic_seq += 1
             return self._traffic_seq
+
+    def append_traffic(self, data: bytes) -> int:
+        """Append bytes to traffic.bin and update running hash.
+
+        Returns the seq for the appended chunk. Raises RuntimeError if
+        the stream has already been finalized.
+        """
+        with self._traffic_lock:
+            if self._finalized is not None:
+                raise RuntimeError("traffic stream already finalized")
+            self._traffic_seq += 1
+            with self.traffic_path.open("ab") as f:
+                f.write(data)
+            self._hasher.update(data)
+            self._traffic_size += len(data)
+            return self._traffic_seq
+
+    def finalize_traffic(self) -> dict[str, object]:
+        """Idempotent: return the cached digest+size on second call."""
+        with self._traffic_lock:
+            if self._finalized is not None:
+                return self._finalized
+            digest = "sha256:" + self._hasher.hexdigest()
+            self.traffic_digest_path.write_text(digest + "\n", encoding="utf-8")
+            self._finalized = {
+                "digest": digest,
+                "size_bytes": self._traffic_size,
+            }
+            return self._finalized
 
 
 class VerifierHandler(BaseHTTPRequestHandler):
@@ -101,24 +139,43 @@ class VerifierHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         if self.path == "/traffic":
             return self._handle_post_traffic()
+        if self.path == "/traffic/finalize":
+            return self._handle_post_traffic_finalize()
         return self._send_json(404, {"error": "not found"})
 
     def _handle_post_traffic(self) -> None:
         if self.state is None:
             return self._send_json(500, {"error": "verifier state not initialized"})
         body = self._read_body()
-        seq = self.state.next_traffic_seq()
-        path = self.state.out_dir / f"traffic-{seq:06d}.bin"
-        path.write_bytes(body)
-        # Use a relative path in the transcript so the file is reproducible
-        # across machines.
+        try:
+            seq = self.state.append_traffic(body)
+        except RuntimeError as exc:
+            return self._send_json(409, {"error": str(exc)})
+        # Record only the digest in the transcript (full bytes live in
+        # traffic.bin). payload_path points at the consolidated file.
         self.state.transcript.record(
             direction="received",
             endpoint="/traffic",
             payload=body,
-            payload_path=path.name,
+            payload_path=self.state.traffic_path.name,
         )
         return self._send_json(200, {"received_bytes": len(body), "seq": seq})
+
+    def _handle_post_traffic_finalize(self) -> None:
+        if self.state is None:
+            return self._send_json(500, {"error": "verifier state not initialized"})
+        result = self.state.finalize_traffic()
+        # Record the finalize event in the transcript. payload is the
+        # digest itself so the verdict engine can find it without a
+        # separate file fetch.
+        digest = str(result["digest"])
+        self.state.transcript.record(
+            direction="received",
+            endpoint="/traffic/finalize",
+            payload=digest.encode("utf-8"),
+            payload_path=self.state.traffic_digest_path.name,
+        )
+        return self._send_json(200, dict(result))
 
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):

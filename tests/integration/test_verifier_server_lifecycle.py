@@ -99,11 +99,10 @@ class TestTrafficIngest(_VerifierFixture):
         )
         self.assertEqual(status, 200)
 
-        # Find a traffic-* file containing the payload.
         out_dir = Path(self.tmp.name)  # type: ignore[arg-type]
-        traffic_files = list(out_dir.glob("traffic-*.bin"))
-        self.assertEqual(len(traffic_files), 1)
-        self.assertEqual(traffic_files[0].read_bytes(), payload)
+        bin_path = out_dir / "traffic.bin"
+        self.assertTrue(bin_path.exists())
+        self.assertEqual(bin_path.read_bytes(), payload)
 
         entries = self._read_transcript_lines()
         traffic_entries = [e for e in entries if e["endpoint"] == "/traffic"]
