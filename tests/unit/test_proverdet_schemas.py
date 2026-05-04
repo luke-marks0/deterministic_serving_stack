@@ -5,6 +5,8 @@ import unittest
 from pkg.common.contracts import ValidationError, validate_with_schema
 
 GRAPH_SCHEMA = "prover_graph.v1.schema.json"
+REPLAY_REQUEST_SCHEMA = "replay_request.v1.schema.json"
+REPLAY_EVIDENCE_SCHEMA = "replay_evidence.v1.schema.json"
 
 
 def _minimal_graph() -> dict:
@@ -113,6 +115,160 @@ class TestGraphSchema(unittest.TestCase):
         graph["tasks"] = [bad_task]
         with self.assertRaises(ValidationError):
             validate_with_schema(GRAPH_SCHEMA, graph)
+
+
+def _minimal_replay_request() -> dict:
+    return {
+        "replay_id": "r-1",
+        "pod_id": "pod-a",
+        "target": {"kind": "task", "task_id": "task-0"},
+        "erasure": {
+            "challenge_seed": "deadbeef",
+            "deadline_ms": 1000,
+            "rounds": 4,
+        },
+        "proof_of_work": {
+            "matmul_dim": 64,
+            "dtype": "bf16",
+            "rounds": 3,
+            "report_every_ms": 100,
+        },
+        "auxiliary": [],
+    }
+
+
+class TestReplayRequestSchema(unittest.TestCase):
+    def test_minimal_request_validates(self) -> None:
+        validate_with_schema(REPLAY_REQUEST_SCHEMA, _minimal_replay_request())
+
+    def test_artifact_target_validates(self) -> None:
+        req = _minimal_replay_request()
+        req["target"] = {"kind": "artifact", "artifact_id": "art-0"}
+        validate_with_schema(REPLAY_REQUEST_SCHEMA, req)
+
+    def test_request_rejects_unknown_field(self) -> None:
+        bad = _minimal_replay_request()
+        bad["spurious"] = 1
+        with self.assertRaises(ValidationError):
+            validate_with_schema(REPLAY_REQUEST_SCHEMA, bad)
+
+    def test_request_requires_pod_id(self) -> None:
+        bad = _minimal_replay_request()
+        del bad["pod_id"]
+        with self.assertRaises(ValidationError):
+            validate_with_schema(REPLAY_REQUEST_SCHEMA, bad)
+
+    def test_request_rejects_bad_dtype(self) -> None:
+        bad = _minimal_replay_request()
+        bad["proof_of_work"]["dtype"] = "fp64"
+        with self.assertRaises(ValidationError):
+            validate_with_schema(REPLAY_REQUEST_SCHEMA, bad)
+
+    def test_request_rejects_unknown_target_kind(self) -> None:
+        bad = _minimal_replay_request()
+        bad["target"] = {"kind": "task_or_artifact", "task_id": "task-0"}
+        with self.assertRaises(ValidationError):
+            validate_with_schema(REPLAY_REQUEST_SCHEMA, bad)
+
+    def test_artifact_target_requires_artifact_id(self) -> None:
+        bad = _minimal_replay_request()
+        bad["target"] = {"kind": "artifact"}
+        with self.assertRaises(ValidationError):
+            validate_with_schema(REPLAY_REQUEST_SCHEMA, bad)
+
+    def test_task_target_requires_task_id(self) -> None:
+        bad = _minimal_replay_request()
+        bad["target"] = {"kind": "task"}
+        with self.assertRaises(ValidationError):
+            validate_with_schema(REPLAY_REQUEST_SCHEMA, bad)
+
+    def test_erasure_rounds_must_be_int(self) -> None:
+        bad = _minimal_replay_request()
+        bad["erasure"]["rounds"] = "4"
+        with self.assertRaises(ValidationError):
+            validate_with_schema(REPLAY_REQUEST_SCHEMA, bad)
+
+    def test_pow_rounds_must_be_positive(self) -> None:
+        bad = _minimal_replay_request()
+        bad["proof_of_work"]["rounds"] = 0
+        with self.assertRaises(ValidationError):
+            validate_with_schema(REPLAY_REQUEST_SCHEMA, bad)
+
+
+def _minimal_replay_evidence() -> dict:
+    return {
+        "replay_id": "r-1",
+        "produced_at": "2026-05-04T12:00:00Z",
+        "output": {
+            "commitment": "sha256:" + "0" * 64,
+            "bytes_b64": "c3R1Yi1vdXRwdXQ=",
+        },
+        "erasure_evidence": {
+            "rounds": 4,
+            "passed": 4,
+            "log_path": "erasure-r-1.jsonl",
+        },
+        "pow_stream": [],
+    }
+
+
+def _pow_entry() -> dict:
+    return {
+        "t_ms": 100,
+        "freivalds_attestation_id": "att-0",
+        "matmul_dim": 64,
+        "rounds": 3,
+        "dtype": "bf16",
+    }
+
+
+class TestReplayEvidenceSchema(unittest.TestCase):
+    def test_minimal_evidence_validates(self) -> None:
+        validate_with_schema(REPLAY_EVIDENCE_SCHEMA, _minimal_replay_evidence())
+
+    def test_with_pow_stream_validates(self) -> None:
+        ev = _minimal_replay_evidence()
+        ev["pow_stream"] = [_pow_entry(), _pow_entry()]
+        validate_with_schema(REPLAY_EVIDENCE_SCHEMA, ev)
+
+    def test_evidence_rejects_unknown_field(self) -> None:
+        bad = _minimal_replay_evidence()
+        bad["spurious"] = 1
+        with self.assertRaises(ValidationError):
+            validate_with_schema(REPLAY_EVIDENCE_SCHEMA, bad)
+
+    def test_output_commitment_must_be_sha256(self) -> None:
+        bad = _minimal_replay_evidence()
+        bad["output"]["commitment"] = "not-a-digest"
+        with self.assertRaises(ValidationError):
+            validate_with_schema(REPLAY_EVIDENCE_SCHEMA, bad)
+
+    def test_evidence_requires_replay_id(self) -> None:
+        bad = _minimal_replay_evidence()
+        del bad["replay_id"]
+        with self.assertRaises(ValidationError):
+            validate_with_schema(REPLAY_EVIDENCE_SCHEMA, bad)
+
+    def test_pow_entry_rejects_string_dim(self) -> None:
+        bad = _minimal_replay_evidence()
+        entry = _pow_entry()
+        entry["matmul_dim"] = "64"
+        bad["pow_stream"] = [entry]
+        with self.assertRaises(ValidationError):
+            validate_with_schema(REPLAY_EVIDENCE_SCHEMA, bad)
+
+    def test_erasure_passed_cannot_exceed_rounds(self) -> None:
+        # Schema cannot easily enforce the cross-field rule, but it MUST
+        # at least require both as ints with a min of 0.
+        bad = _minimal_replay_evidence()
+        bad["erasure_evidence"]["passed"] = -1
+        with self.assertRaises(ValidationError):
+            validate_with_schema(REPLAY_EVIDENCE_SCHEMA, bad)
+
+    def test_evidence_with_optional_errors(self) -> None:
+        ev = _minimal_replay_evidence()
+        ev["errors"] = ["something went wrong"]
+        validate_with_schema(REPLAY_EVIDENCE_SCHEMA, ev)
 
 
 if __name__ == "__main__":
