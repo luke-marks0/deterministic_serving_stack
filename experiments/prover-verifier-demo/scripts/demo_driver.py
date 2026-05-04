@@ -30,6 +30,7 @@ import argparse
 import json
 import os
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -138,15 +139,22 @@ def _format_transcript_line(line: str) -> str | None:
     status = e.get("status_code")
     arrow = "verifier → prover" if direction == "sent" else "prover → verifier"
     if endpoint.startswith("/replay/verdict/"):
+        # The /replay/verdict line only appears on the receiving side; skip
+        # the (non-existent) sent half. `status==200` ↔ Freivalds + erasure
+        # both passed.
+        if direction != "received":
+            return None
         replay_id = endpoint[len("/replay/verdict/") :]
-        verdict = "pass" if status == 200 else "fail"
-        return f"verifier verified replay {replay_id}: {verdict}"
+        outcome = "pass" if status == 200 else "fail"
+        return f"verifier verified replay {replay_id}: {outcome}"
     if endpoint == "/graph":
         return f"{arrow}: GET /graph" + (f" → {status}" if status else "")
     if endpoint == "/replay":
         return f"{arrow}: POST /replay" + (f" → {status}" if status else "")
     if endpoint == "/traffic":
-        return f"{arrow}: POST /traffic" + (f" → {status}" if status else "")
+        # Skip per-frame chatter — the tailer prints one /traffic line per
+        # frame otherwise, drowning out the more interesting events.
+        return None
     if endpoint == "/traffic/finalize":
         return f"{arrow}: POST /traffic/finalize → {status}"
     return None
@@ -183,34 +191,33 @@ def _tail_transcript(transcript_path: Path, *, started_at: float, deadline: floa
 # --------------- server lifecycle (local mode) --------------------------
 
 
+def _pick_free_port() -> int:
+    """Bind to (127.0.0.1, 0), grab the assigned port, close. There's a
+    small TOCTOU window between close and the subprocess re-binding the
+    same port, but the OS won't rapidly reuse a freshly-released ephemeral
+    port — good enough for a single-host demo, and lets us know both
+    URLs up front so the verifier scheduler can run immediately."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
 def _spawn_servers(
     prover_dir: Path, verifier_dir: Path, *, log_dir: Path
 ) -> tuple[subprocess.Popen[bytes], subprocess.Popen[bytes], int, int]:
+    """Spawn prover + verifier with cross-URLs already known.
+
+    Pre-picks both ports so we can pass each side the other's URL at
+    launch time (verifier needs `--prover-base-url` for its scheduler;
+    prover needs `--verifier-url` for its traffic publisher). With both
+    URLs known, the verifier scheduler runs by default and the
+    transcript narration recovers `/graph` + `/replay` events.
+    """
+    verifier_port = _pick_free_port()
+    prover_port = _pick_free_port()
     verifier_port_file = verifier_dir / "port"
     prover_port_file = prover_dir / "port"
-    verifier_log = open(log_dir / "verifier.log", "wb")  # noqa: SIM115
-    verifier = subprocess.Popen(
-        [
-            sys.executable,
-            "cmd/verifier_server/main.py",
-            "--host",
-            "127.0.0.1",
-            "--port",
-            "0",
-            "--port-file",
-            str(verifier_port_file),
-            "--out-dir",
-            str(verifier_dir),
-            "--prover-base-url",
-            "http://127.0.0.1:1",  # patched after prover binds (no-scheduler mode)
-            "--no-scheduler",
-        ],
-        stdout=verifier_log,
-        stderr=verifier_log,
-        cwd=str(REPO_ROOT),
-        env=sandbox_env(),
-    )
-    verifier_port = read_bound_port(verifier_port_file, timeout_s=15.0)
 
     prover_log = open(log_dir / "prover.log", "wb")  # noqa: SIM115
     prover = subprocess.Popen(
@@ -220,7 +227,7 @@ def _spawn_servers(
             "--host",
             "127.0.0.1",
             "--port",
-            "0",
+            str(prover_port),
             "--port-file",
             str(prover_port_file),
             "--run-id",
@@ -235,7 +242,37 @@ def _spawn_servers(
         cwd=str(REPO_ROOT),
         env=sandbox_env(),
     )
-    prover_port = read_bound_port(prover_port_file, timeout_s=15.0)
+    # Wait for the prover to bind before starting the verifier — the
+    # verifier's scheduler hits /graph immediately and we want it to find
+    # the prover up rather than logging spurious connection-refused errors.
+    read_bound_port(prover_port_file, timeout_s=15.0)
+
+    verifier_log = open(log_dir / "verifier.log", "wb")  # noqa: SIM115
+    verifier = subprocess.Popen(
+        [
+            sys.executable,
+            "cmd/verifier_server/main.py",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(verifier_port),
+            "--port-file",
+            str(verifier_port_file),
+            "--out-dir",
+            str(verifier_dir),
+            "--prover-base-url",
+            f"http://127.0.0.1:{prover_port}",
+            "--graph-period-ms",
+            "500",
+            "--replay-period-ms",
+            "1000",
+        ],
+        stdout=verifier_log,
+        stderr=verifier_log,
+        cwd=str(REPO_ROOT),
+        env=sandbox_env(),
+    )
+    read_bound_port(verifier_port_file, timeout_s=15.0)
     return verifier, prover, verifier_port, prover_port
 
 

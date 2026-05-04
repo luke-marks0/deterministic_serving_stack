@@ -136,21 +136,45 @@ viewer](../viewer.html) (`file://` — no server needed).
   benign drift; an adversary that stays under 10 % over-budget evades
   the compute signal. The full sweep would tune this per-workload.
 
+## Reproducing on two machines
+
+The demo's `--remote` mode skips the local spawn and trusts that prover
+and verifier are already running on whatever hosts you point it at:
+
+```bash
+# On the prover host (e.g. Lambda gpu_1x_h100):
+python3 cmd/prover/main.py --host 0.0.0.0 --port 8000 \
+    --run-id prod-001 --out-dir /tmp/prover \
+    --verifier-url http://10.0.0.2:9000
+
+# On the verifier host:
+python3 cmd/verifier_server/main.py --host 0.0.0.0 --port 9000 \
+    --out-dir /tmp/verifier \
+    --prover-base-url http://10.0.0.1:8000
+
+# On either machine (or a third):
+PROVER_HOST=10.0.0.1 PROVER_PORT=8000 \
+VERIFIER_HOST=10.0.0.2 VERIFIER_PORT=9000 \
+  ./experiments/prover-verifier-demo/demo.sh --remote
+```
+
+The full provisioning + networking recipe (Lambda Cloud, vast.ai,
+Digital Ocean GPU droplets, key setup, port allow-lists) is in the
+"Cloud GPU provisioning" section of
+[docs/plans/prover-verifier-demo.md](../../../docs/plans/prover-verifier-demo.md).
+
 ## Next steps
 
 1. Replace the placeholder graph with the real task graph from
    `experiments/task-graph-prototype/` so the compute and bandwidth
    baselines come from declared per-task budgets, not workload self-report.
-2. Cross-machine demo on Lambda / vast.ai (the `--remote` mode in
-   `demo.sh` lands in Phase 10; the Cloud GPU section of the plan has
-   the provisioning recipe).
-3. End-to-end encryption (TLS or Noise) on `/replay` and `/traffic`
+2. End-to-end encryption (TLS or Noise) on `/replay` and `/traffic`
    with verifier-pinned certs.
-4. Adversarial robustness sweeps: how many gradient steps can hide under
+3. Adversarial robustness sweeps: how many gradient steps can hide under
    `tolerance`? Tune the tolerance against benign timing variance from a
    real workload.
 
 ---
 
 *Reproduce locally: `cd experiments/prover-verifier-demo && ./demo.sh
---quick` (Task 10.1 lands the script).*
+--quick` exits 0 with `ALL PASS` (~15 s wallclock).*
