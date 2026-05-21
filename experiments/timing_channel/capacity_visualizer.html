@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Timing Covert Channel Capacity Visualizer</title>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --border: #30363d;
+    --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff;
+    --danger: #f85149; --warn: #d29922; --ok: #3fb950;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.55;
+    padding: 24px; max-width: 1100px; margin: 0 auto;
+  }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  h2 { font-size: 15px; color: var(--accent); margin: 22px 0 10px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+  h3 { font-size: 13px; color: var(--muted); margin: 14px 0 6px; text-transform: uppercase; letter-spacing: 0.04em; }
+  p, li { font-size: 14px; color: var(--text); margin-bottom: 8px; }
+  .post p, .post li { color: #c9d1d9; }
+  .post { margin-bottom: 18px; }
+  .post code, code { font-family: 'SF Mono', 'Fira Code', Consolas, monospace; background: var(--surface); padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
+  .grid { display: grid; grid-template-columns: 360px 1fr; gap: 18px; }
+  @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+  .field { margin-bottom: 11px; }
+  .field label { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
+  .field label span.val { color: var(--text); font-family: 'SF Mono', monospace; }
+  .field .hint { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  input[type="range"] { width: 100%; accent-color: var(--accent); }
+  input[type="number"], select {
+    width: 100%; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 4px; color: var(--text); padding: 5px 7px;
+    font-size: 13px; font-family: 'SF Mono', monospace;
+  }
+  .results {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px;
+  }
+  .result-box {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 4px; padding: 8px 10px;
+  }
+  .result-box .label { font-size: 11px; color: var(--muted); }
+  .result-box .value { font-size: 18px; font-family: 'SF Mono', monospace; color: var(--text); }
+  .result-box .value.big { font-size: 22px; color: var(--accent); }
+  .result-box.span2 { grid-column: span 2; }
+  canvas { display: block; width: 100%; height: 280px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; }
+  details { margin-top: 6px; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+  details[open] summary { color: var(--accent); }
+  button {
+    background: var(--accent); border: none; color: #0d1117; font-weight: 600;
+    padding: 7px 14px; border-radius: 5px; cursor: pointer; font-size: 13px;
+  }
+  button.ghost { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+  button.preset { font-size: 11px; padding: 4px 8px; font-weight: 400; }
+  button.preset.active { border-color: var(--accent); color: var(--accent); }
+  .pill { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 11px; }
+  .pill.ok { background: rgba(63,185,80,0.15); color: var(--ok); }
+  .pill.warn { background: rgba(210,153,34,0.15); color: var(--warn); }
+  .pill.danger { background: rgba(248,81,73,0.15); color: var(--danger); }
+  .row { display: flex; gap: 10px; }
+  .row .field { flex: 1; }
+  ul { padding-left: 20px; }
+  hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+</style>
+</head>
+<body>
+
+<h1>Timing covert-channel capacity visualizer</h1>
+<p style="color: var(--muted); font-size: 13px;">
+  Drag the knobs to see how attacker-side modulation, network jitter, and bucket-pacing defenses change the bps an exfiltrator can extract from a token-streaming endpoint.
+</p>
+
+<hr>
+
+<div class="post">
+  <h2>Why model this</h2>
+  <p>
+    A streaming LLM endpoint emits tokens with measurable inter-arrival times. An attacker who controls (or biases) generation can encode bits into those gaps; an outside observer who sees the stream timestamps can decode them. This is a classic timing covert channel, and our experiments in this directory measure its raw capacity (~150 bps undefended at 16-PAM, 50 packets/s) and how a bucket pacer collapses it.
+  </p>
+  <p>
+    The point of this page is to make the <em>knobs</em> explorable. Two questions matter for the IEEE S&amp;P paper:
+  </p>
+  <ul>
+    <li>Given a defense (bucket pacer at <code>B</code> ms), what's the residual capacity an attacker can still achieve, and which knob trades against which?</li>
+    <li>Where does the &ldquo;200 bps&rdquo; number from our prior experiments come from, and is it tight or generous? (Spoiler: generous.)</li>
+  </ul>
+
+  <h2>The carrier is the packet, not the token</h2>
+  <p>
+    Subtle but load-bearing. The timing observable is one timestamp per <em>packet</em>. A serving stack that flushes one token per SSE event gives the attacker one symbol per token; a stack that batches <code>k</code> tokens per flush gives the attacker one symbol per <code>k</code> tokens. So <code>bps = packet_rate · bits_per_packet</code>, and <code>tokens_per_packet</code> only changes the <em>per-token</em> framing.
+  </p>
+
+  <h2>Model</h2>
+  <p>The attacker uses M-PAM on inter-packet delays:</p>
+  <ul>
+    <li>Symbol <code>s ∈ {0..M-1}</code> is encoded as a target inter-packet delay <code>d_s = base + s · step</code> (ms).</li>
+    <li>A bucket pacer (if active) holds each packet to the next bucket boundary: emit at <code>⌈t/B⌉·B</code>.</li>
+    <li>Network jitter adds Gaussian noise <code>σ</code> on top.</li>
+    <li>The receiver decodes by nearest-neighbor on observed inter-arrival.</li>
+  </ul>
+  <p>Bucket pacing has two effects: (a) it <em>aliases</em> symbols whose target delays fall in the same bucket — pure information loss — and (b) it raises the effective separation between distinguishable levels.</p>
+
+  <h3>σ is delay-domain noise</h3>
+  <p>The receiver decodes <em>inter-arrival</em> delays. <code>σ</code> here is the std of jitter on the inter-arrival, not on individual timestamps. (If your model has per-timestamp jitter <code>σ_t</code>, the delay-domain σ is roughly <code>σ_t·√2</code>.) Default σ=0.55ms reproduces our undefended SER=0.0625 measurement.</p>
+
+  <h3>Closed form (optimal-decoder upper bound)</h3>
+  <p><strong>The bucket channel is two-mode discrete + Gaussian noise.</strong> When the sender intends to emit at offset <code>Δ_s = base + step·s</code> from the previous packet, and the previous packet was released at a bucket boundary at random phase relative to the bucket grid, the observed inter-arrival is</p>
+  <p style="margin-left: 12px; font-family: 'SF Mono', monospace; font-size: 13px;">
+    Y = q_s·B&nbsp;&nbsp;with prob 1 − p_s<br>
+    Y = (q_s+1)·B&nbsp;&nbsp;with prob p_s
+  </p>
+  <p>where <code>q_s = ⌊Δ_s/B⌋</code> and <code>p_s = (Δ_s mod B)/B</code>. Then Gaussian jitter σ is added on the wire. Capacity is the mutual information of this channel:</p>
+  <p style="margin-left: 12px; font-family: 'SF Mono', monospace; font-size: 13px;">
+    bits_per_packet = (1/M)·Σ_s E_Y|s[log₂(p(Y|s) / p(Y))]<br>
+    bps = effective_rate · bits_per_packet
+  </p>
+  <p>The expectation is taken over the 2-component Gaussian mixture <code>Y|s</code>, computed via 16-point Gauss-Hermite quadrature around each peak. When <code>B = 0</code> the formula reduces to plain M-PAM AWGN.</p>
+  <p><strong>Why the previous models were wrong.</strong> Two earlier attempts in this project's history: (1) the BSC approximation <code>log₂(M)·(1−H_b(SER))</code> is a loose lower bound that gets beaten by MC under moderate noise; (2) the <code>M_eff = ⌊range/B⌋+1</code> discretization is a hard cliff that says capacity = 0 when bucket exceeds modulation range, but the channel never actually closes — even one bit per packet from "did this packet fall in the same bucket as the previous one or the next" survives. Both were caught by the validation suite.</p>
+
+  <h3>Monte-Carlo (naive-decoder estimate)</h3>
+  <p>The MC button simulates a <em>naive</em> receiver — one that doesn't know about pacing and decodes nearest-neighbor against the original <code>(base, step)</code> M-PAM grid, like the harness in <code>bucket_experiment.py</code>. So MC ≤ closed form: the gap between them is the value an attacker would gain from explicit channel modeling.</p>
+
+  <h3>Validation against experiments</h3>
+  <p>Calibrating σ against the undefended case (16-PAM, base=5ms, step=2ms, 50 pps): closed form predicts SER=0.065, MC gives 0.065, observed is 0.062 — clean agreement, all three within MC noise. Under bucket pacing the three diverge: at B=10ms, closed form says 0 (optimal decoder reads the bucket grid), MC says 0.77 (naive decoder is fully aliased), the harness sits at 0.34. The harness number is between because its pacer is a <em>leaky-bucket release</em> (drain queue every <code>B</code> ms) rather than a hard arrival-time quantizer — packets arriving in the same drain interval go out back-to-back instead of all snapping to the next boundary. The visualizer models the hard-quantizer abstraction; treat the harness data as one realization of a softer pacing scheme.</p>
+</div>
+
+<hr>
+
+<div class="grid">
+  <!-- Controls -->
+  <div class="card">
+    <h2 style="margin-top: 0;">Knobs</h2>
+
+    <h3>Attacker</h3>
+    <div class="field">
+      <label>Modulation levels (M) <span class="val" id="M-val">16</span></label>
+      <select id="M">
+        <option value="2">2 (1 bit/sym)</option>
+        <option value="4">4 (2 bits)</option>
+        <option value="8">8 (3 bits)</option>
+        <option value="16" selected>16 (4 bits)</option>
+        <option value="32">32 (5 bits)</option>
+        <option value="64">64 (6 bits)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Base delay (ms) <span class="val" id="base-val">5.0</span></label>
+      <input type="range" id="base" min="0" max="500" step="1" value="5">
+      <div class="hint">Minimum inter-packet gap (delay used by symbol s=0).</div>
+    </div>
+    <div class="field">
+      <label>Step size <span class="val" id="step-val">2.0 ms</span></label>
+      <input type="range" id="step" min="0" max="1000" step="1" value="325">
+      <div class="hint">Log scale: 0.1 ms → 1000 ms. Smaller = harder to distinguish under noise; larger = survives bucket pacing.</div>
+    </div>
+    <div class="field" style="background: rgba(88,166,255,0.06); border: 1px solid var(--border); border-radius: 5px; padding: 8px 10px; margin-top: 10px;">
+      <label style="display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 13px;">
+        <input type="checkbox" id="adaptive">
+        Adaptive attacker (counter the bucket)
+      </label>
+      <div id="adaptive-note" style="display: none; font-size: 12px; color: #c9d1d9; margin-top: 8px; line-height: 1.5;">
+        When the defender's bucket interval exceeds the modulation range, every symbol aliases to the same bucket and the channel collapses. The attacker counters by <em>widening the step past the bucket</em> so adjacent symbols can't share a bucket — at the cost of packet rate. While this toggle is on, step is auto-set to 1.5×B and base to B whenever you move the bucket slider.<br><br>
+        Implied max packet rate at this modulation: <span id="max-rate" style="color: var(--accent); font-family: 'SF Mono', monospace;">—</span>.
+      </div>
+
+    </div>
+
+    <h3>Channel</h3>
+    <div class="field">
+      <label>Packet rate <span class="val" id="rate-val">50 pps</span></label>
+      <input type="range" id="rate" min="0" max="1000" step="1" value="243">
+      <div class="hint">Log scale: 1 pps → 10M pps. Single-stream emission rate; capped at the modulation max.</div>
+    </div>
+    <div class="field">
+      <label>Tokens / packet <span class="val" id="tpp-val">1</span></label>
+      <input type="range" id="tpp" min="0" max="1000" step="1" value="0">
+      <div class="hint">Log scale: 1 (per-token flush) → 10k (extreme batching).</div>
+    </div>
+    <div class="field">
+      <label>Inter-arrival jitter σ <span class="val" id="sigma-val">0.55 ms</span></label>
+      <input type="range" id="sigma" min="0" max="1000" step="1" value="435">
+      <div class="hint">Log scale: 0.01 ms → 100 ms. σ=0.55ms reproduces undefended SER=0.0625.</div>
+      <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px;">
+        <button class="ghost preset" data-sigma="0">0 (ideal)</button>
+        <button class="ghost preset" data-sigma="0.2">LAN</button>
+        <button class="ghost preset" data-sigma="2">Internet</button>
+        <button class="ghost preset" data-sigma="8">WiFi</button>
+        <button class="ghost preset" data-sigma="25">Mobile</button>
+      </div>
+    </div>
+
+    <h3>Defense</h3>
+    <div class="field">
+      <label>Bucket interval B (ms; 0 = off) <span class="val" id="bucket-val">0</span></label>
+      <input type="range" id="bucket" min="0" max="500" step="1" value="0">
+    </div>
+
+    <h3>Monte-Carlo verify</h3>
+    <div class="field">
+      <button id="mc-btn">Run MC (10k packets)</button>
+      <span id="mc-status" style="color: var(--muted); font-size: 12px; margin-left: 8px;"></span>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div>
+    <div class="card">
+      <h2 style="margin-top: 0;">Capacity</h2>
+      <div class="results">
+        <div class="result-box span2">
+          <div class="label">Capacity per stream (optimal decoder, upper bound)</div>
+          <div class="value big" id="r-bps">— bps</div>
+        </div>
+        <div class="result-box span2">
+          <div class="label">Capacity (naive decoder, MC) — click "Run MC" to fill</div>
+          <div class="value" id="r-mc-bps">—</div>
+        </div>
+        <div class="result-box">
+          <div class="label">Raw modulation rate</div>
+          <div class="value" id="r-raw-bps">—</div>
+        </div>
+        <div class="result-box">
+          <div class="label">Bits / packet (optimal)</div>
+          <div class="value" id="r-bpp">—</div>
+        </div>
+        <div class="result-box">
+          <div class="label">Bits / token (optimal)</div>
+          <div class="value" id="r-bpt">—</div>
+        </div>
+        <div class="result-box">
+          <div class="label">SER (optimal decoder)</div>
+          <div class="value" id="r-ser">—</div>
+        </div>
+        <div class="result-box span2">
+          <div class="label">Distinguishable levels (M_eff of M)</div>
+          <div class="value" id="r-meff">—</div>
+        </div>
+      </div>
+
+      <details style="margin-top: 12px;">
+        <summary>Diagnostic</summary>
+        <pre id="diag" style="font-size: 11.5px; color: var(--muted); margin-top: 6px; white-space: pre-wrap;"></pre>
+      </details>
+    </div>
+
+    <div class="card" style="margin-top: 12px;">
+      <h2 style="margin-top: 0;">Symbol delay distributions</h2>
+      <p style="font-size: 12px; color: var(--muted); margin-bottom: 8px;">
+        Per-symbol Gaussians (sender intent + jitter). Vertical lines are bucket boundaries; symbols inside the same bucket-strip alias to the same observation.
+      </p>
+      <canvas id="plot" width="800" height="280"></canvas>
+    </div>
+  </div>
+</div>
+
+<hr>
+<p style="color: var(--muted); font-size: 12px;">
+  Source experiments: <code>bucket_experiment.py</code>, <code>boundary_attack_experiment.py</code>. Capacity model lives entirely in this file.
+</p>
+
+<script>
+"use strict";
+
+// ---------- math primitives ----------
+function erf(x) {
+  // Abramowitz & Stegun 7.1.26
+  const a1 =  0.254829592, a2 = -0.284496736, a3 = 1.421413741;
+  const a4 = -1.453152027, a5 =  1.061405429, p  = 0.3275911;
+  const sign = x < 0 ? -1 : 1;
+  x = Math.abs(x);
+  const t = 1.0 / (1.0 + p * x);
+  const y = 1.0 - ((((a5*t + a4)*t + a3)*t + a2)*t + a1)*t * Math.exp(-x*x);
+  return sign * y;
+}
+function Q(x) { return 0.5 * (1 - erf(x / Math.SQRT2)); }
+function Hb(p) {
+  if (p <= 0 || p >= 1) return 0;
+  return -p*Math.log2(p) - (1-p)*Math.log2(1-p);
+}
+function gaussSample() {
+  // Box-Muller
+  let u1 = 0, u2 = 0;
+  while (u1 === 0) u1 = Math.random();
+  while (u2 === 0) u2 = Math.random();
+  return Math.sqrt(-2*Math.log(u1)) * Math.cos(2*Math.PI*u2);
+}
+
+// 16-point Gauss-Hermite quadrature for ∫ f(t) e^{-t²} dt
+const HG_NODES = [
+  -4.688738939305818, -3.869447904860123, -3.176999161979956, -2.546202157847481,
+  -1.951787990916254, -1.380258539198881, -0.822951449144656, -0.273481046138152,
+   0.273481046138152,  0.822951449144656,  1.380258539198881,  1.951787990916254,
+   2.546202157847481,  3.176999161979956,  3.869447904860123,  4.688738939305818,
+];
+const HG_WEIGHTS = [
+  2.65480747401119e-10, 2.32098084485497e-07, 2.71186007426073e-05, 9.32284008624180e-04,
+  1.28803115863748e-02, 8.38100413749661e-02, 2.80647458528532e-01, 5.07929479016613e-01,
+  5.07929479016613e-01, 2.80647458528532e-01, 8.38100413749661e-02, 1.28803115863748e-02,
+  9.32284008624180e-04, 2.71186007426073e-05, 2.32098084485497e-07, 2.65480747401119e-10,
+];
+const _SQRT_PI = Math.sqrt(Math.PI);
+
+// True optimal-decoder capacity for uniform-input M-PAM AWGN with separation d
+// and noise σ. Used when there's no bucket pacing.
+function mPamAwgnCapacity(M, d, sigma) {
+  if (M <= 1) return 0;
+  if (sigma <= 0) return Math.log2(M);
+  let cond = 0;
+  const twoSigmaSq = 2 * sigma * sigma;
+  for (let x = 0; x < M; x++) {
+    let inner = 0;
+    for (let i = 0; i < HG_NODES.length; i++) {
+      const z = sigma * Math.SQRT2 * HG_NODES[i];
+      let s = 0;
+      for (let xp = 0; xp < M; xp++) {
+        const diff = (x - xp) * d;
+        s += Math.exp(-(diff * diff + 2 * diff * z) / twoSigmaSq);
+      }
+      inner += HG_WEIGHTS[i] * Math.log2(s);
+    }
+    cond += inner / _SQRT_PI;
+  }
+  return Math.max(0, Math.log2(M) - cond / M);
+}
+
+// Bucket-paced channel capacity. Inter-arrival Y given symbol s is a 2-component
+// discrete distribution at q_s·B and (q_s+1)·B with weights 1−p_s and p_s, then
+// Gaussian noise σ. Captures the residual leakage when bucket >> modulation
+// range — the M_eff = ⌊range/B⌋+1 cliff was wrong; even with all symbols in one
+// bucket, the bucket-edge probability p_s carries information.
+function bucketChannelCapacity(M, base, step, B, sigma) {
+  if (M <= 1) return 0;
+  if (B <= 0) return mPamAwgnCapacity(M, step, sigma);
+
+  const sd = new Array(M);
+  for (let s = 0; s < M; s++) {
+    const Delta = base + step * s;
+    const q = Math.floor(Delta / B);
+    const rho = Delta - q * B;
+    sd[s] = { yl: q * B, yh: (q + 1) * B, p: rho / B };
+  }
+
+  if (sigma <= 1e-9) {
+    // Discrete MI: Y is finite-valued
+    const joint = new Map();  // key "s|y" -> prob
+    const py = new Map();
+    for (let s = 0; s < M; s++) {
+      const { yl, yh, p } = sd[s];
+      if (1 - p > 1e-12) {
+        const k = `${s}|${yl}`;
+        joint.set(k, (joint.get(k) || 0) + (1 - p) / M);
+        py.set(yl, (py.get(yl) || 0) + (1 - p) / M);
+      }
+      if (p > 1e-12) {
+        const k = `${s}|${yh}`;
+        joint.set(k, (joint.get(k) || 0) + p / M);
+        py.set(yh, (py.get(yh) || 0) + p / M);
+      }
+    }
+    if (py.size <= 1) return 0;
+    let mi = 0;
+    for (const [k, pst] of joint) {
+      const y = parseFloat(k.split('|')[1]);
+      const pyv = py.get(y);
+      if (pst > 0 && pyv > 0) mi += pst * Math.log2(pst / ((1 / M) * pyv));
+    }
+    return Math.max(0, mi);
+  }
+
+  // Continuous: 16-pt Gauss-Hermite around each component peak
+  const sqrt2pi_sig = sigma * Math.sqrt(2 * Math.PI);
+  function pYS(y, s) {
+    const { yl, yh, p } = sd[s];
+    const a = (y - yl) / sigma;
+    const b = (y - yh) / sigma;
+    return ((1 - p) * Math.exp(-0.5 * a * a) + p * Math.exp(-0.5 * b * b)) / sqrt2pi_sig;
+  }
+
+  let mi = 0;
+  for (let s = 0; s < M; s++) {
+    const { yl, yh, p: p_h } = sd[s];
+    const components = [
+      { mu: yl, w: 1 - p_h },
+      { mu: yh, w: p_h },
+    ];
+    for (const { mu, w: w_comp } of components) {
+      if (w_comp <= 0) continue;
+      let integral = 0;
+      for (let i = 0; i < HG_NODES.length; i++) {
+        const y = mu + sigma * Math.SQRT2 * HG_NODES[i];
+        const ps = pYS(y, s);
+        let pyv = 0;
+        for (let s2 = 0; s2 < M; s2++) pyv += pYS(y, s2);
+        pyv /= M;
+        if (ps > 0 && pyv > 0) integral += HG_WEIGHTS[i] * Math.log2(ps / pyv);
+      }
+      integral /= _SQRT_PI;
+      mi += w_comp * integral;
+    }
+  }
+  mi /= M;
+  return Math.max(0, mi);
+}
+
+// ---------- closed-form capacity ----------
+function capacity({M, base, step, sigma, B, rate}) {
+  const range = step * (M - 1);
+  let M_eff, d_eff;
+  if (B <= 0 || B <= step) {
+    M_eff = M;
+    d_eff = step;
+  } else {
+    M_eff = Math.max(1, Math.min(M, Math.floor(range / B) + 1));
+    d_eff = B;
+  }
+  // Optimal-decoder mutual information through the bucket-paced channel.
+  // For B=0 this collapses to mPamAwgnCapacity(M, step, sigma).
+  const bits_per_packet = bucketChannelCapacity(M, base, step, B, sigma);
+  // Diagnostic SER (informational only; not used in capacity).
+  let ser;
+  if (M_eff <= 1) ser = 0.5;
+  else if (sigma <= 0) ser = 0;
+  else ser = Math.min(0.5, 2 * (M_eff - 1) / M_eff * Q(d_eff / (2 * sigma)));
+
+  // Single-stream rate is bounded by the modulation: each symbol takes
+  // an average of base + step·(M-1)/2 ms to send, so the attacker can't
+  // emit faster than 1000/meanDelay packets per second on one stream.
+  const meanDelay = base + step * (M - 1) / 2;
+  const maxRate = meanDelay > 0 ? 1000 / meanDelay : Infinity;
+  const effectiveRate = Math.min(rate, maxRate);
+  const rateLimited = rate > maxRate * 1.001;
+
+  return {
+    M_eff, d_eff, range, ser,
+    bits_per_packet,
+    maxRate, effectiveRate, rateLimited,
+    bps: effectiveRate * bits_per_packet,
+    raw_bps: effectiveRate * Math.log2(M),
+  };
+}
+
+// ---------- Monte Carlo ----------
+function simulateMC(params, N) {
+  const {M, base, step, sigma, B, rate} = params;
+  const meanDelay = base + step * (M - 1) / 2;
+  const maxRate = meanDelay > 0 ? 1000 / meanDelay : Infinity;
+  const effectiveRate = Math.min(rate, maxRate);
+  return _simulateMC({M, base, step, sigma, B, rate: effectiveRate}, N);
+}
+
+function _simulateMC({M, base, step, sigma, B, rate}, N) {
+  // Naive-decoder simulation: bucket-quantize sender emit times, add
+  // delay-domain Gaussian noise to the inter-arrival, decode nearest-symbol
+  // against the original (base, step) M-PAM grid (same as bucket_experiment.py).
+  // Bits/packet is computed as mutual information of the observed (s, ŝ)
+  // joint distribution, not from SER — under bucket aliasing the errors are
+  // structured, so the BSC formula log2(M)·(1−H_b(SER)) is way too pessimistic.
+  let errors = 0;
+  let lastEmit = 0;
+  let lastBucketed = null;
+  let counted = 0;
+  const phase = B > 0 ? Math.random() * B : 0;
+  const joint = new Array(M);
+  for (let i = 0; i < M; i++) joint[i] = new Array(M).fill(0);
+
+  for (let i = 0; i < N; i++) {
+    const s = (Math.random() * M) | 0;
+    const intended = base + step * s;
+    const emit = lastEmit + intended;
+    const tBucketed = (B > 0)
+      ? Math.ceil((emit + phase) / B) * B - phase
+      : emit;
+
+    if (lastBucketed !== null) {
+      const intendedDelta = tBucketed - lastBucketed;
+      const delta = intendedDelta + sigma * gaussSample();
+      let sHat = Math.round((delta - base) / step);
+      if (sHat < 0) sHat = 0;
+      if (sHat > M - 1) sHat = M - 1;
+      joint[s][sHat]++;
+      if (sHat !== s) errors++;
+      counted++;
+    }
+
+    lastEmit = emit;
+    lastBucketed = tBucketed;
+  }
+  const ser = counted > 0 ? errors / counted : 0;
+
+  // I(S; Ŝ) = Σ p(s,ŝ) log2(p(s,ŝ) / (p(s)·p(ŝ)))
+  const ps = new Array(M).fill(0);
+  const pt = new Array(M).fill(0);
+  for (let s = 0; s < M; s++) {
+    for (let t = 0; t < M; t++) {
+      ps[s] += joint[s][t];
+      pt[t] += joint[s][t];
+    }
+  }
+  let mi = 0;
+  for (let s = 0; s < M; s++) {
+    for (let t = 0; t < M; t++) {
+      const c = joint[s][t];
+      if (c > 0) {
+        const pst = c / counted;
+        const psm = ps[s] / counted;
+        const ptm = pt[t] / counted;
+        mi += pst * Math.log2(pst / (psm * ptm));
+      }
+    }
+  }
+  const bits_per_packet = Math.max(0, mi);
+  return { ser, bits_per_packet, bps: rate * bits_per_packet };
+}
+
+// ---------- plot ----------
+function drawPlot(canvas, params) {
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  const { M, base, step, sigma, B } = params;
+  const range = step * (M - 1);
+  const xMin = Math.max(0, base - 3 * Math.max(sigma, 1));
+  const xMax = base + range + 3 * Math.max(sigma, 1);
+  const span = xMax - xMin;
+  const padL = 40, padR = 12, padT = 12, padB = 28;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const xToPx = (x) => padL + ((x - xMin) / span) * plotW;
+  const yToPx = (y, yMax) => padT + plotH - (y / yMax) * plotH;
+
+  // Compute densities
+  const sigmaEff = Math.max(sigma, 0.05);
+  const samples = 400;
+  const xs = [];
+  for (let i = 0; i < samples; i++) xs.push(xMin + (i / (samples - 1)) * span);
+
+  const peak = 1 / (sigmaEff * Math.sqrt(2 * Math.PI));
+
+  // bucket bands (drawn first, behind everything)
+  if (B > 0) {
+    ctx.save();
+    for (let bx = Math.floor(xMin / B) * B; bx <= xMax; bx += B) {
+      const px = xToPx(bx);
+      ctx.strokeStyle = '#30363d';
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(px, padT);
+      ctx.lineTo(px, padT + plotH);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // axes
+  ctx.strokeStyle = '#30363d';
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.moveTo(padL, padT + plotH);
+  ctx.lineTo(padL + plotW, padT + plotH);
+  ctx.stroke();
+
+  // x ticks
+  ctx.fillStyle = '#8b949e';
+  ctx.font = '11px monospace';
+  ctx.textAlign = 'center';
+  const tickStep = niceTick(span / 8);
+  for (let tx = Math.ceil(xMin / tickStep) * tickStep; tx <= xMax; tx += tickStep) {
+    const px = xToPx(tx);
+    ctx.fillText(tx.toFixed(tickStep < 1 ? 1 : 0), px, padT + plotH + 14);
+  }
+  ctx.textAlign = 'left';
+  ctx.fillText('inter-packet delay (ms)', padL, H - 4);
+
+  // per-symbol PDFs
+  for (let s = 0; s < M; s++) {
+    const mu = base + step * s;
+    // hue cycle
+    const hue = (s * 360 / M) % 360;
+    ctx.strokeStyle = `hsl(${hue}, 70%, 60%)`;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    let started = false;
+    for (let i = 0; i < samples; i++) {
+      const x = xs[i];
+      const z = (x - mu) / sigmaEff;
+      const y = peak * Math.exp(-0.5 * z * z);
+      const px = xToPx(x), py = yToPx(y, peak * 1.05);
+      if (!started) { ctx.moveTo(px, py); started = true; }
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    // symbol marker on x-axis
+    ctx.fillStyle = `hsl(${hue}, 70%, 60%)`;
+    ctx.beginPath();
+    ctx.arc(xToPx(mu), padT + plotH, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function niceTick(raw) {
+  const exp = Math.floor(Math.log10(raw));
+  const base = raw / Math.pow(10, exp);
+  let nice;
+  if (base < 1.5) nice = 1;
+  else if (base < 3) nice = 2;
+  else if (base < 7) nice = 5;
+  else nice = 10;
+  return nice * Math.pow(10, exp);
+}
+
+// ---------- wiring ----------
+const els = {
+  M: document.getElementById('M'),
+  base: document.getElementById('base'),
+  step: document.getElementById('step'),
+  rate: document.getElementById('rate'),
+  tpp: document.getElementById('tpp'),
+  sigma: document.getElementById('sigma'),
+  bucket: document.getElementById('bucket'),
+  adaptive: document.getElementById('adaptive'),
+  mcBtn: document.getElementById('mc-btn'),
+  mcStatus: document.getElementById('mc-status'),
+  canvas: document.getElementById('plot'),
+};
+
+function fmtStep(s) {
+  if (s < 0.1) return s.toFixed(3) + ' ms';
+  if (s < 10)  return s.toFixed(2) + ' ms';
+  return s.toFixed(1) + ' ms';
+}
+
+// Saved base/step slider values from before adaptive mode was toggled on,
+// so we can restore them when it's toggled off.
+let savedBase = null, savedStep = null;
+
+function syncAdaptive() {
+  if (!els.adaptive.checked) return;
+  const B = parseFloat(els.bucket.value);
+  if (B <= 0) return;
+  const desiredStep = B * 1.5;
+  const desiredBase = B;
+  els.step.value = logScaleInv(desiredStep, SCALES.step.logMin, SCALES.step.logMax);
+  els.base.value = Math.min(parseFloat(els.base.max), Math.round(desiredBase));
+}
+
+// Map a [0..1000] slider to a log-scaled value in [10^logMin, 10^logMax].
+function logScale(sliderVal, logMin, logMax) {
+  const t = sliderVal / 1000;
+  return Math.pow(10, logMin + t * (logMax - logMin));
+}
+function logScaleInv(value, logMin, logMax) {
+  const t = (Math.log10(Math.max(value, Math.pow(10, logMin))) - logMin) / (logMax - logMin);
+  return Math.max(0, Math.min(1000, Math.round(t * 1000)));
+}
+
+const SCALES = {
+  rate:    { logMin: 0, logMax: 7 },     // 1 pps to 10M pps
+  tpp:     { logMin: 0, logMax: 4 },     // 1 to 10000
+  sigma:   { logMin: -2, logMax: 2 },    // 0.01 ms to 100 ms
+  step:    { logMin: -1, logMax: 3 },    // 0.1 ms to 1000 ms
+};
+
+function readParams() {
+  const sigmaSlider = parseFloat(els.sigma.value);
+  const sigma = sigmaSlider === 0 ? 0 : logScale(sigmaSlider, SCALES.sigma.logMin, SCALES.sigma.logMax);
+  const tppRaw = logScale(parseFloat(els.tpp.value), SCALES.tpp.logMin, SCALES.tpp.logMax);
+  return {
+    M: parseInt(els.M.value, 10),
+    base: parseFloat(els.base.value),
+    step: logScale(parseFloat(els.step.value), SCALES.step.logMin, SCALES.step.logMax),
+    rate: logScale(parseFloat(els.rate.value), SCALES.rate.logMin, SCALES.rate.logMax),
+    tpp: Math.max(1, Math.round(tppRaw)),
+    sigma,
+    B: parseFloat(els.bucket.value),
+  };
+}
+
+function fmtCount(n) {
+  if (n < 1000) return Math.round(n).toString();
+  if (n < 1e6) return (n / 1e3).toPrecision(3).replace(/\.?0+$/, '') + 'k';
+  if (n < 1e9) return (n / 1e6).toPrecision(3).replace(/\.?0+$/, '') + 'M';
+  return (n / 1e9).toPrecision(3).replace(/\.?0+$/, '') + 'B';
+}
+
+function fmtSigma(s) {
+  if (s === 0) return '0';
+  if (s < 0.1) return s.toFixed(3);
+  if (s < 10)  return s.toFixed(2);
+  return s.toFixed(1);
+}
+
+function fmtBps(b) {
+  if (!isFinite(b)) return '—';
+  if (b < 1) return b.toFixed(3) + ' bps';
+  if (b < 10) return b.toFixed(2) + ' bps';
+  if (b < 1000) return b.toFixed(1) + ' bps';
+  if (b < 1e6) return (b / 1000).toFixed(2) + ' kbps';
+  if (b < 1e9) return (b / 1e6).toFixed(2) + ' Mbps';
+  return (b / 1e9).toFixed(2) + ' Gbps';
+}
+
+function pillFor(bps) {
+  if (bps < 1) return '<span class="pill ok">closed</span>';
+  if (bps < 30) return '<span class="pill warn">limited</span>';
+  return '<span class="pill danger">open</span>';
+}
+
+function update() {
+  const p = readParams();
+  document.getElementById('M-val').textContent = p.M;
+  document.getElementById('base-val').textContent = p.base.toFixed(1) + ' ms';
+  document.getElementById('step-val').textContent = fmtStep(p.step);
+
+  // Implied max packet rate (one symbol = one packet, average over symbols)
+  const meanDelay = p.base + p.step * (p.M - 1) / 2;
+  const maxRate = meanDelay > 0 ? 1000 / meanDelay : 0;
+  const maxRateEl = document.getElementById('max-rate');
+  if (maxRateEl) maxRateEl.textContent = fmtCount(maxRate) + ' pps (single saturated stream)';
+  document.getElementById('rate-val').textContent = fmtCount(p.rate) + ' pps';
+  document.getElementById('tpp-val').textContent = fmtCount(p.tpp);
+  document.getElementById('sigma-val').textContent = fmtSigma(p.sigma) + ' ms';
+  document.getElementById('bucket-val').textContent = p.B === 0 ? 'off' : p.B.toFixed(0) + ' ms';
+
+  // Highlight active jitter preset (within 5%)
+  document.querySelectorAll('button.preset').forEach(btn => {
+    const v = parseFloat(btn.dataset.sigma);
+    const close = v === 0 ? p.sigma === 0 : Math.abs(p.sigma - v) / Math.max(v, 0.001) < 0.05;
+    btn.classList.toggle('active', close);
+  });
+
+  const c = capacity({ ...p, B: p.B });
+  const rateBadge = c.rateLimited
+    ? ` <span class="pill warn">rate-capped at ${fmtCount(c.maxRate)} pps</span>`
+    : '';
+  document.getElementById('r-bps').innerHTML = fmtBps(c.bps) + ' ' + pillFor(c.bps) + rateBadge;
+  document.getElementById('r-raw-bps').textContent = fmtBps(c.raw_bps);
+  document.getElementById('r-bpp').textContent = c.bits_per_packet.toFixed(2) + ' bits';
+  document.getElementById('r-bpt').textContent = (c.bits_per_packet / p.tpp).toFixed(2) + ' bits';
+  document.getElementById('r-ser').textContent = c.ser.toFixed(3);
+  document.getElementById('r-meff').textContent = `${c.M_eff} of ${p.M}`;
+
+  document.getElementById('diag').textContent =
+    `mod range  = step·(M−1) = ${(p.step*(p.M-1)).toFixed(2)} ms\n` +
+    `mean delay = base + step·(M−1)/2 = ${(p.base + p.step*(p.M-1)/2).toFixed(2)} ms\n` +
+    `max rate   = 1000 / mean delay  = ${fmtCount(c.maxRate)} pps (single-stream limit)\n` +
+    `eff rate   = min(rate, max_rate) = ${fmtCount(c.effectiveRate)} pps\n` +
+    `M_eff      = ${c.M_eff}\n` +
+    `d_eff      = ${c.d_eff.toFixed(2)} ms (separation between distinguishable levels)\n` +
+    `SNR (d/σ)  = ${p.sigma > 0 ? (c.d_eff/p.sigma).toFixed(2) : '∞'}\n` +
+    `bits/pkt   = bucket channel MI(M, base, step, B, σ) = ${c.bits_per_packet.toFixed(4)}\n` +
+    `bps        = eff rate · bits/pkt = ${c.bps.toFixed(2)}`;
+
+  drawPlot(els.canvas, p);
+}
+
+els.mcBtn.addEventListener('click', () => {
+  const p = readParams();
+  els.mcStatus.textContent = 'simulating...';
+  // defer so the DOM updates first
+  setTimeout(() => {
+    const t0 = performance.now();
+    const mc = simulateMC(p, 10000);
+    const ms = performance.now() - t0;
+    document.getElementById('r-mc-bps').textContent = fmtBps(mc.bps);
+    els.mcStatus.textContent = `done in ${ms.toFixed(0)}ms (SER=${mc.ser.toFixed(3)})`;
+  }, 10);
+});
+
+['M','base','step','rate','tpp','sigma','bucket'].forEach(id => {
+  els[id].addEventListener('input', () => {
+    if (id === 'bucket') syncAdaptive();
+    update();
+  });
+  els[id].addEventListener('change', update);
+});
+
+els.adaptive.addEventListener('change', () => {
+  if (els.adaptive.checked) {
+    // Entering adaptive: save pre-adaptive slider values before overwriting.
+    savedBase = els.base.value;
+    savedStep = els.step.value;
+    syncAdaptive();
+  } else {
+    // Exiting adaptive: restore pre-adaptive slider values.
+    if (savedBase !== null) els.base.value = savedBase;
+    if (savedStep !== null) els.step.value = savedStep;
+    savedBase = null;
+    savedStep = null;
+  }
+  document.getElementById('adaptive-note').style.display =
+    els.adaptive.checked ? 'block' : 'none';
+  update();
+});
+
+
+document.querySelectorAll('button.preset').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const v = parseFloat(btn.dataset.sigma);
+    if (v === 0) {
+      els.sigma.value = 0;
+    } else {
+      els.sigma.value = logScaleInv(v, SCALES.sigma.logMin, SCALES.sigma.logMax);
+    }
+    update();
+  });
+});
+
+update();
+</script>
+</body>
+</html>
