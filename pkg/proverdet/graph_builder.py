@@ -1,7 +1,8 @@
 """Builders for the placeholder Graph.
 
-The real attested task graph (see experiments/task-graph-prototype/) is the
-follow-up; for now the prover always returns the empty-but-typed shape.
+The real attested task graph (see the task-graph-prototype experiment on the
+`experiments` branch) is the follow-up; for now the prover always returns the
+empty-but-typed shape.
 """
 
 from __future__ import annotations
