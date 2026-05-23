@@ -171,7 +171,7 @@ pkg/
   hardware/       GPU probing and conformance
 schemas/          JSON Schema contracts (manifest, lockfile, run_bundle, verify_report)
 manifests/        Model-specific manifests (Qwen3-1.7B)
-experiments/      Determinism experiment scripts (tiered: smoke/medium/full)
+experiments/      Experiments product code/gates/demos depend on (research-only ones live on the `experiments` branch)
 docs/             Architecture diagrams, field reports, memos
 ```
 

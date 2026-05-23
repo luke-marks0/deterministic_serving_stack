@@ -68,14 +68,21 @@ Do NOT scatter experiment artifacts across `scripts/`, `results/`, `docs/reports
 
 Use `/experiment <idea>` to start a new experiment — it walks through design, planning, critique, and implementation.
 
-Current experiments:
-- `experiments/overhead-benchmark/` — throughput/latency cost of determinism flags
-- `experiments/multinode-determinism/` — cross-node determinism (D6, DBRX + Mistral Large 2)
-- `experiments/multi-gpu-determinism/` — single-machine TP/BOI tests
-- `experiments/single-node-determinism/` — early single-node reproducibility
-- `experiments/network-determinism/` — DPDK, TCP, retransmission analysis
-- `experiments/e2e-audit/` — end-to-end audit verification demo
-- `experiments/memory_wipe/` — GPU memory attestation (PoSE)
+Research-only experiments live on the **`experiments` branch**, not `main`, to
+keep `main` product-focused (`git checkout experiments` to work on them, or browse
+the branch on GitHub). `main` keeps only experiments that product code/gates/demos
+depend on.
+
+Experiments on `main`:
+- `experiments/e2e-audit/` — end-to-end audit demo (smoke manifest used by `scripts/demo.sh`)
+- `experiments/prover-verifier-demo/` — prover↔verifier protocol (LoRA workloads, e2e tests)
+- `experiments/memory_wipe/` — GPU memory attestation, PoSE (`modules/memory` facade)
+- `experiments/multinode-determinism/` — cross-node determinism (D6 gate writes here)
+- `experiments/freivalds-attestation/` — matmul attestation + SM occupancy
+
+On the `experiments` branch (research-only): overhead-benchmark, multi-gpu-determinism,
+single-node-determinism, network-determinism, deterministic-cuda-graphs,
+task-graph-prototype, timing_channel.
 
 ## Determinism flags (the "c3" config)
 
