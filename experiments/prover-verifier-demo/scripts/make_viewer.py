@@ -1,0 +1,221 @@
+#!/usr/bin/env python3
+"""Build a single-file, self-contained HTML viewer for the eval sweep (Task 9.3).
+
+Reads `data/eval/results.jsonl`, embeds the rows as a JSON literal in a
+`<script>` block, and writes one `viewer.html`. Opens via `file://` — no
+fetch, no CDN, no external assets.
+
+Usage:
+    python3 experiments/prover-verifier-demo/scripts/make_viewer.py \\
+        --results data/eval/results.jsonl \\
+        --out experiments/prover-verifier-demo/viewer.html
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+# The template is inline (not a sibling file) to keep this experiment's
+# scripts directory flat. Vanilla JS, no frameworks. The "__BUNDLE_JSON__"
+# token gets replaced at build time with the embedded payload.
+_TEMPLATE = """<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>prover-verifier-demo — eval viewer</title>
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 1.5rem; background: #fafafa; color: #222; }
+  h1 { margin: 0 0 0.5rem; font-size: 1.25rem; }
+  .sub { color: #666; margin-bottom: 1.25rem; font-size: 0.85rem; }
+  .layout { display: grid; grid-template-columns: 280px 1fr; gap: 1rem; }
+  .picker { background: white; border: 1px solid #ddd; border-radius: 6px; padding: 0.5rem; max-height: 70vh; overflow: auto; }
+  .picker .row { padding: 0.4rem 0.5rem; cursor: pointer; border-radius: 4px; font-size: 0.85rem; }
+  .picker .row:hover { background: #eef; }
+  .picker .row.selected { background: #dde; font-weight: 600; }
+  .picker .row.tor { border-left: 3px solid #c0392b; }
+  .picker .row.inf { border-left: 3px solid #27ae60; }
+  .panel { background: white; border: 1px solid #ddd; border-radius: 6px; padding: 1rem; }
+  .verdict-big { font-size: 1.4rem; font-weight: 700; padding: 0.5rem 0.75rem; border-radius: 4px; display: inline-block; }
+  .verdict-big.tor { background: #fbe7e3; color: #92260f; }
+  .verdict-big.inf { background: #e3f5e8; color: #1e6b35; }
+  .verdict-big.unk { background: #f0f0f0; color: #555; }
+  .signals { margin: 0.75rem 0; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  .signal { padding: 0.3rem 0.6rem; border-radius: 4px; font-size: 0.8rem; border: 1px solid; }
+  .signal.pass { color: #1e6b35; border-color: #b3dfc2; background: #f0f9f3; }
+  .signal.fail { color: #92260f; border-color: #f0c1b8; background: #fdecea; }
+  .meta { font-size: 0.85rem; color: #444; margin: 0.5rem 0; }
+  .bars { margin: 1rem 0; }
+  .bar-row { margin: 0.4rem 0; font-size: 0.8rem; }
+  .bar-row .label { display: inline-block; width: 9rem; color: #444; }
+  .bar { display: inline-block; height: 10px; background: #aaa; vertical-align: middle; border-radius: 2px; margin-right: 0.5rem; }
+  .bar.observed { background: #c0392b; }
+  .bar.claimed { background: #27ae60; }
+  .reasons { margin-top: 0.75rem; }
+  .reason { font-family: monospace; font-size: 0.78rem; background: #f6efed; padding: 0.3rem 0.5rem; border-radius: 3px; margin-bottom: 0.25rem; color: #92260f; }
+  .curve-section { margin-top: 1.5rem; }
+  .curve-section h2 { font-size: 0.9rem; color: #444; margin: 0 0 0.4rem; }
+  svg.curve { background: white; border: 1px solid #eee; }
+</style>
+</head>
+<body>
+<h1>prover-verifier-demo — eval viewer</h1>
+<div class="sub">One row per (workload, knob_value) cell. Click to inspect.</div>
+<div class="layout">
+  <div class="picker" id="picker"></div>
+  <div class="panel" id="panel"></div>
+</div>
+
+<script>
+const BUNDLE = __BUNDLE_JSON__;
+
+function fmt(n) { return n.toLocaleString(); }
+function pct(x) { return (x * 100).toFixed(0) + "%"; }
+
+function renderPicker(rows) {
+  const el = document.getElementById("picker");
+  el.innerHTML = "";
+  rows.forEach((r, i) => {
+    const div = document.createElement("div");
+    div.className = "row " + (r.verdict === "training_or_exfil" ? "tor" : (r.verdict === "inference" ? "inf" : "unk"));
+    div.dataset.idx = String(i);
+    div.textContent = r.workload + " · " + r.knob_param + "=" + fmt(r.knob_value);
+    div.addEventListener("click", () => selectRow(i));
+    el.appendChild(div);
+  });
+}
+
+function detectionCurve(rows, workload) {
+  const buckets = new Map();
+  rows.forEach(r => {
+    if (r.workload !== workload) return;
+    const k = r.knob_value;
+    if (!buckets.has(k)) buckets.set(k, []);
+    buckets.get(k).push(r.verdict === "training_or_exfil" ? 1 : 0);
+  });
+  const keys = Array.from(buckets.keys()).sort((a, b) => a - b);
+  return keys.map(k => {
+    const arr = buckets.get(k);
+    return { knob: k, rate: arr.reduce((s, v) => s + v, 0) / arr.length };
+  });
+}
+
+function curveSvg(points, title, xlabel) {
+  const W = 360, H = 160, P = 32;
+  if (points.length === 0) return "<svg class='curve' width='" + W + "' height='" + H + "'></svg>";
+  const xs = points.map(p => p.knob);
+  const xmin = Math.min(...xs), xmax = Math.max(...xs);
+  const xRange = (xmax - xmin) || 1;
+  const px = (k) => P + ((k - xmin) / xRange) * (W - 2 * P);
+  const py = (r) => H - P - r * (H - 2 * P);
+  let path = "";
+  points.forEach((p, i) => {
+    path += (i === 0 ? "M" : "L") + px(p.knob).toFixed(1) + "," + py(p.rate).toFixed(1);
+  });
+  const dots = points.map(p =>
+    "<circle cx='" + px(p.knob).toFixed(1) + "' cy='" + py(p.rate).toFixed(1) + "' r='3' fill='#c0392b'/>"
+  ).join("");
+  return (
+    "<svg class='curve' width='" + W + "' height='" + H + "'>" +
+    "<text x='" + (W / 2) + "' y='14' text-anchor='middle' font-size='11' fill='#444'>" + title + "</text>" +
+    "<line x1='" + P + "' y1='" + (H - P) + "' x2='" + (W - P) + "' y2='" + (H - P) + "' stroke='#888'/>" +
+    "<line x1='" + P + "' y1='" + P + "' x2='" + P + "' y2='" + (H - P) + "' stroke='#888'/>" +
+    "<text x='" + P + "' y='" + (H - 6) + "' font-size='10' fill='#666'>" + fmt(xmin) + "</text>" +
+    "<text x='" + (W - P) + "' y='" + (H - 6) + "' text-anchor='end' font-size='10' fill='#666'>" + fmt(xmax) + "</text>" +
+    "<text x='" + (P - 6) + "' y='" + py(0).toFixed(1) + "' text-anchor='end' font-size='10' fill='#666'>0%</text>" +
+    "<text x='" + (P - 6) + "' y='" + py(1).toFixed(1) + "' text-anchor='end' font-size='10' fill='#666'>100%</text>" +
+    "<text x='" + (W / 2) + "' y='" + (H - 4) + "' text-anchor='middle' font-size='10' fill='#444'>" + xlabel + "</text>" +
+    "<path d='" + path + "' stroke='#c0392b' stroke-width='1.5' fill='none'/>" +
+    dots +
+    "</svg>"
+  );
+}
+
+function bar(label, value, max) {
+  const widthPx = max > 0 ? Math.max(2, Math.round(180 * value / max)) : 2;
+  return (
+    "<div class='bar-row'><span class='label'>" + label + "</span>" +
+    "<span class='bar " + (label.startsWith("observed") ? "observed" : (label.startsWith("claimed") ? "claimed" : "")) + "' style='width:" + widthPx + "px'></span>" +
+    fmt(value) + "</div>"
+  );
+}
+
+function renderPanel(row) {
+  const el = document.getElementById("panel");
+  const klass = row.verdict === "training_or_exfil" ? "tor" : (row.verdict === "inference" ? "inf" : "unk");
+  const sigEntries = Object.entries(row.signals || {});
+  const sigBlock = sigEntries.map(([k, v]) =>
+    "<span class='signal " + v + "'>" + k + ": " + v + "</span>"
+  ).join("");
+  const claimed = row.claimed_flops || 0;
+  const observed = row.observed_flops || 0;
+  const traffic = row.traffic_size || 0;
+  const flopsMax = Math.max(1, claimed, observed);
+  const trafficMax = Math.max(1, claimed, traffic);
+
+  const reasonsBlock = (row.reasons || []).length
+    ? "<div class='reasons'>" + row.reasons.map(r => "<div class='reason'>" + r + "</div>").join("") + "</div>"
+    : "";
+
+  let curve = "";
+  if (row.workload === "mixed_lora") {
+    curve = curveSvg(detectionCurve(BUNDLE.rows, "mixed_lora"), "mixed_lora detection vs gradient_steps", "gradient_steps");
+  } else if (row.workload === "lora_loading") {
+    curve = curveSvg(detectionCurve(BUNDLE.rows, "lora_loading"), "lora_loading detection vs lora_bytes", "lora_bytes");
+  }
+
+  el.innerHTML =
+    "<div class='verdict-big " + klass + "'>" + row.verdict + "</div>" +
+    "<div class='meta'><b>workload:</b> " + row.workload + " &nbsp; <b>" + row.knob_param + ":</b> " + fmt(row.knob_value) + "</div>" +
+    "<div class='signals'>" + sigBlock + "</div>" +
+    "<div class='bars'>" +
+      bar("claimed FLOPs", claimed, flopsMax) +
+      bar("observed FLOPs", observed, flopsMax) +
+      bar("traffic bytes", traffic, trafficMax) +
+    "</div>" +
+    reasonsBlock +
+    (curve ? "<div class='curve-section'><h2>detection curve</h2>" + curve + "</div>" : "");
+}
+
+function selectRow(i) {
+  Array.from(document.querySelectorAll(".picker .row")).forEach(el => {
+    el.classList.toggle("selected", Number(el.dataset.idx) === i);
+  });
+  renderPanel(BUNDLE.rows[i]);
+}
+
+renderPicker(BUNDLE.rows);
+if (BUNDLE.rows.length > 0) selectRow(0);
+</script>
+</body>
+</html>
+"""
+
+
+def _load_rows(results_path: Path) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for line in results_path.read_text(encoding="utf-8").splitlines():
+        if not line:
+            continue
+        rows.append(json.loads(line))
+    return rows
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Build self-contained eval viewer")
+    parser.add_argument("--results", type=Path, required=True)
+    parser.add_argument("--out", type=Path, required=True)
+    args = parser.parse_args()
+
+    rows = _load_rows(args.results)
+    payload = json.dumps({"rows": rows}, separators=(",", ":"), sort_keys=True)
+    html = _TEMPLATE.replace("__BUNDLE_JSON__", payload)
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    args.out.write_text(html, encoding="utf-8")
+    print(f"[viewer] wrote {args.out} ({len(rows)} rows, {args.out.stat().st_size} bytes)")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -6,74 +6,13 @@ Bitwise identical LLM inference across independent servers. Given the same manif
 
 **157/157 cross-server comparisons match (100%)** across two independent NVIDIA GH200 480GB instances on Lambda Cloud:
 
-| Model | Type | Repeated | Diverse | Tokens | Manifest |
-|-------|------|----------|---------|--------|----------|
-| Qwen3-1.7B | Dense transformer | 20/20 match | 34/34 match | 1.6M | [`qwen3-1.7b.manifest.json`](manifests/qwen3-1.7b.manifest.json) |
-| Qwen3-30B-A3B | Mixture of Experts | 20/20 match | 34/34 match | 2.0M | [`qwen3-30b-moe-tp4.manifest.json`](manifests/qwen3-30b-moe-tp4.manifest.json) |
-| Mistral-7B-Instruct-v0.3 | Dense transformer | 20/20 match | 34/34 match | 2.0M | [`mistral-large2-tp4.manifest.json`](manifests/mistral-large2-tp4.manifest.json) |
+| Model | Type | Repeated | Diverse | Tokens |
+|-------|------|----------|---------|--------|
+| Qwen3-1.7B | Dense transformer | 20/20 match | 34/34 match | 1.6M |
+| Qwen3-30B-A3B | Mixture of Experts | 20/20 match | 34/34 match | 2.0M |
+| Mistral-7B-Instruct-v0.3 | Dense transformer | 20/20 match | 34/34 match | 2.0M |
 
 Each chunk is 30,000 tokens of greedy decoding (temperature=0). Same container image on both servers, same seed, same config.
-
-## For Reviewers
-
-Three tiers, each self-contained. Pick the level of hardware you have access to.
-
-### Tier 0 — No GPU (2 min, laptop)
-
-Reproduces the deterministic network-frame construction claim on any machine. Proves the L2 frame digests are reproducible byte-for-byte without any GPU or model.
-
-```bash
-git clone https://github.com/derpyplops/deterministic-serving.git
-cd deterministic-serving
-python3 demo/run_demo.py --part 1
-```
-
-**Expected output:** a capture digest like `sha256:...` printed twice. Running on any other machine with Python 3.10+ produces the same digest. This is the portion of the determinism argument that does not depend on GPU semantics.
-
-### Tier 1 — One GPU (~15 min, one H100/GH200 host)
-
-Reproduces a deterministic vLLM server and verifies identical tokens across two independent requests to the same server.
-
-```bash
-# Starts the server from a manifest: pulls the Nix closure (or pip-falls-back),
-# downloads the model, resolves the lockfile, launches vLLM.
-scripts/reproduce.sh manifests/qwen3-1.7b.manifest.json
-
-# In another shell, run the same prompt twice and hash the output.
-for i in 1 2; do
-  curl -s http://localhost:8000/v1/chat/completions \
-    -H "Content-Type: application/json" \
-    -d '{"model":"Qwen/Qwen3-1.7B","messages":[{"role":"user","content":"Hello"}],"max_tokens":50,"temperature":0,"seed":42}' \
-    | python3 -c "import sys,json,hashlib; c=json.load(sys.stdin)['choices'][0]['message']['content']; print(f'Run '$i': {hashlib.sha256(c.encode()).hexdigest()[:16]}')"
-done
-```
-
-**Expected output:** two identical 16-char hex digests. `scripts/reproduce.sh` verifies the Nix closure digest matches the one pinned in the manifest before starting the server; with Nix available this is the hermetic path. Without Nix the script falls back to unpinned pip (best-effort, non-hermetic) — the reviewer-grade path is the Nix one.
-
-### Tier 2 — Two GPUs, two hosts (~30 min)
-
-Reproduces the cross-server determinism claim from the Results table. Provision two independent H100/GH200 hosts, run the same manifest on each, compare run bundles byte-for-byte.
-
-```bash
-# On host A and host B (same manifest, same commit, same container):
-scripts/reproduce.sh manifests/qwen3-1.7b.manifest.json &
-until curl -sf http://localhost:8000/health; do sleep 3; done
-
-python3 cmd/runner/main.py \
-  --manifest manifests/qwen3-1.7b.manifest.json \
-  --lockfile .reproduce-run/lockfile.built.v1.json \
-  --out-dir /tmp/bundle \
-  --mode vllm
-
-# On either host, after copying the other bundle over:
-python3 cmd/verifier/main.py \
-  --baseline /tmp/bundle-A/run_bundle.v1.json \
-  --candidate /tmp/bundle-B/run_bundle.v1.json \
-  --report-out /tmp/verify.json \
-  --summary-out /tmp/verify.txt
-```
-
-**Expected output:** `verify.txt` reports per-request token-equality; `verify.json` contains the structured `verify_report.v1` with first-mismatch path on any divergence. The full Results-table experiment (20 repeated × 34 diverse chunks × 30K tokens per model) is driven by `experiments/multinode-determinism/scripts/run_tiered.py`.
 
 ## Architecture
 
@@ -118,6 +57,41 @@ python3 cmd/verifier/main.py \
  └──────────────────────────────────────────────────────────────────────┘
 ```
 
+## Quick Start (reviewers)
+
+Bring up an NVIDIA H100 instance with the standard CUDA 12.8 AMI (Lambda Cloud's `gpu_1x_h100_sxm5` and `gpu_1x_h100_pcie` work as-is; GH200 also works), then:
+
+```bash
+git clone https://github.com/luke-marks0/deterministic_serving_stack
+cd deterministic_serving_stack
+./scripts/demo.sh
+```
+
+`scripts/demo.sh` builds a venv (cu128 torch + vLLM 0.17.1), resolves the audit-enabled smoke manifest at `experiments/e2e-audit/scripts/smoke.manifest.json` (declares H100 hardware, Qwen3-1.7B, 2 short prompts), starts the deterministic server, and runs the audit replay loop:
+
+1. `POST /run` — server runs the manifest's requests and returns per-output-token HMAC commitments
+2. `POST /replay` at random token positions — server re-runs each request truncated to the challenged position and recomputes the commitment
+3. Negative test — a forged commitment must not match
+
+Expected output ends with `ALL PASS`. Total wall time from `git clone` to `ALL PASS`: ~3 minutes (~90s pip install, <5s resolver/builder, ~30s vLLM model load, ~10s audit).
+
+Requirements:
+- NVIDIA GPU with compute capability ≥ 9.0 (H100, GH200, etc.) — batch invariance kernels need this
+- ~5 GB free GPU memory (Qwen3-1.7B in bf16)
+- Outbound internet for the Hugging Face download
+
+### No GPU? Run the synthetic pipeline
+
+```bash
+tmp=$(mktemp -d)
+python3 cmd/resolver/main.py --manifest manifests/qwen3-1.7b.manifest.json \
+  --lockfile-out $tmp/lock.json --resolve-hf
+python3 cmd/builder/main.py --lockfile $tmp/lock.json --lockfile-out $tmp/built.json
+python3 cmd/runner/main.py --manifest manifests/qwen3-1.7b.manifest.json \
+  --lockfile $tmp/built.json --out-dir $tmp/run
+# Produces a run bundle with tokens, logits, and deterministic network frames
+```
+
 ## How It Works
 
 **Manifest** declares the full workload: model (pinned to HF commit SHA), runtime config (seed, dtype, attention backend, batch invariance), hardware requirements, requests, and comparison criteria.
@@ -143,89 +117,94 @@ python3 cmd/verifier/main.py \
 | **Scheduling** | Greedy decoding (temperature=0), fixed seed |
 | **Network frames** | Simulated TCP/IP stack with fixed MSS segmentation, software checksums, no offloads |
 
-## Running the Server
+## Demos
 
-### Prerequisites
-- NVIDIA GPU with compute capability >= 9.0 (H100, GH200, etc.)
-- Docker with [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
-- The NVIDIA runtime must be the **default Docker runtime**
+- **Prover ↔ Verifier protocol** — wire-protocol demo that detects hidden training and exfiltration from external evidence alone. See [experiments/prover-verifier-demo/reports/memo.md](experiments/prover-verifier-demo/reports/memo.md) (CPU-only; `cd experiments/prover-verifier-demo && ./demo.sh --quick`).
 
-### One-time Docker + NVIDIA setup
+## Capabilities
+
+The stack is organized **by function**. Each capability has a documented
+interface ([`modules/`](modules/)); [`workflows/`](workflows/) is the recipe book
+that composes them.
+
+> 💡 **New here, or looking for ideas of what to build?** See
+> [**Ideas & use cases**](docs/use-cases.md) — a plain-language tour of what this
+> can do.
+
+| Capability | What it does | Start here |
+|---|---|---|
+| [build](modules/build/) | Hermetic, reproducible runtime + OCI image | `nix build .#oci` |
+| [inference](modules/inference/) | Bitwise-deterministic vLLM (the c3 config) | `modules/inference/` |
+| [network](modules/network/) | Deterministic L2 egress frames | `modules.network.egress_frames(...)` |
+| [memory](modules/memory/) | PoSE memory wipe + erasure attestation | `modules/memory/` |
+| [attestation](modules/attestation/) | Matmul / token / replay verification | `cmd/verifier`, `pkg/freivalds` |
+| [utils](modules/utils/) | Provisioning, replay server, helpers | `deploy/`, `scripts/lambda_cli.py` |
+
+Compose them in a few lines via [`modules.Pipeline`](modules/pipeline.py):
+
+```python
+from modules import Pipeline
+report = (Pipeline.from_manifest("manifests/qwen3-1.7b.manifest.json")
+          .resolve().build().run("/tmp/a").run("/tmp/b").verify())
+assert report["status"] == "conformant"
+```
+
+See the [capability map](modules/README.md) and the
+[modularization plan](docs/plans/repo-modularization.md).
+
+## Repository Structure
+
+```
+modules/          Capability layer (build, inference, network, memory, attestation, utils) + Pipeline
+workflows/        Recipe book — runnable compositions of the modules
+cmd/
+  server/         Proxy server with POST/GET /manifest endpoint
+  resolver/       Manifest + HF resolution -> lockfile
+  builder/        Lockfile -> lockfile with runtime_closure_digest
+  runner/         Manifest + lockfile -> run bundle (synthetic or vLLM)
+  capture/        Server capture log -> run bundle
+  verifier/       Compare two run bundles -> conformance report
+pkg/
+  manifest/       Pydantic manifest model (typed validation)
+  common/         Canonical JSON, SHA256, schema validation, HF resolution
+  networkdet/     Deterministic L2 frame construction (sim TCP/IP stack)
+  hardware/       GPU probing and conformance
+schemas/          JSON Schema contracts (manifest, lockfile, run_bundle, verify_report)
+manifests/        Model-specific manifests (Qwen3-1.7B)
+experiments/      Experiments product code/gates/demos depend on (research-only ones live on the `experiments` branch)
+docs/             Architecture diagrams, field reports, memos
+```
+
+## Container image (out of date)
+
+The published image at `ghcr.io/derpyplops/deterministic-serving-runtime:latest` predates the `/run` and `/replay` endpoints used by the audit demo and is currently private. Use `scripts/demo.sh` (above) for the reviewer flow. To run from a container, rebuild from this checkout (`nix build .#oci`) and load into Docker:
 
 ```bash
-sudo nvidia-ctk runtime configure --runtime=docker
-sudo tee /etc/docker/daemon.json <<'EOF'
-{"runtimes":{"nvidia":{"args":[],"path":"nvidia-container-runtime"}},"default-runtime":"nvidia"}
-EOF
+nix build .#oci
+docker load < result
+docker run -d --name vllm-server --gpus all --privileged \
+  -e NVIDIA_DRIVER_CAPABILITIES=all \
+  -v "$PWD:/workspace" -p 8000:8000 \
+  deterministic-serving-runtime:dev \
+  --manifest /workspace/experiments/e2e-audit/scripts/smoke.manifest.json \
+  --skip-boot-validation
+```
+
+The NVIDIA Container Toolkit must be installed and configured as Docker's default runtime:
+
+```bash
+sudo nvidia-ctk runtime configure --runtime=docker --set-as-default
 sudo systemctl restart docker
 ```
 
-### Start the server
-
-```bash
-docker pull ghcr.io/derpyplops/deterministic-serving-runtime:latest
-
-docker run -d --name vllm-server \
-  --gpus all --privileged \
-  -e NVIDIA_DRIVER_CAPABILITIES=all \
-  -e VLLM_BATCH_INVARIANT=1 \
-  -e CUBLAS_WORKSPACE_CONFIG=:4096:8 \
-  -e HOME=/tmp \
-  -p 8000:8000 \
-  ghcr.io/derpyplops/deterministic-serving-runtime:latest \
-  python3 -m vllm.entrypoints.openai.api_server \
-    --model Qwen/Qwen3-1.7B \
-    --host 0.0.0.0 --port 8000 --seed 42 \
-    --enforce-eager --attention-backend TRITON_ATTN \
-    --max-model-len 4096
-
-until curl -s http://localhost:8000/health > /dev/null 2>&1; do sleep 3; done
-```
-
-### Send a request
-
-```bash
-curl http://localhost:8000/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "Qwen/Qwen3-1.7B",
-    "messages": [{"role": "user", "content": "What is deterministic computation?"}],
-    "max_tokens": 100,
-    "temperature": 0,
-    "seed": 42
-  }'
-```
-
-### Notes
-- Replace `Qwen/Qwen3-1.7B` with any supported model
-- Set `-e HF_TOKEN=<token>` for gated models
-- `--privileged` is required on Lambda Cloud GH200 instances
-- `NVIDIA_DRIVER_CAPABILITIES=all` triggers driver lib injection
-- Podman 3.x doesn't work — use Docker
-
-### Troubleshooting
+Troubleshooting:
 
 | Symptom | Fix |
 |---------|-----|
 | `Failed to infer device type` | Add `--privileged -e NVIDIA_DRIVER_CAPABILITIES=all` |
 | `No CUDA GPUs are available` | Add `--privileged` |
 | `Can't initialize NVML` | Set `"default-runtime": "nvidia"` in daemon.json |
-| `Failed to find C compiler` | Container must include gcc (current image does) |
 | `GLIBC_2.38 not found` | Don't set `LD_LIBRARY_PATH` to host system paths |
-
-## Repository Structure
-
-```
-cmd/              CLI entry points (server, resolver, builder, runner, capture, verifier)
-pkg/              Shared library code (manifest model, networkdet, common utilities)
-schemas/          JSON Schema contracts (manifest, lockfile, run_bundle, verify_report)
-manifests/        Model-specific manifest files
-demo/             Laptop-runnable determinism demo (no GPU)
-experiments/      Determinism experiments, organized by topic
-tests/            unit/ integration/ e2e/ determinism/ chaos/
-scripts/          reproduce.sh, CI scripts
-docs/             ADRs, conformance docs, release policy, diagrams
-```
 
 ## Building from Source
 
@@ -248,23 +227,3 @@ docker load < result
 | Main | + e2e + determinism + nix closure | `make ci-main` |
 | Nightly | + chaos + long-run | `make ci-nightly` |
 | Release | + release contracts | `make ci-release` |
-
-## License
-
-Apache-2.0. See [`LICENSE`](LICENSE).
-
-## Citation
-
-A manuscript describing this work is in preparation. Until it is published, please cite the software artifact directly — see [`CITATION.cff`](CITATION.cff), or use:
-
-```bibtex
-@misc{deterministic-serving-stack,
-  title        = {Deterministic Serving Stack: Bitwise-Reproducible LLM Inference Across Independent Servers},
-  author       = {Ng, Jonathan},
-  year         = {2026},
-  note         = {Manuscript in preparation.},
-  url          = {https://github.com/derpyplops/deterministic-serving}
-}
-```
-
-When citing a specific result, include the commit SHA. This file will be updated with the paper citation (and an arXiv `eprint`) once the preprint is available.

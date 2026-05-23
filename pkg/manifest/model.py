@@ -238,6 +238,30 @@ class ArtifactInput(BaseModel):
     role: FileRole | None = None
 
 
+# -- Audit / replay verification --
+
+
+class TokenCommitmentConfig(BaseModel):
+    """Per-token commitment scheme used for the e2e replay audit loop.
+
+    key_source "inline-shared" uses the hardcoded key in pkg.e2e.crypto —
+    it proves deterministic replay works but does NOT bind against a
+    malicious provider. The label exists so future work can add
+    "auditor-supplied" without another schema migration.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool
+    algorithm: Literal["hmac-sha256"] = "hmac-sha256"
+    key_source: Literal["inline-shared"] = "inline-shared"
+
+
+class AuditConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    token_commitment: TokenCommitmentConfig
+
+
 # -- Hardware conformance --
 
 
@@ -275,3 +299,4 @@ class Manifest(BaseModel):
     requests: list[RequestItem] = Field(min_length=1)
     comparison: ComparisonConfig
     artifact_inputs: list[ArtifactInput] = Field(default_factory=list)
+    audit: AuditConfig | None = None

@@ -42,6 +42,13 @@ from pkg.common.deterministic import (
     sha256_prefixed,
     utc_now_iso,
 )
+from pkg.e2e import (
+    commit_token,
+    commit_token_stream,
+    extract_input_token_ids,
+    extract_output_token_ids,
+)
+from pkg.e2e.extract import TokenIdExtractionError
 from pkg.manifest.model import GpuProbe, HardwareConformance, Manifest
 from pkg.networkdet import DeterministicNetStack
 from pkg.networkdet.config import NetStackConfig
@@ -559,6 +566,9 @@ class ProxyHandler(BaseHTTPRequestHandler):
         if self.path == "/run":
             return self._handle_post_run()
 
+        if self.path == "/replay":
+            return self._handle_post_replay()
+
         content_length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(content_length) if content_length > 0 else b""
 
@@ -653,6 +663,39 @@ class ProxyHandler(BaseHTTPRequestHandler):
             "comparison": list(state.manifest.comparison.model_dump(exclude_none=True).keys()),
         })
 
+    def _call_vllm_chat(
+        self,
+        *,
+        model_id: str,
+        prompt: str,
+        max_tokens: int,
+        temperature: float,
+        seed: int,
+        want_token_ids: bool,
+    ) -> dict[str, Any]:
+        """Send one chat completion to the managed vLLM. Returns parsed JSON.
+
+        When `want_token_ids` is True, asks vLLM to include output token IDs
+        on the response so the caller can compute per-token commitments.
+        """
+        state = self.server_state
+        body: dict[str, Any] = {
+            "model": model_id,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "seed": seed,
+        }
+        if want_token_ids:
+            body["return_token_ids"] = True
+        vllm_req = Request(
+            f"http://127.0.0.1:{state.vllm_port}/v1/chat/completions",
+            data=json.dumps(body).encode(),
+            headers={"Content-Type": "application/json"},
+        )
+        with urlopen(vllm_req, timeout=300) as resp:
+            return json.loads(resp.read())
+
     def _handle_post_run(self) -> None:
         """POST /run -- execute the active manifest's requests, return a run bundle.
 
@@ -661,6 +704,15 @@ class ProxyHandler(BaseHTTPRequestHandler):
         - inference results (tokens, content hash per request)
         - packet output (warden-normalized frames, digest)
         - manifest and closure metadata
+
+        When `manifest.audit.token_commitment.enabled` is true, the server
+        also asks vLLM to return both prompt and output token IDs, computes
+        an HMAC-SHA256 commitment per token on both sides, and includes a
+        `token_commitments` map in the bundle shaped as
+        `{request_id: {"input": [...], "output": [...]}}`. Committing both
+        sides keeps the audit surface free of plaintext prompts or
+        completions — an auditor sees only commitments and can challenge
+        any position on either side via POST /replay.
         """
         state = self.server_state
         if state is None:
@@ -669,6 +721,9 @@ class ProxyHandler(BaseHTTPRequestHandler):
         manifest = state.manifest
         model_id = manifest.model.source.removeprefix("hf://")
         seed = manifest.runtime.deterministic_knobs.seed
+        audit_enabled = bool(
+            manifest.audit and manifest.audit.token_commitment.enabled
+        )
 
         # Set up packet pipeline
         config = NetStackConfig(
@@ -688,24 +743,18 @@ class ProxyHandler(BaseHTTPRequestHandler):
 
         inference_results = []
         errors = []
+        token_commitments: dict[str, dict[str, list[str]]] = {}
 
         for i, req in enumerate(manifest.requests):
-            body = json.dumps({
-                "model": model_id,
-                "messages": [{"role": "user", "content": req.prompt}],
-                "max_tokens": req.max_new_tokens,
-                "temperature": req.temperature,
-                "seed": seed,
-            }).encode()
-            vllm_req = Request(
-                f"http://127.0.0.1:{state.vllm_port}/v1/chat/completions",
-                data=body,
-                headers={"Content-Type": "application/json"},
-            )
-
             try:
-                with urlopen(vllm_req, timeout=300) as resp:
-                    resp_data = json.loads(resp.read())
+                resp_data = self._call_vllm_chat(
+                    model_id=model_id,
+                    prompt=req.prompt,
+                    max_tokens=req.max_new_tokens,
+                    temperature=req.temperature,
+                    seed=seed,
+                    want_token_ids=audit_enabled,
+                )
             except Exception as exc:
                 errors.append({"request_id": req.id, "error": str(exc)})
                 continue
@@ -719,6 +768,18 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 "tokens": tokens,
                 "content_hash": content_hash,
             })
+
+            if audit_enabled:
+                try:
+                    input_token_ids = extract_input_token_ids(resp_data)
+                    output_token_ids = extract_output_token_ids(resp_data)
+                except TokenIdExtractionError as exc:
+                    errors.append({"request_id": req.id, "error": str(exc)})
+                    continue
+                token_commitments[req.id] = {
+                    "input": commit_token_stream(input_token_ids),
+                    "output": commit_token_stream(output_token_ids),
+                }
 
             # Feed through packet pipeline — strip nondeterministic API fields
             import copy
@@ -753,10 +814,143 @@ class ProxyHandler(BaseHTTPRequestHandler):
             },
         }
 
+        if audit_enabled:
+            bundle["token_commitments"] = token_commitments
+            bundle["audit"] = {
+                "algorithm": manifest.audit.token_commitment.algorithm,
+                "key_source": manifest.audit.token_commitment.key_source,
+            }
+
         if errors:
             bundle["errors"] = errors
 
         return self._send_json(200, bundle)
+
+    def _handle_post_replay(self) -> None:
+        """POST /replay -- return the HMAC commitment for a challenged token.
+
+        Body: {
+            "request_id": "<id>",
+            "token_position": <1-indexed int>,
+            "side": "input" | "output"   # optional, defaults to "output"
+        }
+
+        Looks up `request_id` in the active manifest and returns the HMAC
+        commitment for the token at position `token_position` on the
+        requested `side`. The caller compares this against the matching
+        stream from /run's `token_commitments[request_id][side]`.
+
+        For `side = "output"` the server sends vLLM a single-shot chat
+        completion with `max_tokens = token_position` and the same seed
+        used by /run, then commits the final generated token.
+
+        For `side = "input"` the server asks vLLM for the prompt
+        tokenization only (max_tokens = 1, prompt_token_ids returned)
+        and commits the token at `token_position` of the prompt. No
+        generation work is needed to verify a prompt token, but routing
+        the request through vLLM guarantees the same tokenizer as /run.
+
+        Returns 400 on bad input, 404 for unknown request_id, 409 if the
+        manifest has not enabled token commitments, 502 if vLLM is down.
+        This endpoint is stateless with respect to prior /run calls.
+        """
+        state = self.server_state
+        if state is None:
+            return self._send_json(500, {"error": "Server state not initialized"})
+        manifest = state.manifest
+
+        if manifest.audit is None or not manifest.audit.token_commitment.enabled:
+            return self._send_json(409, {
+                "error": "Audit/token_commitment is not enabled on the active manifest"
+            })
+
+        content_length = int(self.headers.get("Content-Length", 0))
+        if content_length <= 0:
+            return self._send_json(400, {"error": "Empty request body"})
+        try:
+            body = json.loads(self.rfile.read(content_length))
+        except json.JSONDecodeError as exc:
+            return self._send_json(400, {"error": f"Invalid JSON: {exc}"})
+
+        request_id = body.get("request_id")
+        token_position = body.get("token_position")
+        side = body.get("side", "output")
+        if not isinstance(request_id, str) or not request_id:
+            return self._send_json(400, {"error": "`request_id` must be a non-empty string"})
+        if not isinstance(token_position, int) or isinstance(token_position, bool):
+            return self._send_json(400, {"error": "`token_position` must be an integer"})
+        if side not in ("input", "output"):
+            return self._send_json(400, {
+                "error": "`side` must be 'input' or 'output'"
+            })
+
+        original = next((r for r in manifest.requests if r.id == request_id), None)
+        if original is None:
+            known = [r.id for r in manifest.requests]
+            return self._send_json(404, {
+                "error": f"Unknown request_id {request_id!r}",
+                "known": known,
+            })
+
+        # Output-side positions are bounded by max_new_tokens; input-side
+        # positions are bounded by the prompt's token length, which we
+        # only learn from vLLM. We validate the upper bound after the call.
+        if token_position < 1:
+            return self._send_json(400, {
+                "error": f"`token_position` must be >= 1, got {token_position}"
+            })
+        if side == "output" and token_position > original.max_new_tokens:
+            return self._send_json(400, {
+                "error": (
+                    f"`token_position` must be 1..{original.max_new_tokens} "
+                    f"for request {request_id!r} (side=output), got {token_position}"
+                )
+            })
+
+        model_id = manifest.model.source.removeprefix("hf://")
+        seed = manifest.runtime.deterministic_knobs.seed
+        # For input-side challenges only the tokenizer output matters, so
+        # we request the minimum (1 generated token). For output-side we
+        # need to generate up to `token_position` to reveal that token.
+        replay_max_tokens = token_position if side == "output" else 1
+        try:
+            resp_data = self._call_vllm_chat(
+                model_id=model_id,
+                prompt=original.prompt,
+                max_tokens=replay_max_tokens,
+                temperature=original.temperature,
+                seed=seed,
+                want_token_ids=True,
+            )
+        except URLError as exc:
+            return self._send_json(502, {"error": f"vLLM unreachable: {exc}"})
+        except Exception as exc:
+            return self._send_json(500, {"error": f"vLLM call failed: {exc}"})
+
+        try:
+            if side == "output":
+                token_ids = extract_output_token_ids(resp_data)
+            else:
+                token_ids = extract_input_token_ids(resp_data)
+        except TokenIdExtractionError as exc:
+            return self._send_json(500, {"error": str(exc)})
+        if len(token_ids) < token_position:
+            return self._send_json(400, {
+                "error": (
+                    f"`token_position`={token_position} exceeds the {side} "
+                    f"token length ({len(token_ids)}) for request {request_id!r}"
+                ),
+            })
+
+        challenged_token = token_ids[token_position - 1]
+        commitment = commit_token(challenged_token)
+        return self._send_json(200, {
+            "request_id": request_id,
+            "token_position": token_position,
+            "side": side,
+            "commitment": commitment,
+            "algorithm": manifest.audit.token_commitment.algorithm,
+        })
 
     # -- GET --
 

@@ -26,17 +26,31 @@ python3 cmd/runner/main.py --manifest manifests/qwen3-1.7b.manifest.json --lockf
 ## Code layout
 
 ```
+modules/       — Capability layer (build, inference, network, memory, attestation, utils) + Pipeline; curated public interface over pkg/cmd/nix
+workflows/     — Recipe book: runnable compositions of modules (e.g. deterministic_inference_server.py)
 cmd/           — CLI entry points (runner, server, resolver, builder, verifier, capture)
 pkg/           — Shared library code (manifest model, networkdet, common utilities)
 schemas/       — JSON Schema definitions (manifest, lockfile, run_bundle)
 manifests/     — Model manifest files
-tests/         — unit/, integration/, e2e/, determinism/, fixtures/
+tests/         — unit/, integration/, e2e/, determinism/, modules/, fixtures/
 scripts/ci/    — CI scripts (schema gates, conformance checks, test harnesses)
 scripts/       — General utilities (reproduce.sh)
 experiments/   — All experiments, organized by topic (see below)
 docs/          — ADRs, conformance docs, diagrams, release policy
 docs/plans/    — Implementation plans (code changes, not experiments)
 ```
+
+## Capability modules and workflows
+
+The repo is organized **by function**. `modules/<capability>/` is a curated,
+documented public interface over the primitives in `pkg/`, `cmd/`, and
+`flake.nix` — it re-exports rather than relocates, so `pkg/` and its tests are
+untouched. A capability need not be a Python package (build/utils are nix +
+shell); the contract is a documented `README.md`, and for Python ones a small
+`api.py`. `workflows/` composes modules via `modules.Pipeline` into runnable
+recipes. New modules: add a `README.md` (Purpose · Interface · Artifacts ·
+Requirements · Example) and a smoke test in `tests/modules/`. See
+`docs/plans/repo-modularization.md`.
 
 ## Experiment organization
 
@@ -54,14 +68,21 @@ Do NOT scatter experiment artifacts across `scripts/`, `results/`, `docs/reports
 
 Use `/experiment <idea>` to start a new experiment — it walks through design, planning, critique, and implementation.
 
-Current experiments:
-- `experiments/overhead-benchmark/` — throughput/latency cost of determinism flags
-- `experiments/multinode-determinism/` — cross-node determinism (D6, DBRX + Mistral Large 2)
-- `experiments/multi-gpu-determinism/` — single-machine TP/BOI tests
-- `experiments/single-node-determinism/` — early single-node reproducibility
-- `experiments/network-determinism/` — DPDK, TCP, retransmission analysis
-- `experiments/e2e-audit/` — end-to-end audit verification demo
-- `experiments/memory_wipe/` — GPU memory attestation (PoSE)
+Research-only experiments live on the **`experiments` branch**, not `main`, to
+keep `main` product-focused (`git checkout experiments` to work on them, or browse
+the branch on GitHub). `main` keeps only experiments that product code/gates/demos
+depend on.
+
+Experiments on `main`:
+- `experiments/e2e-audit/` — end-to-end audit demo (smoke manifest used by `scripts/demo.sh`)
+- `experiments/prover-verifier-demo/` — prover↔verifier protocol (LoRA workloads, e2e tests)
+- `experiments/memory_wipe/` — GPU memory attestation, PoSE (`modules/memory` facade)
+- `experiments/multinode-determinism/` — cross-node determinism (D6 gate writes here)
+- `experiments/freivalds-attestation/` — matmul attestation + SM occupancy
+
+On the `experiments` branch (research-only): overhead-benchmark, multi-gpu-determinism,
+single-node-determinism, network-determinism, deterministic-cuda-graphs,
+task-graph-prototype, timing_channel.
 
 ## Determinism flags (the "c3" config)
 

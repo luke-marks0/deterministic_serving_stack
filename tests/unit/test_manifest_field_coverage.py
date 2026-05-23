@@ -277,6 +277,25 @@ def _build_coverage_manifests() -> list[dict]:
         m_enum["runtime"]["serving_engine"].update(combo)
         manifests.append(m_enum)
 
+    # Manifest exercising the optional audit block
+    m_audit = _base_manifest()
+    m_audit["run_id"] = "coverage-audit-001"
+    m_audit["audit"] = {
+        "token_commitment": {
+            "enabled": True,
+            "algorithm": "hmac-sha256",
+            "key_source": "inline-shared",
+        }
+    }
+    manifests.append(m_audit)
+
+    # Manifests exercising distributed_executor_backend values
+    for backend, run_id in (("ray", "coverage-dist-ray-001"), ("mp", "coverage-dist-mp-001")):
+        m_dist = _base_manifest()
+        m_dist["run_id"] = run_id
+        m_dist["runtime"]["serving_engine"]["distributed_executor_backend"] = backend
+        manifests.append(m_dist)
+
     return manifests
 
 
