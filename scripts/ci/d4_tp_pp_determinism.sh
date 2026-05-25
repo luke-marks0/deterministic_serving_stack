@@ -43,8 +43,8 @@ RUN2="$TMP_DIR/run-2"
 
 python3 modules/inference/resolver/main.py --manifest "$MANIFEST_TP" --lockfile-out "$RESOLVED"
 python3 modules/build/builder/main.py --lockfile "$RESOLVED" --lockfile-out "$BUILT"
-python3 modules/inference/runner/main.py --manifest "$MANIFEST_TP" --lockfile "$BUILT" --out-dir "$RUN1" --replica-id replica-0
-python3 modules/inference/runner/main.py --manifest "$MANIFEST_TP" --lockfile "$BUILT" --out-dir "$RUN2" --replica-id replica-0
+python3 modules/inference/runner/main.py --mode mock --manifest "$MANIFEST_TP" --lockfile "$BUILT" --out-dir "$RUN1" --replica-id replica-0
+python3 modules/inference/runner/main.py --mode mock --manifest "$MANIFEST_TP" --lockfile "$BUILT" --out-dir "$RUN2" --replica-id replica-0
 
 python3 - << 'PY' "$RUN1/observables/engine_trace.json" "$RUN2/observables/engine_trace.json"
 import json
