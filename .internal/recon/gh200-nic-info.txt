@@ -1,0 +1,22 @@
+GH200 NIC Recon — Lambda Cloud (us-east-3)
+Date: 2026-04-01
+Instance: 97f37e3b11a44f189c01ac812a3aca7b (192.222.50.130)
+
+NIC Model:      Mellanox ConnectX Family mlx5Gen Virtual Function (rev 01)
+PCI Address:    0000:e6:00.0
+Kernel Driver:  mlx5_core (v24.10-2.1.8)
+Firmware:       32.42.1000 (MT_0000000884)
+Interface:      enp230s0
+Physical Ports: 1 (Virtual Function via SR-IOV)
+MAC:            06:66:b1:2a:da:1a
+
+Key Observations:
+- This is a VF (Virtual Function), not a physical function.
+  Lambda uses SR-IOV to share the physical ConnectX NIC between VMs.
+- mlx5_core is loaded with bifurcated mode support (mlx5_ib, rdma-core present).
+- Hugepage size is 512MB (ARM64 GH200 default). No hugepages allocated.
+  DPDK may need --no-huge for initial testing or explicit 2MB page allocation.
+- Loopback verification (Level 2) may not be possible on a VF.
+  TX completion verification (Level 1) is the realistic target.
+- NIC offloads may be partially controlled by the hypervisor.
+  Must verify which offloads are actually disableable on the VF.
