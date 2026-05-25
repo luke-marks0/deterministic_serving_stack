@@ -23,7 +23,7 @@ run in, and provides the canonical-JSON / digest helpers the whole spine relies 
 the helpers.
 
 **Underlying code.** `deploy/{lambda,vast,warden}/`, `scripts/lambda_cli.py`,
-`demo/run_demo.py`, `modules/core/common/`.
+`modules/core/common/`.
 
 **Status.** Facade in `modules/utils/api.py` re-exports the canonical-JSON /
 digest / schema-validation helpers (`canonical_json_bytes`, `sha256_prefixed`,
