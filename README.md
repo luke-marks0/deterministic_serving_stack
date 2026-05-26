@@ -114,7 +114,7 @@ Each chunk is 30,000 tokens of greedy decoding (temperature=0). Same container i
 Bring up an NVIDIA H100 instance with the standard CUDA 12.8 AMI (Lambda Cloud's `gpu_1x_h100_sxm5` and `gpu_1x_h100_pcie` work as-is; GH200 also works), then:
 
 ```bash
-git clone https://github.com/luke-marks0/verification-tooling
+git clone https://github.com/compute-verification/verification-tooling
 cd verification-tooling
 ./scripts/demo.sh
 ```
