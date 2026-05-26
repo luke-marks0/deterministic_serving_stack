@@ -21,13 +21,12 @@ Integrates with the attestation flow via `modules/attestation/proverdet/erasure.
 
 **Requirements.** Root on the target; a GPU for HBM wipes. Research-grade PoC.
 
-**Underlying code.** `experiments/memory_wipe/src/pose/`
-(protocol/prover/verifier/noise + `memory/{dram,hbm,nvme}.py`),
-`experiments/memory_wipe/scripts/`.
+**Underlying code.** `modules/memory/pose/` (protocol/prover/verifier/noise +
+`memory/{dram,hbm,nvme}.py`). The bench/probe scripts and the research log live
+on the `experiments` branch under `experiments/memory_wipe/scripts/`.
 
-**Status.** Facade present in `modules/memory/api.py`: `load_pose("protocol")`,
+**Status.** Facade in `modules/memory/api.py`: `load_pose("protocol")`,
 `load_pose("prover")`, `load_pose("memory.hbm")`, etc. (lazy — no GPU needed to
-import). The `pose` package is **not relocated**: it's a separately-deployed
-artifact (its own `pyproject.toml`, installed via `uv` on the target box), so the
-facade imports it from `experiments/memory_wipe/src` rather than moving it (a
-move would break the remote install workflow, which CI can't verify).
+import). The `pose` package was previously kept under `experiments/memory_wipe/`
+as a separately-deployable artifact; it has since been promoted into the module
+and is now a regular sub-package imported via `modules.memory.pose`.

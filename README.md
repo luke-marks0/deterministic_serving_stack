@@ -71,7 +71,7 @@ cd verification-tooling
 ./scripts/demo.sh
 ```
 
-`scripts/demo.sh` builds a venv (cu128 torch + vLLM 0.17.1), resolves the audit-enabled smoke manifest at `experiments/e2e-audit/scripts/smoke.manifest.json` (declares H100 hardware, Qwen3-1.7B, 2 short prompts), starts the deterministic server, and runs the audit replay loop:
+`scripts/demo.sh` builds a venv (cu128 torch + vLLM 0.17.1), resolves the audit-enabled smoke manifest at `demos/e2e-audit/scripts/smoke.manifest.json` (declares H100 hardware, Qwen3-1.7B, 2 short prompts), starts the deterministic server, and runs the audit replay loop:
 
 1. `POST /run` — server runs the manifest's requests and returns per-output-token HMAC commitments
 2. `POST /replay` at random token positions — server re-runs each request truncated to the challenged position and recomputes the commitment
@@ -145,19 +145,52 @@ that composes them.
 | [attestation](modules/attestation/) | Matmul / token / replay verification | `modules/attestation/verifier`, `modules/attestation/freivalds` |
 | [utils](modules/utils/) | Provisioning, replay server, helpers | `scripts/deploy/`, `scripts/lambda/lambda_cli.py` |
 
-Compose them in a few lines via [`modules.Pipeline`](modules/pipeline.py):
+See the [capability map](modules/README.md). Design and implementation plans
+live on the `experiments` branch.
+
+### Workflows & the Pipeline
+
+Every recipe walks the same **artifact spine** — four stages, four named artifacts:
+
+```
+manifest.v1 ──resolve──▶ lockfile.v1 ──build──▶ + closure digest
+                                                       │
+                                                       └──run──▶ run_bundle.v1
+                                                                       │
+                                                                       └──verify──▶ verify_report.v1
+```
+
+Each stage already exists as a standalone CLI (`modules/inference/resolver/main.py`,
+`modules/build/builder/main.py`, etc.). [`modules.Pipeline`](modules/pipeline.py)
+is a thin fluent wrapper that chains them in-process — each method calls the
+same code the per-stage CLI runs, holds the intermediate artifact on the object,
+and returns `self`:
 
 ```python
 from modules import Pipeline
 report = (Pipeline.from_manifest("modules/inference/manifests/qwen3-1.7b.manifest.json")
-          .resolve().build().run("/tmp/a").run("/tmp/b").verify())
+          .resolve()        # -> lockfile.v1        (pins HF revisions + per-file digests)
+          .build()           # -> + closure digest   (pins the Nix runtime)
+          .run("/tmp/a")    # -> run_bundle.v1      (tokens, logits, network frames)
+          .run("/tmp/b")    # -> run_bundle.v1      (independent run)
+          .verify())         # -> verify_report.v1   ("conformant" iff identical)
 assert report["status"] == "conformant"
 ```
 
-See the [capability map](modules/README.md). Design and implementation plans
-live on the `experiments` branch.
+A **workflow** in [`workflows/`](workflows/) is just a Python file that uses
+`Pipeline` (plus any other module helpers it needs) to compose a *named
+scenario*, wrapped in a small `argparse` CLI. Examples:
 
-**Demo:** [Prover ↔ Verifier protocol](experiments/prover-verifier-demo/reports/memo.md) — wire-protocol demo that detects hidden training and exfiltration from external evidence alone. CPU-only; `cd experiments/prover-verifier-demo && ./demo.sh --quick`.
+- `deterministic_inference_server.py` — the snippet above + an
+  `egress_frames()` check that the network output is also reproducible.
+- `verified_inference.py` — adds a matmul attestation pass on top of the run.
+- `deterministic_lora_training.py` — the same shape, for LoRA fine-tunes.
+
+So the layering is: spine (the CLIs) ▸ `Pipeline` (the chainer) ▸ workflows
+(named recipes that use the chainer). "Workflow" here is much more modest than
+in Airflow / GitHub Actions — it's a ~60-line script, not a DAG orchestrator.
+
+**Demo:** [Prover ↔ Verifier protocol](demos/prover-verifier/reports/memo.md) — wire-protocol demo that detects hidden training and exfiltration from external evidence alone. CPU-only; `cd demos/prover-verifier && ./demo.sh --quick`.
 
 ### Repository layout
 
@@ -175,12 +208,12 @@ modules/                Capability layer — each module owns its code, plus sha
     manifests/          Model manifests (Qwen3, Mistral-Large2, DBRX, Llama4-Scout, ... + multinode)
   network/              networkdet/ (sim TCP/IP frame construction) + native/libnetdet/ (DPDK transmit)
   attestation/          freivalds/, e2e/, proverdet/ + verifier/ (+ verifier_cli/server) + prover/
-  memory/               PoSE memory-wipe facade (over experiments/memory_wipe)
+  memory/               PoSE memory wipe + erasure attestation (pose/ sub-package + api.py)
   utils/                Provisioning / replay helpers (re-exports core/common)
   core/                 Shared: common/ (canonical JSON, SHA256, schema validation, HF resolution)
                         + schemas/ (JSON Schema contracts: manifest, lockfile, run_bundle, verify_report, attestation/replay)
 workflows/              Recipe book — runnable compositions of the modules
-experiments/            Experiments product code/gates/demos depend on (research-only ones live on the `experiments` branch)
+demos/                  End-to-end scenarios: e2e-audit (the scripts/demo.sh path), prover-verifier (the protocol demo). Research experiments live on the `experiments` branch.
 scripts/deploy/         Lambda / vast / warden provisioning (utils-owned)
 tests/conformance/      Spec conformance catalog + release blockers (read by CI)
 flake.nix, flake.lock   Hermetic build entrypoint + pin (at root: src=self packages repo-wide code; callers invoke `.#`)
@@ -206,7 +239,7 @@ docker run -d --name vllm-server --gpus all --privileged \
   -e NVIDIA_DRIVER_CAPABILITIES=all \
   -v "$PWD:/workspace" -p 8000:8000 \
   deterministic-serving-runtime:dev \
-  --manifest /workspace/experiments/e2e-audit/scripts/smoke.manifest.json \
+  --manifest /workspace/demos/e2e-audit/scripts/smoke.manifest.json \
   --skip-boot-validation
 ```
 
