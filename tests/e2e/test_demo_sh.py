@@ -21,7 +21,7 @@ from tests.proverdet._helpers import REPO_ROOT, sandbox_env
 class TestDemoSh(unittest.TestCase):
     def test_demo_quick_exits_zero_with_all_pass(self) -> None:
         result = subprocess.run(
-            ["bash", "experiments/prover-verifier-demo/demo.sh", "--quick"],
+            ["bash", "demos/prover-verifier/demo.sh", "--quick"],
             cwd=str(REPO_ROOT),
             env=sandbox_env(),
             capture_output=True,

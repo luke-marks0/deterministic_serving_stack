@@ -82,7 +82,7 @@ class TestPlotResults(unittest.TestCase):
             rc = subprocess.run(
                 [
                     sys.executable,
-                    "experiments/prover-verifier-demo/scripts/plot_results.py",
+                    "demos/prover-verifier/scripts/plot_results.py",
                     "--results",
                     str(results),
                     "--figures-dir",

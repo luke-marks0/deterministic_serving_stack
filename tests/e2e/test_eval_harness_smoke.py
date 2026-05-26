@@ -1,6 +1,6 @@
 """Smoke test for the eval sweep harness (Task 9.1).
 
-Runs `experiments/prover-verifier-demo/scripts/run_eval.py --smoke` against
+Runs `demos/prover-verifier/scripts/run_eval.py --smoke` against
 a temporary output dir and checks the JSONL row schema. Doesn't pin
 exact verdicts — Phase 9 plotting/HTML viewer assert that — only that
 each row has the required fields and uses the binary verdict vocabulary.
@@ -36,7 +36,7 @@ class TestEvalHarnessSmoke(unittest.TestCase):
             result = subprocess.run(
                 [
                     sys.executable,
-                    "experiments/prover-verifier-demo/scripts/run_eval.py",
+                    "demos/prover-verifier/scripts/run_eval.py",
                     "--smoke",
                     "--out-dir",
                     str(out_dir),

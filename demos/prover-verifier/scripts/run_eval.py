@@ -18,8 +18,8 @@ same Python build, same knob set, same hardware should produce
 byte-identical results.
 
 Usage:
-    python3 experiments/prover-verifier-demo/scripts/run_eval.py \\
-        --out-dir experiments/prover-verifier-demo/data/eval [--smoke]
+    python3 demos/prover-verifier/scripts/run_eval.py \\
+        --out-dir demos/prover-verifier/data/eval [--smoke]
 
 `--smoke` runs one knob value per workload (the cheating-trip value for
 the adversarial workloads, 0 for benign) so the smoke test stays under

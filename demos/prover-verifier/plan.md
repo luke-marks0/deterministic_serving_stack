@@ -35,7 +35,7 @@ in/out of scope. This file is the experiment-side mirror; keep it short.
 
 ## Headline deliverable
 
-`./experiments/prover-verifier-demo/demo.sh --quick` exits 0 and prints
+`./demos/prover-verifier/demo.sh --quick` exits 0 and prints
 `ALL PASS` plus a summary table showing the three verdicts match
 expectations (benign → inference; mixed_lora and lora_loading →
 training_or_exfil).
@@ -43,7 +43,7 @@ training_or_exfil).
 ## Layout
 
 ```
-experiments/prover-verifier-demo/
+demos/prover-verifier/
   plan.md                   this file
   EXPERIMENT_LOG.md         append-only log
   demo.sh                   headline deliverable (Phase 10)

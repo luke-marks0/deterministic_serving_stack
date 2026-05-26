@@ -17,7 +17,7 @@ Each scenario:
 Exit 0 iff all three actual verdicts match expected.
 
 Usage:
-    python3 experiments/prover-verifier-demo/scripts/demo_driver.py \\
+    python3 demos/prover-verifier/scripts/demo_driver.py \\
         [--per-scenario 5.0] [--remote]
 
 Env (only read in --remote mode):

@@ -71,7 +71,7 @@ integration point; `--dry-run` prints the plan without touching a GPU.
 $ python3 workflows/deterministic_lora_training.py --dry-run
 {
   "c3_env": {"CUBLAS_WORKSPACE_CONFIG": ":4096:8", "PYTHONHASHSEED": "0", "VLLM_BATCH_INVARIANT": "1"},
-  "lora_workload": {"name": "mixed_lora", "definition": "experiments/prover-verifier-demo/scripts/workloads/mixed_lora.py", ...},
+  "lora_workload": {"name": "mixed_lora", "definition": "demos/prover-verifier/scripts/workloads/mixed_lora.py", ...},
   "manifest": "tests/fixtures/positive/manifest.v1.example.json",
   "runtime_closure_digest": "sha256:3bfb14e6…"
 }

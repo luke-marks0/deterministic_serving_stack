@@ -6,9 +6,9 @@ Reads `data/eval/results.jsonl`, embeds the rows as a JSON literal in a
 fetch, no CDN, no external assets.
 
 Usage:
-    python3 experiments/prover-verifier-demo/scripts/make_viewer.py \\
+    python3 demos/prover-verifier/scripts/make_viewer.py \\
         --results data/eval/results.jsonl \\
-        --out experiments/prover-verifier-demo/viewer.html
+        --out demos/prover-verifier/viewer.html
 """
 
 from __future__ import annotations

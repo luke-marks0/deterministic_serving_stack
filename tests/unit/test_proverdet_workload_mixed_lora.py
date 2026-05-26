@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 EXP_SCRIPTS = (
-    Path(__file__).resolve().parents[2] / "experiments" / "prover-verifier-demo" / "scripts"
+    Path(__file__).resolve().parents[2] / "demos" / "prover-verifier" / "scripts"
 )
 if str(EXP_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(EXP_SCRIPTS))

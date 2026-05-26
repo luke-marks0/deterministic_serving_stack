@@ -2,7 +2,7 @@
 set -euo pipefail
 # Typecheck the prover-verifier demo new code only.
 
-PROJECT=experiments/prover-verifier-demo/pyrightconfig.json
+PROJECT=demos/prover-verifier/pyrightconfig.json
 
 if ! command -v pyright >/dev/null 2>&1 && ! command -v uv >/dev/null 2>&1; then
     echo "[typecheck-proverdet] pyright/uv not installed; skipping" >&2

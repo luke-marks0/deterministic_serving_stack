@@ -172,7 +172,7 @@ python3 modules/attestation/verifier_server/main.py --host 0.0.0.0 --port 9000 \
 # On either machine (or a third):
 PROVER_HOST=10.0.0.1 PROVER_PORT=8000 \
 VERIFIER_HOST=10.0.0.2 VERIFIER_PORT=9000 \
-  ./experiments/prover-verifier-demo/demo.sh --remote
+  ./demos/prover-verifier/demo.sh --remote
 ```
 
 The full provisioning + networking recipe (Lambda Cloud, vast.ai,
@@ -193,5 +193,5 @@ Digital Ocean GPU droplets, key setup, port allow-lists) is in the
 
 ---
 
-*Reproduce locally: `cd experiments/prover-verifier-demo && ./demo.sh
+*Reproduce locally: `cd demos/prover-verifier && ./demo.sh
 --quick` exits 0 with `ALL PASS` (~15 s wallclock).*

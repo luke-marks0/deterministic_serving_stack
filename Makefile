@@ -29,10 +29,10 @@ ci-release: lint schema test-release
 build-libnetdet:
 	cd modules/network/native/libnetdet && make
 
-# Scoped tooling for the prover-verifier demo (experiments/prover-verifier-demo).
+# Scoped tooling for the prover-verifier demo (demos/prover-verifier).
 # Keeps the existing tree's looser conventions intact while letting the new code
 # sit under stricter ruff + pyright. Edit ruff.toml / pyrightconfig.json under
-# experiments/prover-verifier-demo/ to tune.
+# demos/prover-verifier/ to tune.
 PROVERDET_PATHS := modules/attestation/proverdet modules/attestation/prover modules/attestation/verifier_server modules/attestation/verifier_cli
 
 lint-proverdet:

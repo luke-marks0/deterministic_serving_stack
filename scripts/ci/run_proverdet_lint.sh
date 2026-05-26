@@ -4,7 +4,7 @@ set -euo pipefail
 # missing (the rest of the test suite shouldn't fail because a developer
 # hasn't installed the dev tool yet).
 
-CFG=experiments/prover-verifier-demo/ruff.toml
+CFG=demos/prover-verifier/ruff.toml
 PATHS=(modules/attestation/proverdet modules/attestation/prover modules/attestation/verifier_server modules/attestation/verifier_cli)
 TEST_GLOBS=()
 for pattern in \

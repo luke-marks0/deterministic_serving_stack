@@ -58,5 +58,5 @@ else
 fi
 
 cd "${REPO_ROOT}"
-exec "${PY}" experiments/prover-verifier-demo/scripts/demo_driver.py \
+exec "${PY}" demos/prover-verifier/scripts/demo_driver.py \
   --per-scenario "${PER_SCENARIO}" ${REMOTE}

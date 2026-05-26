@@ -103,7 +103,7 @@ class TestMakeViewer(unittest.TestCase):
             rc = subprocess.run(
                 [
                     sys.executable,
-                    "experiments/prover-verifier-demo/scripts/make_viewer.py",
+                    "demos/prover-verifier/scripts/make_viewer.py",
                     "--results",
                     str(results),
                     "--out",

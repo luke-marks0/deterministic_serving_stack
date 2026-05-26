@@ -12,9 +12,9 @@ We deliberately keep this small. Plots open no windows
 duplicate-knob aggregation when the harness sweeps repeat seeds.
 
 Usage:
-    python3 experiments/prover-verifier-demo/scripts/plot_results.py \\
+    python3 demos/prover-verifier/scripts/plot_results.py \\
         --results data/eval/results.jsonl \\
-        --figures-dir experiments/prover-verifier-demo/figures
+        --figures-dir demos/prover-verifier/figures
 """
 
 from __future__ import annotations

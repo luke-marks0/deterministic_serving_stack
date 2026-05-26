@@ -7,7 +7,7 @@ c3 config) into a reproducible LoRA-training environment.
 The *training step itself requires a GPU + vLLM/torch* and is the integration
 point marked below. The LoRA workload is defined the same way the
 prover-verifier-demo adversarial workloads are
-(``experiments/prover-verifier-demo/scripts/workloads/mixed_lora.py``), so a
+(``demos/prover-verifier/scripts/workloads/mixed_lora.py``), so a
 colleague can reproduce exactly what you ran by sharing this file.
 
 Usage::
@@ -34,7 +34,7 @@ from modules import Pipeline
 from modules.inference import C3_ENV
 
 DEFAULT_MANIFEST = str(REPO_ROOT / "tests" / "fixtures" / "positive" / "manifest.v1.example.json")
-LORA_WORKLOAD = "experiments/prover-verifier-demo/scripts/workloads/mixed_lora.py"
+LORA_WORKLOAD = "demos/prover-verifier/scripts/workloads/mixed_lora.py"
 
 
 def assemble_plan(manifest_path: str | Path) -> dict[str, Any]:
