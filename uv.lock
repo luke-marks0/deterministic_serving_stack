@@ -346,7 +346,9 @@ dev = [
     { name = "ruff" },
 ]
 training = [
+    { name = "huggingface-hub" },
     { name = "peft" },
+    { name = "safetensors" },
     { name = "transformers" },
 ]
 
@@ -363,7 +365,9 @@ dev = [
     { name = "ruff" },
 ]
 training = [
+    { name = "huggingface-hub" },
     { name = "peft" },
+    { name = "safetensors" },
     { name = "transformers" },
 ]
 

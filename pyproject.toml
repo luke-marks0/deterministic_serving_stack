@@ -20,14 +20,18 @@ dev = [
     "matplotlib",
     "ruff",
 ]
-# Training-side deps for workflows/deterministic_lora_training.py.
-# CUDA-bound (transformers + peft + the underlying torch wheels are provisioned
-# by scripts/demo.sh on the GPU box), so they're NOT pulled in by default
-# `uv sync`. Install with: uv sync --group training (or `uv pip install`
-# directly on the GPU host).
+# GPU-path deps for workflows/{deterministic_lora_training, verified_inference}.
+# CUDA-bound (these + the underlying torch wheels are provisioned by
+# scripts/demo.sh on the GPU box), so they're NOT pulled in by default
+# `uv sync`. Install with: uv sync --group training.
+#   - transformers + peft: LoRA training in deterministic_lora_training
+#   - safetensors + huggingface_hub: load the manifest-pinned model weights
+#     used by verified_inference's Freivalds attestation
 training = [
     "transformers",
     "peft",
+    "safetensors",
+    "huggingface_hub",
 ]
 
 # This repo is an application (modules/ + workflows/), not a pip-installable
